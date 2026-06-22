@@ -1,0 +1,2 @@
+-- ALELS WEB clean schema is now migration-based.
+-- Apply files in database/migrations in numeric order, then database/seed.sql for development seed data.

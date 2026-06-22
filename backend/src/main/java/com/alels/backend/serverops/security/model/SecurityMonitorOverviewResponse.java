@@ -1,0 +1,130 @@
+package com.alels.backend.serverops.security.model;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class SecurityMonitorOverviewResponse {
+    private String status;
+    private int securityScore;
+    private String generatedAt;
+    private String summary;
+    private String recommendation;
+    private List<SecurityMetric> metrics = new ArrayList<>();
+    private List<SecurityDistribution> signalDistribution = new ArrayList<>();
+    private List<SecurityDistribution> userRiskDistribution = new ArrayList<>();
+    private List<SecurityInsight> insights = new ArrayList<>();
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public int getSecurityScore() { return securityScore; }
+    public void setSecurityScore(int securityScore) { this.securityScore = securityScore; }
+    public String getGeneratedAt() { return generatedAt; }
+    public void setGeneratedAt(String generatedAt) { this.generatedAt = generatedAt; }
+    public String getSummary() { return summary; }
+    public void setSummary(String summary) { this.summary = summary; }
+    public String getRecommendation() { return recommendation; }
+    public void setRecommendation(String recommendation) { this.recommendation = recommendation; }
+    public List<SecurityMetric> getMetrics() { return metrics; }
+    public void setMetrics(List<SecurityMetric> metrics) { this.metrics = metrics; }
+    public List<SecurityDistribution> getSignalDistribution() { return signalDistribution; }
+    public void setSignalDistribution(List<SecurityDistribution> signalDistribution) { this.signalDistribution = signalDistribution; }
+    public List<SecurityDistribution> getUserRiskDistribution() { return userRiskDistribution; }
+    public void setUserRiskDistribution(List<SecurityDistribution> userRiskDistribution) { this.userRiskDistribution = userRiskDistribution; }
+    public List<SecurityInsight> getInsights() { return insights; }
+    public void setInsights(List<SecurityInsight> insights) { this.insights = insights; }
+
+    public static class SecurityMetric {
+        private String key;
+        private String label;
+        private String value;
+        private String unit;
+        private String severity;
+        private String description;
+
+        public SecurityMetric() {}
+
+        public SecurityMetric(String key, String label, String value, String unit, String severity, String description) {
+            this.key = key;
+            this.label = label;
+            this.value = value;
+            this.unit = unit;
+            this.severity = severity;
+            this.description = description;
+        }
+
+        public String getKey() { return key; }
+        public void setKey(String key) { this.key = key; }
+        public String getLabel() { return label; }
+        public void setLabel(String label) { this.label = label; }
+        public String getValue() { return value; }
+        public void setValue(String value) { this.value = value; }
+        public String getUnit() { return unit; }
+        public void setUnit(String unit) { this.unit = unit; }
+        public String getSeverity() { return severity; }
+        public void setSeverity(String severity) { this.severity = severity; }
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+    }
+
+    public static class SecurityDistribution {
+        private String name;
+        private long count;
+        private double percent;
+        private String displayValue;
+
+        public SecurityDistribution() {}
+
+        public SecurityDistribution(String name, long count, double percent, String displayValue) {
+            this.name = name;
+            this.count = count;
+            this.percent = percent;
+            this.displayValue = displayValue;
+        }
+
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        public long getCount() { return count; }
+        public void setCount(long count) { this.count = count; }
+        public double getPercent() { return percent; }
+        public void setPercent(double percent) { this.percent = percent; }
+        public String getDisplayValue() { return displayValue; }
+        public void setDisplayValue(String displayValue) { this.displayValue = displayValue; }
+    }
+
+    public static class SecurityInsight {
+        private String id;
+        private String severity;
+        private String category;
+        private String title;
+        private String impact;
+        private String action;
+        private String status;
+
+        public SecurityInsight() {}
+
+        public SecurityInsight(String id, String severity, String category, String title, String impact, String action, String status) {
+            this.id = id;
+            this.severity = severity;
+            this.category = category;
+            this.title = title;
+            this.impact = impact;
+            this.action = action;
+            this.status = status;
+        }
+
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
+        public String getSeverity() { return severity; }
+        public void setSeverity(String severity) { this.severity = severity; }
+        public String getCategory() { return category; }
+        public void setCategory(String category) { this.category = category; }
+        public String getTitle() { return title; }
+        public void setTitle(String title) { this.title = title; }
+        public String getImpact() { return impact; }
+        public void setImpact(String impact) { this.impact = impact; }
+        public String getAction() { return action; }
+        public void setAction(String action) { this.action = action; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
+    }
+}

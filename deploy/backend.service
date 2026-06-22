@@ -1,0 +1,13 @@
+[Unit]
+Description=ALELS Backend API
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/alels/backend
+Environment=ALELS_GATEWAY_PORT=5050
+ExecStart=/usr/bin/java -jar /opt/alels/backend/target/alels-backend-1.0.0.jar
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

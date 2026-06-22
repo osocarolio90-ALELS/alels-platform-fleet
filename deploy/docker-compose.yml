@@ -1,0 +1,91 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: alels-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alels_db}
+      POSTGRES_USER: ${POSTGRES_USER:-alels}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - alels_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alels} -d ${POSTGRES_DB:-alels_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: alels-redis
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "${REDIS_MAXMEMORY:-512mb}", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - alels_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: alels-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --overprovisioned
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr
+      - PLAINTEXT://localhost:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    volumes:
+      - alels_redpanda:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.*true|true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redpanda-console:
+    image: redpandadata/console:v2.7.2
+    container_name: alels-redpanda-console
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8088:8080"
+
+  redpanda-topic-init:
+    image: redpandadata/redpanda:v24.2.7
+    container_name: alels-redpanda-topic-init
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "rpk topic create telemetry.raw --brokers redpanda:9092 --partitions ${TELEMETRY_RAW_PARTITIONS:-96} --replicas 1 || true &&
+       rpk topic create telemetry.dead-letter --brokers redpanda:9092 --partitions ${TELEMETRY_DLQ_PARTITIONS:-24} --replicas 1 || true &&
+       rpk topic create telemetry.parsed --brokers redpanda:9092 --partitions ${TELEMETRY_PARSED_PARTITIONS:-96} --replicas 1 || true &&
+       rpk topic alter-config telemetry.raw --brokers redpanda:9092 --set retention.ms=${TELEMETRY_RAW_RETENTION_MS:-259200000} || true &&
+       rpk topic alter-config telemetry.dead-letter --brokers redpanda:9092 --set retention.ms=${TELEMETRY_DLQ_RETENTION_MS:-2592000000} || true"
+
+volumes:
+  alels_pgdata:
+  alels_redpanda:

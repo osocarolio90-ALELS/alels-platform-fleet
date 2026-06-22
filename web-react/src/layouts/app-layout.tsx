@@ -1,0 +1,253 @@
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Bot, Building2, CarFront, ChevronDown, CircleUserRound, ClipboardList, DollarSign, Globe, IdCard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Recycle, ServerCog, Settings, Sun } from "lucide-react";
+
+import { useAuthStore } from "@/stores/auth-store";
+import { t } from "@/lib/i18n";
+import { useLanguageStore } from "@/stores/language-store";
+import { useThemeStore } from "@/stores/theme-store";
+import { cn } from "@/lib/utils";
+import { ENERGY_REFERENCE_ROLES, ORGANIZATION_ROLES, SERVER_MONITOR_ROLES, hasRole } from "@/lib/role-access";
+
+type SidebarItem = { to: string; label: string; roles?: readonly string[] };
+
+const organizationItems: SidebarItem[] = [
+  { to: "/organization/company-list", label: "Company List" },
+  { to: "/organization/user-list", label: "User List" },
+  { to: "/organization/wasted", label: "Wasted" }
+];
+
+const serverMonitorItems: SidebarItem[] = [
+  { to: "/server-monitor/overview", label: "Overview Monitor" },
+  { to: "/server-monitor/ai-ops", label: "AI Ops Monitor" },
+  { to: "/server-monitor/gateway", label: "Gateway Monitor" },
+  { to: "/server-monitor/traffic", label: "Traffic Monitor" },
+  { to: "/server-monitor/database", label: "Database Monitor" },
+  { to: "/server-monitor/storage", label: "Storage Monitor" },
+  { to: "/server-monitor/security", label: "Security Monitor" }
+];
+
+const assetRegisterItems: SidebarItem[] = [
+  { to: "/asset-register/vehicle-register", label: "Vehicle Register" },
+  { to: "/asset-register/driver-register", label: "Driver Register" },
+  { to: "/asset-register/energy-price", label: "Harga Energy" },
+  { to: "/asset-register/energy-reference", label: "Harga Referensi", roles: ENERGY_REFERENCE_ROLES },
+  { to: "/asset-register/wasted", label: "Wasted" }
+];
+
+export function AppLayout() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+  const [serverMonitorOpen, setServerMonitorOpen] = useState(location.pathname.startsWith("/server-monitor"));
+  const [organizationOpen, setOrganizationOpen] = useState(location.pathname.startsWith("/organization"));
+  const [assetRegisterOpen, setAssetRegisterOpen] = useState(location.pathname.startsWith("/asset-register"));
+  const [profileOpen, setProfileOpen] = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+  const language = useLanguageStore((state) => state.language);
+  const toggleLanguage = useLanguageStore((state) => state.toggleLanguage);
+  const theme = useThemeStore((state) => state.theme);
+  const toggleTheme = useThemeStore((state) => state.toggleTheme);
+
+  const canViewServerMonitor = hasRole(user?.role, SERVER_MONITOR_ROLES);
+  const canViewOrganization = hasRole(user?.role, ORGANIZATION_ROLES);
+  const visibleAssetRegisterItems = assetRegisterItems.filter((item) => !item.roles || hasRole(user?.role, item.roles as any));
+  const sidebarIsCompact = sidebarCollapsed && !sidebarHovered;
+  const currentCompanyName = (user?.companyName || "ALELS TECH INDONESIA").trim().toUpperCase();
+
+  function handleLogout() {
+    logout();
+    navigate("/login");
+  }
+
+  return (
+    <div className={cn("legacy-shell", sidebarIsCompact && "sidebar-collapsed", theme === "light" ? "theme-light" : "theme-dark")}>
+      <aside
+        className={cn(
+          "legacy-sidebar fixed inset-y-0 left-0 z-20 hidden flex-col px-3.5 py-[18px] lg:flex",
+          sidebarIsCompact ? "w-[76px]" : "w-[250px]"
+        )}
+        onMouseEnter={() => sidebarCollapsed && setSidebarHovered(true)}
+        onMouseLeave={() => setSidebarHovered(false)}
+      >
+        <div className="mb-7 flex items-center gap-3">
+          <div className="legacy-brand-logo">
+            <img src="/assets/logo-card.png" alt="ALELS" className="h-full w-full object-contain" />
+          </div>
+          <div className="sidebar-text">
+            <strong className="block text-base text-white">Alels<span className="text-sky-400">Tech</span>IDN</strong>
+            <small className="text-[11px] text-[#8e96a8]">Server Operations</small>
+          </div>
+          <button
+            className="legacy-sidebar-toggle ml-auto"
+            type="button"
+            onClick={() => { setSidebarCollapsed((current) => !current); setSidebarHovered(false); }}
+            aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+            title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </button>
+        </div>
+
+        <nav className="flex-1 space-y-1">
+          {canViewServerMonitor ? (
+            <div>
+              <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Server Operations</p>
+              <button
+                type="button"
+                className={cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", location.pathname.startsWith("/server-monitor") && "active")}
+                onClick={() => setServerMonitorOpen((current) => !current)}
+                title="Server Operations"
+              >
+                <ServerCog className="h-4 w-4 shrink-0" />
+                <span className="sidebar-text flex-1 text-left">Server Operations</span>
+                <ChevronDown className={cn("sidebar-text h-4 w-4 transition-transform", serverMonitorOpen && "rotate-180")} />
+              </button>
+              {serverMonitorOpen && !sidebarIsCompact ? (
+                <div className="legacy-subnav mb-1 ml-8 space-y-1">
+                  {serverMonitorItems.map((item) => (
+                    <NavLink key={item.to} to={item.to} className={({ isActive }) => cn("legacy-subnav-link", isActive && "active")}>
+                      <span className="inline-flex items-center gap-2"><Bot className="h-3.5 w-3.5" />{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {canViewOrganization ? (
+            <div>
+              <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Organizations</p>
+              <button
+                type="button"
+                className={cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", location.pathname.startsWith("/organization") && "active")}
+                onClick={() => setOrganizationOpen((current) => !current)}
+                title="Organizations"
+              >
+                <Building2 className="h-4 w-4 shrink-0" />
+                <span className="sidebar-text flex-1 text-left">Organizations</span>
+                <ChevronDown className={cn("sidebar-text h-4 w-4 transition-transform", organizationOpen && "rotate-180")} />
+              </button>
+              {organizationOpen && !sidebarIsCompact ? (
+                <div className="legacy-subnav mb-1 ml-8 space-y-1">
+                  {organizationItems.map((item) => (
+                    <NavLink key={item.to} to={item.to} className={({ isActive }) => cn("legacy-subnav-link", isActive && "active")}>
+                      <span className="inline-flex items-center gap-2"><Building2 className="h-3.5 w-3.5" />{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div>
+            <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Asset Register</p>
+            <button
+              type="button"
+              className={cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", location.pathname.startsWith("/asset-register") && "active")}
+              onClick={() => setAssetRegisterOpen((current) => !current)}
+              title="Asset Register"
+            >
+              <CarFront className="h-4 w-4 shrink-0" />
+              <span className="sidebar-text flex-1 text-left">Asset Register</span>
+              <ChevronDown className={cn("sidebar-text h-4 w-4 transition-transform", assetRegisterOpen && "rotate-180")} />
+            </button>
+            {assetRegisterOpen && !sidebarIsCompact ? (
+              <div className="legacy-subnav mb-1 ml-8 space-y-1">
+                {visibleAssetRegisterItems.map((item) => (
+                  <NavLink key={item.to} to={item.to} className={({ isActive }) => cn("legacy-subnav-link", isActive && "active")}>
+                    <span className="inline-flex items-center gap-2">
+                      {item.to.includes("driver") ? <IdCard className="h-3.5 w-3.5" /> : item.to.includes("energy-reference") ? <DollarSign className="h-3.5 w-3.5" /> : item.to.includes("energy") ? <DollarSign className="h-3.5 w-3.5" /> : item.to.includes("wasted") ? <Recycle className="h-3.5 w-3.5" /> : <CarFront className="h-3.5 w-3.5" />}
+                      {item.label}
+                    </span>
+                  </NavLink>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div>
+            <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Assignment</p>
+            <NavLink
+              to="/assignment"
+              className={({ isActive }) => cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", isActive && "active")}
+              title="Assignment"
+            >
+              <ClipboardList className="h-4 w-4 shrink-0" />
+              <span className="sidebar-text flex-1 text-left">Assignment</span>
+            </NavLink>
+          </div>
+        </nav>
+        <div className="mt-auto border-t border-white/10 pt-3">
+          <NavLink
+            to="/user/profile"
+            className={({ isActive }) =>
+              cn(
+                "legacy-nav-link flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
+                isActive && "active"
+              )
+            }
+            title="User Profile"
+          >
+            <CircleUserRound className="h-4 w-4 shrink-0" />
+            <span className="sidebar-text">User Profile</span>
+          </NavLink>
+        </div>
+      </aside>
+
+      <div className={cn("legacy-content", sidebarIsCompact ? "lg:pl-[76px]" : "lg:pl-[250px]")}> 
+        <header className="legacy-topbar sticky top-0 z-10 flex h-[60px] items-center justify-between px-[22px]">
+          <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#222633] bg-[#10131b] px-3 text-white">
+            <ServerCog className="h-4 w-4 text-sky-400" />
+            <strong className="max-w-[260px] truncate text-sm">{currentCompanyName}</strong>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#222633] bg-[#10131b] px-3 text-sm text-white" type="button" onClick={toggleLanguage} aria-label="Switch language" title={language === "en" ? "Bahasa Indonesia" : "English"}>
+              <Globe className="h-4 w-4" />{language === "en" ? "EN" : "ID"}
+            </button>
+            <button className="legacy-icon-btn" type="button" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"}>
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <div className="relative">
+              <button className="legacy-icon-btn h-10 w-10 overflow-hidden rounded-full p-0" type="button" onClick={() => setProfileOpen((current) => !current)} aria-label="User profile" title="User profile">
+                <img src={user?.profilePhotoUrl || "/assets/logokecil.png"} alt="User" className="h-full w-full rounded-full object-cover" />
+              </button>
+              {profileOpen ? (
+                <div className="absolute right-0 mt-2 w-72 rounded-xl border border-white/10 bg-[#0b1220] p-3 shadow-2xl">
+                  <div className="border-b border-white/10 pb-3">
+                    <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Company</p>
+                    <p className="truncate text-sm font-bold text-white">{currentCompanyName}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">Role</p>
+                    <p className="truncate text-sm font-bold text-white">{(user?.role || "-").toUpperCase()}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">Username</p>
+                    <p className="truncate text-sm font-bold text-white">{user?.username || user?.fullName || "-"}</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">User Email</p>
+                    <p className="truncate text-sm font-bold text-white">{user?.email || "-"}</p>
+                  </div>
+                  <button className="mt-3 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/10" type="button" onClick={() => { setProfileOpen(false); navigate("/user/profile"); }}>
+                    <Settings className="h-4 w-4" /> Settings
+                  </button>
+                  <button className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-200 hover:bg-red-500/10" type="button" onClick={handleLogout}>
+                    <LogOut className="h-4 w-4" /> {t(language, "logout")}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <button
+              className="legacy-icon-btn text-red-200 hover:bg-red-500/10 hover:text-red-100"
+              type="button"
+              onClick={handleLogout}
+              aria-label="Logout"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </header>
+        <main className="px-[22px] py-5"><Outlet /></main>
+      </div>
+    </div>
+  );
+}

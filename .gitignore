@@ -1,0 +1,46 @@
+# Java
+target/
+*.class
+
+# Node / frontend
+node_modules/
+dist/
+.npm-cache/
+*.tsbuildinfo
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+logs/**/*.log
+*.log
+
+# Environment
+.env
+application-prod.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs and caches
+**/target/
+**/dist/
+**/node_modules/
+**/.vite/
+**/.vite-temp/
+**/.cache/
+
+# Runtime logs generated during local testing
+*.out.log
+*.err.log
+backend/*.log
+web-react/*.log
+gateway/*.log
+ingestion-service/*.log
+
+# Local-only workspace archives
+*.zip
+*.7z
+*.rar

@@ -1,0 +1,191 @@
+/*
+ * Server Operations app shell.
+ * Scope all layout styles under .legacy-shell to prevent leaking into feature pages.
+ */
+.legacy-shell {
+  min-height: 100vh;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.legacy-shell.theme-dark {
+  background: #07080c;
+}
+
+.legacy-shell.theme-light {
+  background: #f3f6fb;
+}
+
+.legacy-content {
+  min-height: 100vh;
+  transition: padding-left 180ms ease;
+}
+
+.legacy-sidebar {
+  background: linear-gradient(180deg, #081120 0%, #0b1930 42%, #07101d 100%);
+  border-right: 1px solid rgba(104, 131, 177, 0.26);
+  box-shadow:
+    inset -1px 0 0 rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  transition: width 180ms ease;
+  overflow-x: hidden;
+}
+
+.legacy-brand-logo {
+  width: 46px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-collapsed .legacy-brand-logo,
+.sidebar-collapsed .sidebar-text {
+  display: none;
+}
+
+.sidebar-collapsed .legacy-sidebar {
+  padding-left: 13px;
+  padding-right: 13px;
+}
+
+.sidebar-collapsed .legacy-sidebar-toggle {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.sidebar-collapsed .legacy-nav-link {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+  width: 50px;
+}
+
+.legacy-sidebar-toggle {
+  height: 30px;
+  width: 30px;
+  border: 1px solid rgba(191, 219, 254, 0.36);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.28);
+  flex-shrink: 0;
+  transition: background .2s ease, color .2s ease, border-color .2s ease;
+}
+
+.legacy-sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.legacy-nav-link {
+  color: #dbeafe;
+  transition: background .2s ease, color .2s ease, box-shadow .2s ease;
+}
+
+.legacy-nav-link:hover,
+.legacy-nav-link.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+}
+
+.legacy-subnav-link {
+  display: block;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #bfdbfe;
+  font-size: 13px;
+  text-decoration: none;
+  transition: background .2s ease, color .2s ease;
+}
+
+.legacy-subnav-link:hover,
+.legacy-subnav-link.active {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.legacy-topbar {
+  background: linear-gradient(180deg, #081120 0%, #0a1628 100%);
+  border-bottom: 1px solid rgba(104, 131, 177, 0.2);
+}
+
+.legacy-icon-btn,
+.legacy-logout-btn {
+  height: 36px;
+  border: 1px solid #222633;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #10131b;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
+}
+
+.legacy-icon-btn {
+  width: 36px;
+  padding: 0;
+}
+
+.legacy-logout-btn {
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fecaca;
+}
+
+.legacy-icon-btn:hover,
+.legacy-logout-btn:hover {
+  border-color: #33415c;
+  background: #172033;
+  transform: translateY(-1px);
+}
+
+.legacy-logout-btn:hover {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(127, 29, 29, 0.28);
+  color: #ffffff;
+}
+
+.legacy-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 13px;
+}
+
+.theme-light .legacy-sidebar,
+.theme-light .legacy-topbar {
+  background: linear-gradient(180deg, #081120 0%, #0b1930 100%);
+}
+
+.theme-light .legacy-sidebar strong,
+.theme-light .legacy-sidebar small,
+.theme-light .legacy-sidebar p,
+.theme-light .legacy-nav-link,
+.theme-light .legacy-subnav-link,
+.theme-light .legacy-topbar strong,
+.theme-light .legacy-topbar .text-white {
+  color: #f3f6ff;
+}
+
+.theme-light .legacy-topbar button,
+.theme-light .legacy-topbar .legacy-icon-btn,
+.theme-light .legacy-topbar .legacy-logout-btn,
+.theme-light .legacy-topbar > div:first-child {
+  background: rgba(12, 24, 42, 0.92);
+  border-color: rgba(104, 131, 177, 0.26);
+  color: #f3f6ff;
+}
+
+.theme-light .legacy-logout-btn {
+  color: #fecaca;
+}

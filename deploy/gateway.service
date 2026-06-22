@@ -1,0 +1,12 @@
+[Unit]
+Description=ALELS Hybrid Gateway
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/alels/gateway
+ExecStart=/usr/bin/java -jar /opt/alels/gateway/target/alels-gateway-1.0.0.jar
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

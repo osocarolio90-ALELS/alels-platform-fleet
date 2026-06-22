@@ -1,0 +1,52 @@
+/*
+ * ALELS theme tokens.
+ * Keep theme colors here only. Do not override utility classes such as .bg-card globally.
+ * This keeps Shadcn/Tailwind components predictable and prevents future UI regressions.
+ */
+.legacy-shell.theme-dark,
+.theme-dark {
+  --background: 225 24% 5%;
+  --foreground: 224 100% 98%;
+  --card: 226 25% 7%;
+  --card-foreground: 224 100% 98%;
+  --popover: 226 25% 7%;
+  --popover-foreground: 224 100% 98%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 222 29% 10%;
+  --secondary: 220 30% 12%;
+  --secondary-foreground: 224 100% 98%;
+  --muted: 222 24% 12%;
+  --muted-foreground: 221 16% 64%;
+  --accent: 45 94% 54%;
+  --accent-foreground: 222 29% 12%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 224 20% 17%;
+  --input: 224 20% 17%;
+  --ring: 199 89% 48%;
+  color-scheme: dark;
+}
+
+.legacy-shell.theme-light,
+.theme-light {
+  --background: 214 36% 96%;
+  --foreground: 222 29% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 29% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 29% 12%;
+  --primary: 199 89% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 214 38% 92%;
+  --secondary-foreground: 222 29% 12%;
+  --muted: 214 30% 92%;
+  --muted-foreground: 215 16% 42%;
+  --accent: 45 94% 54%;
+  --accent-foreground: 222 29% 12%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 214 20% 86%;
+  --input: 214 20% 86%;
+  --ring: 199 89% 40%;
+  color-scheme: light;
+}
