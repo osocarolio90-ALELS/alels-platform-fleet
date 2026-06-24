@@ -107,6 +107,7 @@ public class EnergyReferenceRepository {
                 JOIN energy_types et ON et.id = erp.energy_id
                 LEFT JOIN users u ON u.id = erp.updated_by
                 WHERE et.status = 'ACTIVE'
+                  AND erp.deleted_at IS NULL
                   AND (? IS NULL OR erp.country_code = UPPER(?))
                 ORDER BY erp.country_name, et.sort_order, et.energy_name
                 """, rowMapper(), blankToNull(countryCode), blankToNull(countryCode));
@@ -183,6 +184,21 @@ public class EnergyReferenceRepository {
         syncCompanyEnergyPriceReferences(countryCode);
         logOrganization(actorUserId, actorCompanyId, "ENERGY_REFERENCE_PRICE", null, "UPDATE_PROVIDER", "{\"updatedRows\":" + updated + "}");
         return updated;
+    }
+
+
+    public void softDelete(Long id, Long actorUserId, Long actorCompanyId) {
+        jdbcTemplate.update("""
+                UPDATE energy_reference_prices
+                SET deleted_at = NOW(),
+                    deleted_by = ?,
+                    deleted_reason = COALESCE(deleted_reason, 'Deleted from Harga Master'),
+                    delete_permanent_at = COALESCE(delete_permanent_at, NOW() + INTERVAL '30 days'),
+                    updated_by = ?,
+                    updated_at = NOW()
+                WHERE id = ? AND deleted_at IS NULL
+                """, actorUserId, actorUserId, id);
+        logOrganization(actorUserId, actorCompanyId, "ENERGY_REFERENCE_PRICE", id, "HARGA_MASTER_DELETE", "{}");
     }
 
     public void updateManual(Long id, EnergyReferenceUpdateRequest request, Long actorUserId, Long actorCompanyId) {

@@ -26,7 +26,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/health", "/api/auth/login", "/api/user/profile/photo/**").permitAll()
                         .requestMatchers("/api/server-monitor/**").hasRole("SUPERADMIN")
-                        .requestMatchers("/api/organization/**", "/api/organizations/**", "/api/user/**", "/api/asset-register/**").authenticated()
+                        .requestMatchers("/api/organization/**", "/api/organizations/**", "/api/user/**", "/api/asset-register/**", "/api/master-data/**").authenticated()
                         .anyRequest().authenticated())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())

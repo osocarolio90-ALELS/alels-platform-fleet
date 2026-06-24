@@ -25,3 +25,6 @@ export function getDefaultRouteForRole(_role?: string | null): string {
   if (normalized && ORGANIZATION_ROLES.includes(normalized)) return "/organization/company-list";
   return "/server-monitor/overview";
 }
+
+export const MASTER_DATA_ROLES: AlelsRole[] = ["SUPERADMIN", "ADMIN"];
+export const MASTER_DATA_EDIT_ROLES: AlelsRole[] = ["SUPERADMIN"];

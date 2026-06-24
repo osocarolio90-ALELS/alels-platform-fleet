@@ -1,13 +1,13 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Bot, Building2, CarFront, ChevronDown, CircleUserRound, ClipboardList, DollarSign, Globe, IdCard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Recycle, ServerCog, Settings, Sun } from "lucide-react";
+import { Bot, Building2, CarFront, ChevronDown, CircleUserRound, ClipboardList, Cpu, Database, DollarSign, Globe, IdCard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Recycle, ServerCog, Settings, Sun } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
 import { useLanguageStore } from "@/stores/language-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { cn } from "@/lib/utils";
-import { ENERGY_REFERENCE_ROLES, ORGANIZATION_ROLES, SERVER_MONITOR_ROLES, hasRole } from "@/lib/role-access";
+import { MASTER_DATA_ROLES, ORGANIZATION_ROLES, SERVER_MONITOR_ROLES, hasRole } from "@/lib/role-access";
 
 type SidebarItem = { to: string; label: string; roles?: readonly string[] };
 
@@ -29,10 +29,17 @@ const serverMonitorItems: SidebarItem[] = [
 
 const assetRegisterItems: SidebarItem[] = [
   { to: "/asset-register/vehicle-register", label: "Vehicle Register" },
+  { to: "/asset-register/device-register", label: "Device Register" },
   { to: "/asset-register/driver-register", label: "Driver Register" },
   { to: "/asset-register/energy-price", label: "Harga Energy" },
-  { to: "/asset-register/energy-reference", label: "Harga Referensi", roles: ENERGY_REFERENCE_ROLES },
   { to: "/asset-register/wasted", label: "Wasted" }
+];
+
+const masterDataItems: SidebarItem[] = [
+  { to: "/master-data/vehicle-master", label: "Vehicle Master" },
+  { to: "/master-data/device-master", label: "Device Master" },
+  { to: "/master-data/reference-price", label: "Harga Master" },
+  { to: "/master-data/wasted", label: "Wasted" }
 ];
 
 export function AppLayout() {
@@ -43,6 +50,7 @@ export function AppLayout() {
   const [serverMonitorOpen, setServerMonitorOpen] = useState(location.pathname.startsWith("/server-monitor"));
   const [organizationOpen, setOrganizationOpen] = useState(location.pathname.startsWith("/organization"));
   const [assetRegisterOpen, setAssetRegisterOpen] = useState(location.pathname.startsWith("/asset-register"));
+  const [masterDataOpen, setMasterDataOpen] = useState(location.pathname.startsWith("/master-data"));
   const [profileOpen, setProfileOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -53,6 +61,7 @@ export function AppLayout() {
 
   const canViewServerMonitor = hasRole(user?.role, SERVER_MONITOR_ROLES);
   const canViewOrganization = hasRole(user?.role, ORGANIZATION_ROLES);
+  const canViewMasterData = hasRole(user?.role, MASTER_DATA_ROLES);
   const visibleAssetRegisterItems = assetRegisterItems.filter((item) => !item.roles || hasRole(user?.role, item.roles as any));
   const sidebarIsCompact = sidebarCollapsed && !sidebarHovered;
   const currentCompanyName = (user?.companyName || "ALELS TECH INDONESIA").trim().toUpperCase();
@@ -159,7 +168,7 @@ export function AppLayout() {
                 {visibleAssetRegisterItems.map((item) => (
                   <NavLink key={item.to} to={item.to} className={({ isActive }) => cn("legacy-subnav-link", isActive && "active")}>
                     <span className="inline-flex items-center gap-2">
-                      {item.to.includes("driver") ? <IdCard className="h-3.5 w-3.5" /> : item.to.includes("energy-reference") ? <DollarSign className="h-3.5 w-3.5" /> : item.to.includes("energy") ? <DollarSign className="h-3.5 w-3.5" /> : item.to.includes("wasted") ? <Recycle className="h-3.5 w-3.5" /> : <CarFront className="h-3.5 w-3.5" />}
+                      {item.to.includes("device") ? <Cpu className="h-3.5 w-3.5" /> : item.to.includes("driver") ? <IdCard className="h-3.5 w-3.5" /> : item.to.includes("energy-reference") ? <DollarSign className="h-3.5 w-3.5" /> : item.to.includes("energy") ? <DollarSign className="h-3.5 w-3.5" /> : item.to.includes("wasted") ? <Recycle className="h-3.5 w-3.5" /> : <CarFront className="h-3.5 w-3.5" />}
                       {item.label}
                     </span>
                   </NavLink>
@@ -167,6 +176,31 @@ export function AppLayout() {
               </div>
             ) : null}
           </div>
+
+          {canViewMasterData ? (
+            <div>
+              <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Master Data</p>
+              <button
+                type="button"
+                className={cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", location.pathname.startsWith("/master-data") && "active")}
+                onClick={() => setMasterDataOpen((current) => !current)}
+                title="Master Data"
+              >
+                <Database className="h-4 w-4 shrink-0" />
+                <span className="sidebar-text flex-1 text-left">Master Data</span>
+                <ChevronDown className={cn("sidebar-text h-4 w-4 transition-transform", masterDataOpen && "rotate-180")} />
+              </button>
+              {masterDataOpen && !sidebarIsCompact ? (
+                <div className="legacy-subnav mb-1 ml-8 space-y-1">
+                  {masterDataItems.map((item) => (
+                    <NavLink key={item.to} to={item.to} className={({ isActive }) => cn("legacy-subnav-link", isActive && "active")}>
+                      <span className="inline-flex items-center gap-2"><Database className="h-3.5 w-3.5" />{item.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div>
             <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Assignment</p>

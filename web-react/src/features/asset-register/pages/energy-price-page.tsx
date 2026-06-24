@@ -5,7 +5,7 @@ import { Fuel, Pencil, Save, X } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getEnergyPriceCountries, getEnergyPrices, updateEnergyPrice, type EnergyCountryOption, type EnergyPriceRow } from "@/features/asset-register/api/energy-price-api";
+import { getEnergyPriceCountries, getEnergyPrices, updateEnergyPrice, type EnergyPriceRow } from "@/features/asset-register/api/energy-price-api";
 import { OrganizationPageHeader, OrganizationTableCard, StatusBadge, formatDateTime } from "@/features/organization/components/organization-ui";
 import { useAuthStore } from "@/stores/auth-store";
 import { hasRole, ENERGY_PRICE_EDIT_ROLES } from "@/lib/role-access";
@@ -31,7 +31,6 @@ export function EnergyPricePage() {
   });
 
   const selectedCountry = countries.find((country) => country.countryCode === form.countryCode);
-  const selectedTableCountry = countries.find((country) => country.countryCode === selectedCountryCode);
 
   const updateMutation = useMutation({
     mutationFn: ({ id, input }: { id: number; input: EnergyPriceForm }) => updateEnergyPrice(id, normalizeInput(input)),
@@ -76,12 +75,12 @@ export function EnergyPricePage() {
   }
 
   return (
-    <section className="space-y-5 text-foreground">
+    <section className="space-y-3 text-foreground">
       <OrganizationPageHeader icon={<Fuel className="h-5 w-5" />} title="Harga Energy" />
 
       {notice ? <Notice message={notice} /> : null}
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-[#111317] p-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-[#111317] px-3 py-2">
         <label className="grid gap-1 text-xs font-bold text-white">
           <span>Country</span>
           <select
@@ -101,9 +100,9 @@ export function EnergyPricePage() {
             ))}
           </select>
         </label>
-        <div className="text-xs text-slate-400">
-          Harga referensi mengikuti country yang dipilih
-          {selectedTableCountry?.sourceName ? <span className="block">Source: {selectedTableCountry.sourceName}</span> : null}
+        <div className="pt-4 text-xs leading-5 text-slate-400">
+          <span className="block"></span> 
+          <span className="block">Harga referensi hanya rekomendasi, harga yang akan digunakan adalah Price Energy. Jika harga referensi tidak sesuai, tekan Edit untuk merubah Price Energy.</span>
         </div>
       </div>
 
@@ -121,7 +120,7 @@ export function EnergyPricePage() {
             <Field label="Price Energy">
               <Input type="number" min="0" step="0.0001" value={form.priceEnergy} onChange={(event) => setForm((current) => ({ ...current, priceEnergy: event.target.value }))} />
             </Field>
-            <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-xs text-slate-300">
+            <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 text-xs text-slate-300">
               Jika country diubah dan Price Energy dikosongkan, harga operasional akan mengikuti Reference Price Country terbaru untuk negara tersebut.
             </div>
             <div className="md:col-span-2 flex justify-end gap-3 pt-2">

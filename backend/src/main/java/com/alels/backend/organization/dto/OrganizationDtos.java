@@ -31,6 +31,7 @@ public final class OrganizationDtos {
             String updatedAt,
             String deletedAt,
             String deletePermanentAt,
+            Integer remainingDays,
             String deletedReason,
             Long activeUserCount
     ) {}
@@ -54,6 +55,7 @@ public final class OrganizationDtos {
             String updatedAt,
             String deletedAt,
             String deletePermanentAt,
+            Integer remainingDays,
             String deletedReason,
             String profilePhotoUrl
     ) {}
@@ -66,6 +68,7 @@ public final class OrganizationDtos {
             String roleOrType,
             String deletedAt,
             String deletePermanentAt,
+            Integer remainingDays,
             String deletedReason,
             Long deletedBy,
             String deletedByEmail

@@ -2,7 +2,7 @@ import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Building2, CheckCircle2, ChevronDown, Eye, EyeOff, Pencil, Plus, RotateCcw, Save, Search, ShieldOff, Trash2 } from "lucide-react";
 
-import { DataTable, type DataTableColumn } from "@/components/data-table";
+import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/auth-store";
@@ -88,6 +88,12 @@ export function CompanyListPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organization"] }),
     onError: (error) => setNotice(error instanceof Error ? error.message : "Action failed.")
   });
+
+  const bulkActions = useMemo<DataTableBulkAction<Company>[]>(() => [
+    { key: "delete", label: "Delete", icon: <Trash2 className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Move ${rows.length} company item(s) to Wasted?`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ id: row.id, action: "delete" })) },
+    { key: "suspend", label: "Suspend", icon: <ShieldOff className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Suspend ${rows.length} company item(s)?`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ id: row.id, action: "suspend" })) },
+    { key: "activate", label: "Activate", icon: <CheckCircle2 className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Activate ${rows.length} company item(s)?`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ id: row.id, action: "activate" })) }
+  ], [actionMutation]);
 
   const updateMutation = useMutation({
     mutationFn: ({ id, input }: { id: number; input: { companyName: string; parentCompanyId?: number | null } }) => updateCompany(id, input),
@@ -251,9 +257,8 @@ export function CompanyListPage() {
 
   return (
     <section className="space-y-5 text-foreground">
-      <OrganizationPageHeader icon={<Building2 className="h-5 w-5" />} title="Company List" />
+      <OrganizationPageHeader icon={<Building2 className="h-5 w-5" />} title="Company List" actions={<Button type="button" onClick={startCreate}><Plus className="h-4 w-4" /> Created New</Button>} />
       <OrganizationTableCard>
-        <div className="mb-4 flex justify-end"><Button type="button" onClick={startCreate}><Plus className="h-4 w-4" /> Created New</Button></div>
         {notice ? <Notice message={notice} /> : null}
         {companiesQuery.isError ? <Notice message={companiesQuery.error instanceof Error ? companiesQuery.error.message : "Company API belum tersedia atau backend belum berjalan."} /> : null}
         {savedResult ? <div className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-100">Company berhasil disimpan. PDF account information sudah dibuka.</div> : null}
@@ -262,6 +267,8 @@ export function CompanyListPage() {
           columns={columns}
           rowKey={(row) => row.id}
           emptyMessage={companiesQuery.isLoading ? "Loading companies..." : "No company found."}
+          bulkActions={bulkActions}
+          isRowSelectable={(row) => canShowCompanyActions(row, currentCompanyId)}
           actions={(row) => canShowCompanyActions(row, currentCompanyId) ? (
             <div className="flex items-center gap-2">
               <Button type="button" size="sm" variant="outline" title="Edit company" onClick={() => editCompany(row)}>

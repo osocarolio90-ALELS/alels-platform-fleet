@@ -3,7 +3,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { ProtectedRoute } from "@/components/protected-route";
 import { AppLayout } from "@/layouts/app-layout";
-import { ALL_ROLES, ENERGY_REFERENCE_ROLES, ORGANIZATION_ROLES, SERVER_MONITOR_ROLES } from "@/lib/role-access";
+import { ALL_ROLES, MASTER_DATA_ROLES, ORGANIZATION_ROLES, SERVER_MONITOR_ROLES } from "@/lib/role-access";
 
 const LoginPage = lazy(() =>
   import("@/features/auth/pages/login-page").then((module) => ({ default: module.LoginPage }))
@@ -48,11 +48,23 @@ const VehicleRegisterPage = lazy(() =>
 const DriverRegisterPage = lazy(() =>
   import("@/features/asset-register/pages/driver-register-page").then((module) => ({ default: module.DriverRegisterPage }))
 );
+const DeviceRegisterPage = lazy(() =>
+  import("@/features/asset-register/pages/device-register-page").then((module) => ({ default: module.DeviceRegisterPage }))
+);
 const EnergyPricePage = lazy(() =>
   import("@/features/asset-register/pages/energy-price-page").then((module) => ({ default: module.EnergyPricePage }))
 );
-const EnergyReferencePage = lazy(() =>
-  import("@/features/asset-register/pages/energy-reference-page").then((module) => ({ default: module.EnergyReferencePage }))
+const ReferencePricePage = lazy(() =>
+  import("@/features/master-data/pages/reference-price-page").then((module) => ({ default: module.ReferencePricePage }))
+);
+const VehicleMasterPage = lazy(() =>
+  import("@/features/master-data/pages/vehicle-master-page").then((module) => ({ default: module.VehicleMasterPage }))
+);
+const DeviceMasterPage = lazy(() =>
+  import("@/features/master-data/pages/device-master-page").then((module) => ({ default: module.DeviceMasterPage }))
+);
+const MasterWastedPage = lazy(() =>
+  import("@/features/master-data/pages/master-wasted-page").then((module) => ({ default: module.MasterWastedPage }))
 );
 const AssetWastedPage = lazy(() =>
   import("@/features/asset-register/pages/wasted-page").then((module) => ({ default: module.AssetWastedPage }))
@@ -86,15 +98,20 @@ export const router = createBrowserRouter([
           { path: "/dashboard", element: <Navigate to="/organization/company-list" replace /> },
           { path: "/user/profile", element: withSuspense(<UserProfilePage />) },
           { path: "/asset-register/vehicle-register", element: withSuspense(<VehicleRegisterPage />) },
+          { path: "/asset-register/device-register", element: withSuspense(<DeviceRegisterPage />) },
           { path: "/asset-register/driver-register", element: withSuspense(<DriverRegisterPage />) },
           { path: "/asset-register/energy-price", element: withSuspense(<EnergyPricePage />) },
+          { path: "/asset-register/wasted", element: withSuspense(<AssetWastedPage />) },
           {
-            element: <ProtectedRoute allowedRoles={ENERGY_REFERENCE_ROLES} />,
+            element: <ProtectedRoute allowedRoles={MASTER_DATA_ROLES} />,
             children: [
-              { path: "/asset-register/energy-reference", element: withSuspense(<EnergyReferencePage />) }
+              { path: "/master-data/vehicle-master", element: withSuspense(<VehicleMasterPage />) },
+              { path: "/master-data/device-master", element: withSuspense(<DeviceMasterPage />) },
+              { path: "/master-data/reference-price", element: withSuspense(<ReferencePricePage />) },
+              { path: "/master-data/wasted", element: withSuspense(<MasterWastedPage />) },
+              { path: "/master-data", element: <Navigate to="/master-data/vehicle-master" replace /> }
             ]
           },
-          { path: "/asset-register/wasted", element: withSuspense(<AssetWastedPage />) },
           { path: "/asset-register", element: <Navigate to="/asset-register/vehicle-register" replace /> },
           { path: "/assignment", element: withSuspense(<AssignmentPage />) },
 

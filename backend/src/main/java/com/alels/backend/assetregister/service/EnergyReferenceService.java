@@ -54,6 +54,11 @@ public class EnergyReferenceService {
         repository.updateManual(id, request, actor.userId(), actor.companyId());
     }
 
+    public void delete(JwtUserContext actor, Long id) {
+        requireSuperAdmin(actor);
+        repository.softDelete(id, actor.userId(), actor.companyId());
+    }
+
     private void validateCountry(EnergyReferenceCountryCreateRequest request) {
         if (request == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request wajib diisi.");
         if (isBlank(request.countryCode()) || request.countryCode().trim().length() > 10) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Country code tidak valid.");

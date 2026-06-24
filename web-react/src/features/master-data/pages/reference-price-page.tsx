@@ -1,16 +1,17 @@
 import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DatabaseZap, Pencil, Plus, RefreshCw, Save, X } from "lucide-react";
+import { DatabaseZap, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 
 import { DataTable, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createEnergyReferenceCountry, getEnergyReferenceCountries, getEnergyReferences, updateEnergyReference, updateEnergyReferenceProvider, type EnergyReferenceCountryInput, type EnergyReferenceCountryRow, type EnergyReferenceRow } from "@/features/asset-register/api/energy-reference-api";
-import { OrganizationPageHeader, OrganizationTableCard, StatusBadge, formatDateTime } from "@/features/organization/components/organization-ui";
+import { createEnergyReferenceCountry, deleteEnergyReference, getEnergyReferenceCountries, getEnergyReferences, updateEnergyReference, updateEnergyReferenceProvider, type EnergyReferenceCountryInput, type EnergyReferenceCountryRow, type EnergyReferenceRow } from "@/features/master-data/api/reference-price-api";
+import { OrganizationTableCard, StatusBadge, formatDateTime } from "@/features/organization/components/organization-ui";
+import { PageHeader } from "@/components/ui/page-header";
 import { useAuthStore } from "@/stores/auth-store";
 import { hasRole, ENERGY_REFERENCE_EDIT_ROLES } from "@/lib/role-access";
 
-export function EnergyReferencePage() {
+export function ReferencePricePage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
   const isSuperAdmin = hasRole(user?.role, ENERGY_REFERENCE_EDIT_ROLES);
@@ -22,12 +23,12 @@ export function EnergyReferencePage() {
   const [countryForm, setCountryForm] = useState<EnergyCountryForm>(emptyCountryForm());
 
   const { data: countries = [] } = useQuery({
-    queryKey: ["asset-register", "energy-reference-countries"],
+    queryKey: ["master-data", "energy-reference-countries"],
     queryFn: getEnergyReferenceCountries
   });
 
   const { data = [], isLoading, isError } = useQuery({
-    queryKey: ["asset-register", "energy-reference-prices", countryCode],
+    queryKey: ["master-data", "energy-reference-prices", countryCode],
     queryFn: () => getEnergyReferences(countryCode),
     enabled: Boolean(countryCode),
     refetchInterval: 60_000
@@ -53,6 +54,17 @@ export function EnergyReferencePage() {
     onError: (error) => setNotice(error instanceof Error ? error.message : "Edit harga referensi gagal.")
   });
 
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteEnergyReference(id),
+    onSuccess: () => {
+      setNotice("Harga Master dipindahkan ke Wasted.");
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["master-data", "wasted"] });
+    },
+    onError: (error) => setNotice(error instanceof Error ? error.message : "Delete Harga Master gagal.")
+  });
+
   const countryMutation = useMutation({
     mutationFn: (input: EnergyCountryForm) => createEnergyReferenceCountry(normalizeCountryInput(input)),
     onSuccess: () => {
@@ -65,8 +77,8 @@ export function EnergyReferencePage() {
   });
 
   function invalidateAll() {
-    queryClient.invalidateQueries({ queryKey: ["asset-register", "energy-reference-prices"] });
-    queryClient.invalidateQueries({ queryKey: ["asset-register", "energy-reference-countries"] });
+    queryClient.invalidateQueries({ queryKey: ["master-data", "energy-reference-prices"] });
+    queryClient.invalidateQueries({ queryKey: ["master-data", "energy-reference-countries"] });
     queryClient.invalidateQueries({ queryKey: ["asset-register", "energy-prices"] });
   }
 
@@ -111,7 +123,7 @@ export function EnergyReferencePage() {
 
   return (
     <section className="space-y-5 text-foreground">
-      <OrganizationPageHeader icon={<DatabaseZap className="h-5 w-5" />} title="Harga Referensi" />
+      <PageHeader icon={<DatabaseZap className="h-4 w-4" />} title="Harga Master" actions={isSuperAdmin ? <Button type="button" onClick={() => setCreatingCountry((current) => !current)}><Plus className="h-4 w-4" /> Created New Country</Button> : null} />
 
       {notice ? <Notice message={notice} /> : null}
 
@@ -124,7 +136,6 @@ export function EnergyReferencePage() {
             </select>
           </div>
           <div className="flex items-center gap-2">
-            {isSuperAdmin ? <Button type="button" variant="outline" onClick={() => setCreatingCountry((current) => !current)}><Plus className="h-4 w-4" /> Created New Country</Button> : null}
             <Button type="button" onClick={() => providerMutation.mutate()} disabled={providerMutation.isPending}>
               <RefreshCw className="h-4 w-4" /> Update Provider
             </Button>
@@ -146,13 +157,13 @@ export function EnergyReferencePage() {
           </form>
         ) : null}
 
-        {isError ? <Notice message="Harga Referensi API belum tersedia atau migration 010 belum dijalankan." /> : null}
+        {isError ? <Notice message="Harga Master API belum tersedia atau migration 010/014 belum dijalankan." /> : null}
         <DataTable
           data={data}
           columns={columns}
           rowKey={(row) => row.id}
           emptyMessage={isLoading ? "Loading harga referensi..." : "No reference price found."}
-          actions={(row) => isSuperAdmin ? <Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button> : <span className="text-xs text-slate-400">Read only</span>}
+          actions={(row) => isSuperAdmin ? <div className="flex items-center gap-2"><Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button><Button type="button" size="sm" variant="destructive" onClick={() => { if (window.confirm(`Delete ${row.energyName} ${row.countryName} to Wasted?`)) deleteMutation.mutate(row.id); }}><Trash2 className="h-4 w-4" /> Delete</Button></div> : <span className="text-xs text-slate-400">Read only</span>}
         />
       </OrganizationTableCard>
 
@@ -265,3 +276,6 @@ function ReadOnly({ label, value }: { label: string; value?: string | null }) {
 function Notice({ message }: { message: string }) {
   return <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">{message}</div>;
 }
+
+
+export const EnergyReferencePage = ReferencePricePage;

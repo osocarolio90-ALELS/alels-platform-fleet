@@ -2,7 +2,7 @@ import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Pencil, Plus, Save, ShieldOff, Trash2, UsersRound } from "lucide-react";
 
-import { DataTable, type DataTableColumn } from "@/components/data-table";
+import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createUser, getCompanyOptions, getUsers, updateUser, userAction, type OptionRow, type UpdateUserResponse, type User } from "@/features/organization/api/organization-api";
@@ -30,6 +30,12 @@ export function UserListPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organization"] }),
     onError: (error) => setNotice(error instanceof Error ? error.message : "Action failed.")
   });
+  const bulkActions = useMemo<DataTableBulkAction<User>[]>(() => [
+    { key: "delete", label: "Delete", icon: <Trash2 className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Move ${rows.length} user item(s) to Wasted?`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ id: row.id, action: "delete" })) },
+    { key: "suspend", label: "Suspend", icon: <ShieldOff className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Suspend ${rows.length} user item(s)?`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ id: row.id, action: "suspend" })) },
+    { key: "activate", label: "Activate", icon: <CheckCircle2 className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Activate ${rows.length} user item(s)?`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ id: row.id, action: "activate" })) }
+  ], [actionMutation]);
+
   const createMutation = useMutation({
     mutationFn: createUser,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["organization", "users"] }); reset(); },
@@ -83,12 +89,11 @@ export function UserListPage() {
 
   return (
     <section className="space-y-5 text-foreground">
-      <OrganizationPageHeader icon={<UsersRound className="h-5 w-5" />} title="User List" />
+      <OrganizationPageHeader icon={<UsersRound className="h-5 w-5" />} title="User List" actions={<Button type="button" onClick={startCreate}><Plus className="h-4 w-4" /> Created New</Button>} />
       <OrganizationTableCard>
-        <div className="mb-4 flex justify-end"><Button type="button" onClick={startCreate}><Plus className="h-4 w-4" /> Created New</Button></div>
         {notice ? <Notice message={notice} /> : null}
         {isError ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">User API belum tersedia atau backend belum berjalan.</div> : null}
-        <DataTable data={data} columns={columns} rowKey={(row) => row.id} emptyMessage={isLoading ? "Loading users..." : "No user found."} actions={(row) => canShowUserActions(row, currentUser?.id ?? null) ? <div className="flex items-center gap-2"><Button type="button" size="sm" variant="outline" title="Edit user" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /></Button><Button type="button" size="sm" variant="outline" title="Delete" onClick={() => confirm("Move user to Wasted?") && actionMutation.mutate({ id: row.id, action: "delete" })}><Trash2 className="h-4 w-4" /></Button><Button type="button" size="sm" variant="outline" title="Suspend" className={actionButtonClass(row.status, "suspend")} onClick={() => actionMutation.mutate({ id: row.id, action: "suspend" })}><ShieldOff className="h-4 w-4" /></Button><Button type="button" size="sm" variant="outline" title="Activate" className={actionButtonClass(row.status, "activate")} onClick={() => actionMutation.mutate({ id: row.id, action: "activate" })}><CheckCircle2 className="h-4 w-4" /></Button></div> : <span className="text-xs text-slate-500">Protected</span>} />
+        <DataTable data={data} columns={columns} rowKey={(row) => row.id} emptyMessage={isLoading ? "Loading users..." : "No user found."} bulkActions={bulkActions} isRowSelectable={(row) => canShowUserActions(row, currentUser?.id ?? null)} actions={(row) => canShowUserActions(row, currentUser?.id ?? null) ? <div className="flex items-center gap-2"><Button type="button" size="sm" variant="outline" title="Edit user" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /></Button><Button type="button" size="sm" variant="outline" title="Delete" onClick={() => confirm("Move user to Wasted?") && actionMutation.mutate({ id: row.id, action: "delete" })}><Trash2 className="h-4 w-4" /></Button><Button type="button" size="sm" variant="outline" title="Suspend" className={actionButtonClass(row.status, "suspend")} onClick={() => actionMutation.mutate({ id: row.id, action: "suspend" })}><ShieldOff className="h-4 w-4" /></Button><Button type="button" size="sm" variant="outline" title="Activate" className={actionButtonClass(row.status, "activate")} onClick={() => actionMutation.mutate({ id: row.id, action: "activate" })}><CheckCircle2 className="h-4 w-4" /></Button></div> : <span className="text-xs text-slate-500">Protected</span>} />
       </OrganizationTableCard>
     </section>
   );

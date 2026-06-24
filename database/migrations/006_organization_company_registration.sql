@@ -23,6 +23,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS created_by BIGINT NULL REFERENCES use
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_by BIGINT NULL REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS delete_permanent_at TIMESTAMPTZ NULL;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_reason TEXT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_path VARCHAR(512) NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_content_type VARCHAR(120) NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version BIGINT NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS company_types (
     id BIGSERIAL PRIMARY KEY,
@@ -343,6 +346,7 @@ SELECT
     c.deleted_at,
     c.deleted_by,
     c.delete_permanent_at,
+    GREATEST(0, CEIL(EXTRACT(EPOCH FROM (COALESCE(c.delete_permanent_at, c.deleted_at + INTERVAL '30 days') - NOW())) / 86400.0))::INT AS remaining_days,
     c.deleted_reason,
     COUNT(u.id) FILTER (WHERE u.deleted_at IS NULL) AS active_user_count
 FROM companies c
@@ -374,7 +378,11 @@ SELECT
     u.deleted_at,
     u.deleted_by,
     u.delete_permanent_at,
-    u.deleted_reason
+    GREATEST(0, CEIL(EXTRACT(EPOCH FROM (COALESCE(u.delete_permanent_at, u.deleted_at + INTERVAL '30 days') - NOW())) / 86400.0))::INT AS remaining_days,
+    u.deleted_reason,
+    u.profile_photo_path,
+    u.profile_photo_content_type,
+    u.session_version
 FROM users u
 LEFT JOIN companies c ON c.id = u.company_id
 LEFT JOIN companies p ON p.id = c.parent_company_id
@@ -389,6 +397,7 @@ SELECT
     c.company_type::VARCHAR(120) AS role_or_type,
     c.deleted_at,
     c.delete_permanent_at,
+    GREATEST(0, CEIL(EXTRACT(EPOCH FROM (COALESCE(c.delete_permanent_at, c.deleted_at + INTERVAL '30 days') - NOW())) / 86400.0))::INT AS remaining_days,
     c.deleted_reason,
     c.deleted_by,
     du.email::VARCHAR(255) AS deleted_by_email
@@ -404,6 +413,7 @@ SELECT
     u.role::VARCHAR(120) AS role_or_type,
     u.deleted_at,
     u.delete_permanent_at,
+    GREATEST(0, CEIL(EXTRACT(EPOCH FROM (COALESCE(u.delete_permanent_at, u.deleted_at + INTERVAL '30 days') - NOW())) / 86400.0))::INT AS remaining_days,
     u.deleted_reason,
     u.deleted_by,
     du.email::VARCHAR(255) AS deleted_by_email

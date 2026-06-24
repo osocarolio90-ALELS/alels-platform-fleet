@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -59,6 +60,12 @@ public class EnergyReferenceController {
             @RequestBody(required = false) EnergyReferenceProviderUpdateRequest request
     ) {
         return service.updateProvider(user(authentication), request);
+    }
+
+    @DeleteMapping("/{id}")
+    public Map<String, Object> delete(Authentication authentication, @PathVariable Long id) {
+        service.delete(user(authentication), id);
+        return Map.of("success", true);
     }
 
     @PutMapping("/{id}")

@@ -2,10 +2,11 @@ import { ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, Trash2 } from "lucide-react";
 
-import { DataTable, type DataTableColumn } from "@/components/data-table";
+import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { companyAction, getOrganizationWastedItems, userAction, type OrganizationWastedItem } from "@/features/organization/api/organization-api";
 import { formatCompanyName, formatDateTime, OrganizationPageHeader, OrganizationTableCard, StatusBadge } from "@/features/organization/components/organization-ui";
+import { normalizeRole } from "@/lib/role-access";
 import { useAuthStore } from "@/stores/auth-store";
 
 type WasteTab = "COMPANY" | "USER";
@@ -23,6 +24,11 @@ export function WastedPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organization"] })
   });
 
+  const bulkActions = useMemo<DataTableBulkAction<OrganizationWastedItem>[]>(() => [
+    { key: "restore", label: "Restore", icon: <RotateCcw className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Restore ${rows.length} wasted item(s)?`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ item: row, action: "restore" })) },
+    { key: "permanent-delete", label: "Permanent Delete", icon: <Trash2 className="h-4 w-4" />, variant: "outline", hidden: () => !canPermanentDelete, confirmMessage: (rows) => `Permanent delete ${rows.length} item(s)? This cannot be undone.`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ item: row, action: "permanent-delete" })) }
+  ], [actionMutation, canPermanentDelete]);
+
   const companyItems = useMemo(() => data.filter((item) => item.itemType === "COMPANY"), [data]);
   const userItems = useMemo(() => data.filter((item) => item.itemType === "USER"), [data]);
   const tableData = activeTab === "COMPANY" ? companyItems : userItems;
@@ -32,7 +38,8 @@ export function WastedPage() {
     { key: "companyName", label: "Parent / Line", value: (row) => formatCompanyName(row.companyName), render: (row) => <span>{formatCompanyName(row.companyName)}</span> },
     { key: "roleOrType", label: "Type", value: (row) => row.roleOrType || "-", render: (row) => <StatusBadge status={row.roleOrType} /> },
     { key: "deletedAt", label: "Deleted at", value: (row) => formatDateTime(row.deletedAt), render: (row) => <span>{formatDateTime(row.deletedAt)}</span> },
-    { key: "deletePermanentAt", label: "Permanent at", value: (row) => formatDateTime(row.deletePermanentAt), render: (row) => <span>{formatDateTime(row.deletePermanentAt)}</span> },
+    { key: "remainingDays", label: "Remaining", value: (row) => remainingLabel(row), render: (row) => <span className="font-semibold">{remainingLabel(row)}</span> },
+    { key: "deletePermanentAt", label: "Auto purge date", value: (row) => formatDateTime(row.deletePermanentAt), render: (row) => <span>{formatDateTime(row.deletePermanentAt)}</span> },
     { key: "deletedReason", label: "Reason", value: (row) => row.deletedReason || "-" }
   ], []);
 
@@ -41,7 +48,8 @@ export function WastedPage() {
     { key: "companyName", label: "Company", value: (row) => formatCompanyName(row.companyName), render: (row) => <span>{formatCompanyName(row.companyName)}</span> },
     { key: "roleOrType", label: "Role", value: (row) => row.roleOrType || "-", render: (row) => <StatusBadge status={row.roleOrType} /> },
     { key: "deletedAt", label: "Deleted at", value: (row) => formatDateTime(row.deletedAt), render: (row) => <span>{formatDateTime(row.deletedAt)}</span> },
-    { key: "deletePermanentAt", label: "Permanent at", value: (row) => formatDateTime(row.deletePermanentAt), render: (row) => <span>{formatDateTime(row.deletePermanentAt)}</span> },
+    { key: "remainingDays", label: "Remaining", value: (row) => remainingLabel(row), render: (row) => <span className="font-semibold">{remainingLabel(row)}</span> },
+    { key: "deletePermanentAt", label: "Auto purge date", value: (row) => formatDateTime(row.deletePermanentAt), render: (row) => <span>{formatDateTime(row.deletePermanentAt)}</span> },
     { key: "deletedReason", label: "Reason", value: (row) => row.deletedReason || "-" }
   ], []);
 
@@ -59,7 +67,8 @@ export function WastedPage() {
           columns={activeTab === "COMPANY" ? companyColumns : userColumns}
           rowKey={(row) => `${row.itemType}-${row.id}`}
           emptyMessage={isLoading ? "Loading wasted data..." : activeTab === "COMPANY" ? "No company wasted item found." : "No user wasted item found."}
-          actions={(row) => <div className="flex items-center gap-2"><Button type="button" size="sm" variant="outline" title="Restore" onClick={() => actionMutation.mutate({ item: row, action: "restore" })}><RotateCcw className="h-4 w-4" /></Button>{canPermanentDelete ? <Button type="button" size="sm" variant="outline" title="Permanent delete" onClick={() => confirm("Permanent delete this item? This cannot be undone.") && actionMutation.mutate({ item: row, action: "permanent-delete" })}><Trash2 className="h-4 w-4" /></Button> : null}</div>}
+          bulkActions={bulkActions}
+          actions={(row) => <div className="flex items-center gap-2"><Button type="button" size="sm" variant="outline" title="Restore" onClick={() => actionMutation.mutate({ item: row, action: "restore" })}><RotateCcw className="h-4 w-4" /> Restore</Button>{canPermanentDelete ? <Button type="button" size="sm" variant="outline" title="Permanent delete" onClick={() => confirm("Permanent delete this item? This cannot be undone.") && actionMutation.mutate({ item: row, action: "permanent-delete" })}><Trash2 className="h-4 w-4" /> Permanent Delete</Button> : null}</div>}
         />
       </OrganizationTableCard>
     </section>
@@ -70,6 +79,15 @@ function TabButton({ active, children, onClick }: { active: boolean; children: R
   return <Button type="button" variant={active ? "default" : "outline"} onClick={onClick}>{children}</Button>;
 }
 
-function normalizeRole(role?: string | null) {
-  return (role || "").toUpperCase().replace(/[\s_-]+/g, "");
+
+
+function remainingLabel(row: OrganizationWastedItem) {
+  if (typeof row.remainingDays === "number") {
+    return row.remainingDays <= 0 ? "Ready to purge" : `${row.remainingDays} day${row.remainingDays === 1 ? "" : "s"}`;
+  }
+  if (!row.deletePermanentAt) return "30 days";
+  const purgeAt = new Date(row.deletePermanentAt).getTime();
+  if (Number.isNaN(purgeAt)) return "-";
+  const diff = Math.ceil((purgeAt - Date.now()) / 86_400_000);
+  return diff <= 0 ? "Ready to purge" : `${diff} day${diff === 1 ? "" : "s"}`;
 }

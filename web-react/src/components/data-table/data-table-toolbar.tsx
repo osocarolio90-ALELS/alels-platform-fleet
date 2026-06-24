@@ -3,6 +3,7 @@ import { DataTableColumn, DataTableVisibleColumns } from "./data-table-types";
 
 type DataTableToolbarProps<T> = {
   search: string;
+  searchPlaceholder?: string;
   onSearchChange: (value: string) => void;
 
   showFilters: boolean;
@@ -23,6 +24,7 @@ type DataTableToolbarProps<T> = {
 
 export function DataTableToolbar<T>({
   search,
+  searchPlaceholder,
   onSearchChange,
   showFilters,
   onToggleFilters,
@@ -48,7 +50,7 @@ export function DataTableToolbar<T>({
         <input
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Search..."
+          placeholder={searchPlaceholder || "Search..."}
           className="h-9 w-full max-w-sm rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
         />
 

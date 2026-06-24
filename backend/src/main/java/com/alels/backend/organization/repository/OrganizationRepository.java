@@ -322,6 +322,11 @@ public class OrganizationRepository {
         return jdbcTemplate.query("SELECT company_id FROM users WHERE id = ?", (rs, rowNum) -> rs.getLong("company_id"), userId).stream().findFirst();
     }
 
+    public long purgeExpiredWasted() {
+        Long count = jdbcTemplate.queryForObject("SELECT COALESCE(deleted_companies, 0) + COALESCE(deleted_users, 0) FROM alels_purge_organization_wasted()", Long.class);
+        return count == null ? 0L : count;
+    }
+
     public void log(Long actorUserId, Long actorCompanyId, String targetType, Long targetId, String action, String detailsJson) {
         jdbcTemplate.update("""
                 INSERT INTO organization_activity_logs (actor_user_id, actor_company_id, target_type, target_id, action, details)
@@ -331,15 +336,15 @@ public class OrganizationRepository {
 
     private RowMapper<CompanyRow> companyMapper() {
         return (rs, rowNum) -> new CompanyRow(
-                rs.getLong("id"), nullableLong(rs, "parent_company_id"), rs.getString("parent_company_name"), rs.getString("company_name"), rs.getString("company_code"), rs.getString("company_type"), rs.getString("company_type"), rs.getString("plan"), nullableInt(rs, "month_packet"), nullableLong(rs, "storage_quota_mb"), nullableLong(rs, "storage_quota_mb"), nullableLong(rs, "storage_used_mb"), "MB", rs.getString("country"), rs.getString("status"), rs.getString("subscription_status"), rs.getBoolean("is_internal"), str(rs, "first_login_at"), str(rs, "started_at"), str(rs, "expired_at"), str(rs, "created_at"), nullableLong(rs, "created_by"), rs.getString("created_by_name"), rs.getString("created_by_email"), str(rs, "updated_at"), str(rs, "deleted_at"), str(rs, "delete_permanent_at"), rs.getString("deleted_reason"), nullableLong(rs, "active_user_count"));
+                rs.getLong("id"), nullableLong(rs, "parent_company_id"), rs.getString("parent_company_name"), rs.getString("company_name"), rs.getString("company_code"), rs.getString("company_type"), rs.getString("company_type"), rs.getString("plan"), nullableInt(rs, "month_packet"), nullableLong(rs, "storage_quota_mb"), nullableLong(rs, "storage_quota_mb"), nullableLong(rs, "storage_used_mb"), "MB", rs.getString("country"), rs.getString("status"), rs.getString("subscription_status"), rs.getBoolean("is_internal"), str(rs, "first_login_at"), str(rs, "started_at"), str(rs, "expired_at"), str(rs, "created_at"), nullableLong(rs, "created_by"), rs.getString("created_by_name"), rs.getString("created_by_email"), str(rs, "updated_at"), str(rs, "deleted_at"), str(rs, "delete_permanent_at"), nullableInt(rs, "remaining_days"), rs.getString("deleted_reason"), nullableLong(rs, "active_user_count"));
     }
 
     private RowMapper<UserRow> userMapper() {
-        return (rs, rowNum) -> new UserRow(nullableLong(rs, "id"), nullableLong(rs, "company_id"), rs.getString("company_name"), rs.getString("parent_company_name"), rs.getString("username"), rs.getString("full_name"), rs.getString("email"), rs.getString("role"), rs.getString("status"), str(rs, "first_login_at"), str(rs, "last_login_at"), str(rs, "created_at"), nullableLong(rs, "created_by"), rs.getString("created_by_name"), rs.getString("created_by_email"), str(rs, "updated_at"), str(rs, "deleted_at"), str(rs, "delete_permanent_at"), rs.getString("deleted_reason"), rs.getString("profile_photo_path"));
+        return (rs, rowNum) -> new UserRow(nullableLong(rs, "id"), nullableLong(rs, "company_id"), rs.getString("company_name"), rs.getString("parent_company_name"), rs.getString("username"), rs.getString("full_name"), rs.getString("email"), rs.getString("role"), rs.getString("status"), str(rs, "first_login_at"), str(rs, "last_login_at"), str(rs, "created_at"), nullableLong(rs, "created_by"), rs.getString("created_by_name"), rs.getString("created_by_email"), str(rs, "updated_at"), str(rs, "deleted_at"), str(rs, "delete_permanent_at"), nullableInt(rs, "remaining_days"), rs.getString("deleted_reason"), rs.getString("profile_photo_path"));
     }
 
     private RowMapper<WastedRow> wastedMapper() {
-        return (rs, rowNum) -> new WastedRow(rs.getString("item_type"), nullableLong(rs, "id"), rs.getString("name"), rs.getString("company_name"), rs.getString("role_or_type"), str(rs, "deleted_at"), str(rs, "delete_permanent_at"), rs.getString("deleted_reason"), nullableLong(rs, "deleted_by"), rs.getString("deleted_by_email"));
+        return (rs, rowNum) -> new WastedRow(rs.getString("item_type"), nullableLong(rs, "id"), rs.getString("name"), rs.getString("company_name"), rs.getString("role_or_type"), str(rs, "deleted_at"), str(rs, "delete_permanent_at"), nullableInt(rs, "remaining_days"), rs.getString("deleted_reason"), nullableLong(rs, "deleted_by"), rs.getString("deleted_by_email"));
     }
 
     private String str(ResultSet rs, String column) throws SQLException {

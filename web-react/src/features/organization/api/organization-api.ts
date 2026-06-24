@@ -29,6 +29,7 @@ export type Company = {
   updatedAt?: string | null;
   deletedAt?: string | null;
   deletePermanentAt?: string | null;
+  remainingDays?: number | null;
   deletedReason?: string | null;
 };
 
@@ -51,6 +52,7 @@ export type User = {
   updatedAt?: string | null;
   deletedAt?: string | null;
   deletePermanentAt?: string | null;
+  remainingDays?: number | null;
   deletedReason?: string | null;
   profilePhotoUrl?: string | null;
 };
@@ -63,6 +65,7 @@ export type OrganizationWastedItem = {
   roleOrType?: string | null;
   deletedAt?: string | null;
   deletePermanentAt?: string | null;
+  remainingDays?: number | null;
   deletedReason?: string | null;
   deletedBy?: number | null;
   deletedByEmail?: string | null;

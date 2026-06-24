@@ -84,3 +84,9 @@ export async function updateEnergyReference(id: number, input: EnergyReferenceUp
   const response = await api.put<{ success: boolean }>(`${BASE}/${id}`, input);
   return response.data;
 }
+
+
+export async function deleteEnergyReference(id: number) {
+  const response = await api.delete<{ success: boolean }>(`${BASE}/${id}`);
+  return response.data;
+}

@@ -1,23 +1,10 @@
 import { ReactNode } from "react";
-import { Building2 } from "lucide-react";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 
-export function OrganizationPageHeader({ title, icon, description }: { title: string; icon?: ReactNode; description?: string }) {
-  return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 text-foreground shadow-sm md:flex-row md:items-center md:justify-between">
-      <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-400/10 text-sky-300">
-          {icon ?? <Building2 className="h-5 w-5" />}
-        </div>
-        <div>
-          <h1 className="mt-1 text-2xl font-extrabold text-white">{title}</h1>
-          {description ? <p className="mt-1 text-sm text-slate-300">{description}</p> : null}
-        </div>
-      </div>
-    </div>
-  );
+export function OrganizationPageHeader({ title, icon, description, actions }: { title: string; icon?: ReactNode; description?: string; actions?: ReactNode }) {
+  return <PageHeader title={title} icon={icon} description={description} actions={actions} />;
 }
 
 export function OrganizationTableCard({ children, title, description }: { children: ReactNode; title?: string; description?: string }) {
