@@ -121,11 +121,10 @@ export function DeviceMasterPage() {
 
   if (formOpen) {
     return (
-      <section className="space-y-4 text-foreground">
+      <section className="space-y-5 text-foreground">
         <PageHeader
           title={editing ? "Edit Device Master" : "Create New Device Master"}
-          icon={<Database className="h-4 w-4" />}
-          actions={<Button type="button" variant="outline" onClick={closeForm}><X className="h-4 w-4" /> Cancel</Button>}
+          icon={<Database className="h-5 w-5" />}
         />
         <OrganizationTableCard>
           <form className="grid gap-3 md:grid-cols-3" onSubmit={submit}>
@@ -133,10 +132,10 @@ export function DeviceMasterPage() {
               <Input value={form.modelCode} onChange={(event) => setForm((current) => ({ ...current, modelCode: event.target.value.toUpperCase() }))} placeholder="AUTO / MANUAL" />
             </Field>
             <Field label="Device Brand">
-              <Input value={form.brandName} onChange={(event) => setForm((current) => ({ ...current, brandName: event.target.value.toUpperCase() }))} required />
+              <Input value={form.brandName} onChange={(event) => setForm((current) => ({ ...current, brandName: event.target.value }))} required />
             </Field>
             <Field label="Device Model">
-              <Input value={form.modelName} onChange={(event) => setForm((current) => ({ ...current, modelName: event.target.value.toUpperCase() }))} required />
+              <Input value={form.modelName} onChange={(event) => setForm((current) => ({ ...current, modelName: event.target.value }))} required />
             </Field>
             <Field label="Status">
               <select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.value }))}>
@@ -155,12 +154,11 @@ export function DeviceMasterPage() {
   }
 
   return (
-    <section className="space-y-4 text-foreground">
+    <section className="space-y-5 text-foreground">
       <PageHeader
         title="Device Master"
-        icon={<Database className="h-4 w-4" />}
-        description="Master data device untuk Device Register dan gateway protocol mapping."
-        actions={canEdit ? <Button type="button" size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Created New</Button> : null}
+        icon={<Database className="h-5 w-5" />}
+        actions={canEdit ? <Button type="button" onClick={openCreate}><Plus className="h-4 w-4" /> Created New</Button> : null}
       />
       <OrganizationTableCard>
         <DataTable
@@ -195,9 +193,9 @@ function emptyForm(): FormState {
 function toInput(form: FormState): DeviceMasterInput {
   return {
     brandId: null,
-    brandName: form.brandName.trim().toUpperCase() || null,
-    modelCode: form.modelCode.trim().toUpperCase() || null,
-    modelName: form.modelName.trim().toUpperCase() || null,
+    brandName: form.brandName || null,
+    modelCode: form.modelCode || null,
+    modelName: form.modelName || null,
     active: form.active === "ACTIVE"
   };
 }

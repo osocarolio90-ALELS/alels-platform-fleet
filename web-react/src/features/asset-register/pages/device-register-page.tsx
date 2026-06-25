@@ -134,7 +134,7 @@ export function DeviceRegisterPage() {
 
   if (formOpen) {
     return <section className="space-y-4 text-foreground">
-      <PageHeader title={editing ? "Edit Device Register" : "Create New Device Register"} icon={<Cpu className="h-4 w-4" />} />
+      <PageHeader title={editing ? "Edit Device Register" : "Create New Device Register"} icon={<Cpu className="h-5 w-5" />} />
       <OrganizationTableCard>
         {notice ? <div className="mb-3 rounded-md border border-amber-500/50 bg-amber-950/40 px-3 py-2 text-xs font-bold text-amber-100">{notice}</div> : null}
         <form className="grid gap-3 md:grid-cols-3" onSubmit={submit}>
@@ -151,7 +151,7 @@ export function DeviceRegisterPage() {
     </section>;
   }
 
-  return <section className="space-y-4 text-foreground"><PageHeader title="Device Register" icon={<Cpu className="h-4 w-4" />} actions={<Button type="button" size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Created New</Button>} /><OrganizationTableCard><DataTable data={rows} columns={columns} rowKey={(row) => row.id} emptyMessage={isLoading ? "Loading devices..." : "No device found."} bulkActions={bulkActions} actions={(row) => <div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" onClick={() => startEdit(row)} title="Edit"><Pencil className="h-4 w-4" /></Button><Button type="button" size="icon" variant="destructive" onClick={() => deleteMutation.mutate(row.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button></div>} /></OrganizationTableCard></section>;
+  return <section className="space-y-5 text-foreground"><PageHeader title="Device Register" icon={<Cpu className="h-5 w-5" />} actions={<Button type="button" onClick={openCreate}><Plus className="h-4 w-4" /> Created New</Button>} /><OrganizationTableCard><DataTable data={rows} columns={columns} rowKey={(row) => row.id} emptyMessage={isLoading ? "Loading devices..." : "No device found."} bulkActions={bulkActions} actions={(row) => <div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" onClick={() => startEdit(row)} title="Edit"><Pencil className="h-4 w-4" /></Button><Button type="button" size="icon" variant="destructive" onClick={() => deleteMutation.mutate(row.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button></div>} /></OrganizationTableCard></section>;
 }
 
 type FormState = { companyId: string; deviceModelId: string; imei: string; gsmNumber: string; tcpHost: string; tcpPort: string; notes: string };

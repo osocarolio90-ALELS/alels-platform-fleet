@@ -39,6 +39,7 @@ const masterDataItems: SidebarItem[] = [
   { to: "/master-data/vehicle-master", label: "Vehicle Master" },
   { to: "/master-data/device-master", label: "Device Master" },
   { to: "/master-data/reference-price", label: "Harga Master" },
+  { to: "/master-data/license-master", label: "License Master" },
   { to: "/master-data/wasted", label: "Wasted" }
 ];
 

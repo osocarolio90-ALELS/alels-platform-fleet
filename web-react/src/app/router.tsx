@@ -63,6 +63,9 @@ const VehicleMasterPage = lazy(() =>
 const DeviceMasterPage = lazy(() =>
   import("@/features/master-data/pages/device-master-page").then((module) => ({ default: module.DeviceMasterPage }))
 );
+const LicenseMasterPage = lazy(() =>
+  import("@/features/master-data/pages/license-master-page").then((module) => ({ default: module.LicenseMasterPage }))
+);
 const MasterWastedPage = lazy(() =>
   import("@/features/master-data/pages/master-wasted-page").then((module) => ({ default: module.MasterWastedPage }))
 );
@@ -107,8 +110,9 @@ export const router = createBrowserRouter([
             children: [
               { path: "/master-data/vehicle-master", element: withSuspense(<VehicleMasterPage />) },
               { path: "/master-data/device-master", element: withSuspense(<DeviceMasterPage />) },
-              { path: "/master-data/reference-price", element: withSuspense(<ReferencePricePage />) },
+              { path: "/master-data/license-master", element: withSuspense(<LicenseMasterPage />) },
               { path: "/master-data/wasted", element: withSuspense(<MasterWastedPage />) },
+              { path: "/master-data/reference-price", element: withSuspense(<ReferencePricePage />) },
               { path: "/master-data", element: <Navigate to="/master-data/vehicle-master" replace /> }
             ]
           },

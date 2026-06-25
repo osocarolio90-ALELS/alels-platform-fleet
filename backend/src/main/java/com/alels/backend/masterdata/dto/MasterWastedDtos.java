@@ -4,17 +4,17 @@ public final class MasterWastedDtos {
     private MasterWastedDtos() {}
 
     public record MasterWastedRow(
+            String itemType,
             Long id,
-            String category,
-            String masterType,
-            String code,
             String name,
-            String parentName,
+            String code,
+            String extra,
             String status,
             String deletedAt,
-            Integer remainingDays,
+            Long deletedBy,
+            String deletedByEmail,
             String deletePermanentAt,
-            String deletedBy,
-            String reason
+            Integer remainingDays,
+            String deletedReason
     ) {}
 }

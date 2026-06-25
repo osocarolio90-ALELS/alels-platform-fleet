@@ -1,11 +1,11 @@
 import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DatabaseZap, Pencil, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { DatabaseZap, Pencil, Plus, RefreshCw, Save, X } from "lucide-react";
 
 import { DataTable, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createEnergyReferenceCountry, deleteEnergyReference, getEnergyReferenceCountries, getEnergyReferences, updateEnergyReference, updateEnergyReferenceProvider, type EnergyReferenceCountryInput, type EnergyReferenceCountryRow, type EnergyReferenceRow } from "@/features/master-data/api/reference-price-api";
+import { createEnergyReferenceCountry, getEnergyReferenceCountries, getEnergyReferences, updateEnergyReference, updateEnergyReferenceProvider, type EnergyReferenceCountryInput, type EnergyReferenceCountryRow, type EnergyReferenceRow } from "@/features/master-data/api/reference-price-api";
 import { OrganizationTableCard, StatusBadge, formatDateTime } from "@/features/organization/components/organization-ui";
 import { PageHeader } from "@/components/ui/page-header";
 import { useAuthStore } from "@/stores/auth-store";
@@ -52,17 +52,6 @@ export function ReferencePricePage() {
       invalidateAll();
     },
     onError: (error) => setNotice(error instanceof Error ? error.message : "Edit harga referensi gagal.")
-  });
-
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => deleteEnergyReference(id),
-    onSuccess: () => {
-      setNotice("Harga Master dipindahkan ke Wasted.");
-      invalidateAll();
-      queryClient.invalidateQueries({ queryKey: ["master-data", "wasted"] });
-    },
-    onError: (error) => setNotice(error instanceof Error ? error.message : "Delete Harga Master gagal.")
   });
 
   const countryMutation = useMutation({
@@ -121,9 +110,32 @@ export function ReferencePricePage() {
     countryMutation.mutate(countryForm);
   }
 
+  if (creatingCountry && isSuperAdmin) {
+    return (
+      <section className="space-y-5 text-foreground">
+        <PageHeader icon={<DatabaseZap className="h-5 w-5" />} title="Create New Harga Master Country" />
+        {notice ? <Notice message={notice} /> : null}
+        <OrganizationTableCard>
+          <form className="grid gap-4 md:grid-cols-3" onSubmit={submitCountry}>
+            <Field label="Country Code"><Input value={countryForm.countryCode} onChange={(event) => setCountryForm((current) => ({ ...current, countryCode: event.target.value.toUpperCase() }))} placeholder="JP" maxLength={10} /></Field>
+            <Field label="Country Name"><Input value={countryForm.countryName} onChange={(event) => setCountryForm((current) => ({ ...current, countryName: event.target.value }))} placeholder="Japan" /></Field>
+            <Field label="Currency"><Input value={countryForm.currency} onChange={(event) => setCountryForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} placeholder="JPY" maxLength={10} /></Field>
+            <Field label="USD to Local Rate"><Input type="number" min="0" step="0.000001" value={countryForm.usdToLocalRate} onChange={(event) => setCountryForm((current) => ({ ...current, usdToLocalRate: event.target.value }))} /></Field>
+            <Field label="Source Name"><Input value={countryForm.sourceName} onChange={(event) => setCountryForm((current) => ({ ...current, sourceName: event.target.value }))} placeholder="Official Provider" /></Field>
+            <Field label="Source URL"><Input value={countryForm.sourceUrl} onChange={(event) => setCountryForm((current) => ({ ...current, sourceUrl: event.target.value }))} placeholder="https://..." /></Field>
+            <div className="md:col-span-3 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => { setCreatingCountry(false); setCountryForm(emptyCountryForm()); }}><X className="h-4 w-4" /> Cancel</Button>
+              <Button type="submit" disabled={countryMutation.isPending}><Save className="h-4 w-4" /> Save Country</Button>
+            </div>
+          </form>
+        </OrganizationTableCard>
+      </section>
+    );
+  }
+
   return (
     <section className="space-y-5 text-foreground">
-      <PageHeader icon={<DatabaseZap className="h-4 w-4" />} title="Harga Master" actions={isSuperAdmin ? <Button type="button" onClick={() => setCreatingCountry((current) => !current)}><Plus className="h-4 w-4" /> Created New Country</Button> : null} />
+      <PageHeader icon={<DatabaseZap className="h-5 w-5" />} title="Harga Master" actions={isSuperAdmin ? <Button type="button" onClick={() => setCreatingCountry(true)}><Plus className="h-4 w-4" /> Created New Country</Button> : null} />
 
       {notice ? <Notice message={notice} /> : null}
 
@@ -142,28 +154,13 @@ export function ReferencePricePage() {
           </div>
         </div>
 
-        {creatingCountry && isSuperAdmin ? (
-          <form className="mb-4 grid gap-3 rounded-xl border border-white/10 bg-white/5 p-4 md:grid-cols-3" onSubmit={submitCountry}>
-            <Field label="Country Code"><Input value={countryForm.countryCode} onChange={(event) => setCountryForm((current) => ({ ...current, countryCode: event.target.value.toUpperCase() }))} placeholder="JP" maxLength={10} /></Field>
-            <Field label="Country Name"><Input value={countryForm.countryName} onChange={(event) => setCountryForm((current) => ({ ...current, countryName: event.target.value }))} placeholder="Japan" /></Field>
-            <Field label="Currency"><Input value={countryForm.currency} onChange={(event) => setCountryForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} placeholder="JPY" maxLength={10} /></Field>
-            <Field label="USD to Local Rate"><Input type="number" min="0" step="0.000001" value={countryForm.usdToLocalRate} onChange={(event) => setCountryForm((current) => ({ ...current, usdToLocalRate: event.target.value }))} /></Field>
-            <Field label="Source Name"><Input value={countryForm.sourceName} onChange={(event) => setCountryForm((current) => ({ ...current, sourceName: event.target.value }))} placeholder="Official Provider" /></Field>
-            <Field label="Source URL"><Input value={countryForm.sourceUrl} onChange={(event) => setCountryForm((current) => ({ ...current, sourceUrl: event.target.value }))} placeholder="https://..." /></Field>
-            <div className="md:col-span-3 flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => { setCreatingCountry(false); setCountryForm(emptyCountryForm()); }}><X className="h-4 w-4" /> Cancel</Button>
-              <Button type="submit" disabled={countryMutation.isPending}><Save className="h-4 w-4" /> Save Country</Button>
-            </div>
-          </form>
-        ) : null}
-
-        {isError ? <Notice message="Harga Master API belum tersedia atau migration 010/014 belum dijalankan." /> : null}
+        {isError ? <Notice message="Harga Referensi API belum tersedia atau migration 010 belum dijalankan." /> : null}
         <DataTable
           data={data}
           columns={columns}
           rowKey={(row) => row.id}
           emptyMessage={isLoading ? "Loading harga referensi..." : "No reference price found."}
-          actions={(row) => isSuperAdmin ? <div className="flex items-center gap-2"><Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button><Button type="button" size="sm" variant="destructive" onClick={() => { if (window.confirm(`Delete ${row.energyName} ${row.countryName} to Wasted?`)) deleteMutation.mutate(row.id); }}><Trash2 className="h-4 w-4" /> Delete</Button></div> : <span className="text-xs text-slate-400">Read only</span>}
+          actions={(row) => isSuperAdmin ? <Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button> : <span className="text-xs text-slate-400">Read only</span>}
         />
       </OrganizationTableCard>
 

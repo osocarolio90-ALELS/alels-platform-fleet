@@ -40,6 +40,7 @@ export function VehicleMasterPage() {
   const canEdit = hasRole(user?.role, MASTER_DATA_EDIT_ROLES);
   const [activeTab, setActiveTab] = useState<TabKey>("vehicle-types");
   const [editing, setEditing] = useState<MasterDataRow | VehicleModelRow | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<MasterForm>(emptyForm());
   const isModelTab = activeTab === "vehicle-models";
 
@@ -59,8 +60,7 @@ export function VehicleMasterPage() {
       return editing ? updateMasterData(activeTab, editing.id, input) : createMasterData(activeTab, input);
     },
     onSuccess: () => {
-      setEditing(null);
-      setForm(emptyForm());
+      closeForm();
       queryClient.invalidateQueries({ queryKey: ["master-data"] });
     }
   });
@@ -88,6 +88,7 @@ export function VehicleMasterPage() {
   function startCreate() {
     setEditing(null);
     setForm(emptyForm());
+    setFormOpen(true);
   }
 
   function startEdit(row: MasterDataRow | VehicleModelRow) {
@@ -100,6 +101,13 @@ export function VehicleMasterPage() {
       sortOrder: String(row.sortOrder || 1000),
       brandId: String((row as VehicleModelRow).brandId || "")
     });
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setEditing(null);
+    setForm(emptyForm());
+    setFormOpen(false);
   }
 
   function submit(event: FormEvent) {
@@ -108,9 +116,32 @@ export function VehicleMasterPage() {
     saveMutation.mutate();
   }
 
+
+  if (formOpen) {
+    return (
+      <section className="space-y-5 text-foreground">
+        <PageHeader title={`${editing ? "Edit" : "Create New"} ${activeTabLabel(activeTab)}`} icon={<Database className="h-5 w-5" />} />
+        <OrganizationTableCard>
+          <form className="grid gap-4 md:grid-cols-3" onSubmit={submit}>
+            {isModelTab ? <Field label="Brand"><select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={form.brandId} onChange={(event) => setForm((current) => ({ ...current, brandId: event.target.value }))}><option value="">Select Brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></Field> : null}
+            <Field label="Code"><Input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} placeholder="AUTO_IF_EMPTY" /></Field>
+            <Field label="Name"><Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></Field>
+            <Field label="Status"><select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></Field>
+            <Field label="Sort"><Input type="number" value={form.sortOrder} onChange={(event) => setForm((current) => ({ ...current, sortOrder: event.target.value }))} /></Field>
+            <div className="md:col-span-3"><Field label="Description"><Input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></Field></div>
+            <div className="md:col-span-3 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={closeForm}><X className="h-4 w-4" /> Cancel</Button>
+              <Button type="submit" disabled={saveMutation.isPending}><Save className="h-4 w-4" /> {editing ? "Save" : "Create"}</Button>
+            </div>
+          </form>
+        </OrganizationTableCard>
+      </section>
+    );
+  }
+
   return (
-    <section className="space-y-4 text-foreground">
-      <PageHeader title="Vehicle Master" icon={<Database className="h-4 w-4" />} description="Master data source untuk Vehicle Register." />
+    <section className="space-y-5 text-foreground">
+      <PageHeader title="Vehicle Master" icon={<Database className="h-5 w-5" />} actions={canEdit ? <Button type="button" onClick={startCreate}><Plus className="h-4 w-4" /> Created New</Button> : null} />
       <OrganizationTableCard>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
@@ -120,22 +151,8 @@ export function VehicleMasterPage() {
               </Button>
             ))}
           </div>
-          {canEdit ? <Button type="button" size="sm" onClick={startCreate}><Plus className="h-4 w-4" /> New</Button> : <span className="text-xs font-bold text-slate-400">ADMIN view only</span>}
+          {!canEdit ? <span className="text-xs font-bold text-slate-400">ADMIN view only</span> : null}
         </div>
-        {canEdit ? (
-          <form className="mb-4 grid gap-3 rounded-xl border border-white/10 bg-white/5 p-4 md:grid-cols-5" onSubmit={submit}>
-            {isModelTab ? <Field label="Brand"><select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={form.brandId} onChange={(event) => setForm((current) => ({ ...current, brandId: event.target.value }))}><option value="">Select Brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></Field> : null}
-            <Field label="Code"><Input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} placeholder="AUTO_IF_EMPTY" /></Field>
-            <Field label="Name"><Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></Field>
-            <Field label="Status"><select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></Field>
-            <Field label="Sort"><Input type="number" value={form.sortOrder} onChange={(event) => setForm((current) => ({ ...current, sortOrder: event.target.value }))} /></Field>
-            <div className={isModelTab ? "md:col-span-5" : "md:col-span-4"}><Field label="Description"><Input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></Field></div>
-            <div className="md:col-span-5 flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => { setEditing(null); setForm(emptyForm()); }}><X className="h-4 w-4" /> Clear</Button>
-              <Button type="submit" disabled={saveMutation.isPending}><Save className="h-4 w-4" /> {editing ? "Save" : "Create"}</Button>
-            </div>
-          </form>
-        ) : null}
         <DataTable
           data={rows}
           columns={columns}
@@ -158,4 +175,5 @@ function emptyForm(): MasterForm { return { code: "", name: "", description: "",
 function normalizeInput(input: MasterForm): MasterDataInput { return { code: input.code || null, name: input.name, description: input.description || null, status: input.status, sortOrder: toNumber(input.sortOrder) }; }
 function normalizeModelInput(input: MasterForm): VehicleModelInput { return { ...normalizeInput(input), brandId: toNumber(input.brandId) }; }
 function toNumber(value: string) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
+function activeTabLabel(tab: TabKey) { return tabs.find((item) => item.key === tab)?.label || "Vehicle Master"; }
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="grid gap-2 text-xs font-bold text-white"><span>{label}</span>{children}</label>; }
