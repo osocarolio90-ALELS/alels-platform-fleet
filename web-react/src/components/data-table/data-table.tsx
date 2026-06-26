@@ -178,20 +178,20 @@ export function DataTable<T>({
               <ChevronDown className="h-4 w-4" />
             </Button>
             {bulkMenuOpen && selectedRows.length > 0 ? (
-              <div className="absolute left-0 z-30 mt-2 min-w-56 rounded-md border border-sky-700 bg-[#07111f] p-1 shadow-xl">
+              <div data-bulk-actions-menu className="data-table-bulk-actions-menu absolute left-0 z-30 mt-2 min-w-56 rounded-md border border-sky-300 bg-sky-500 p-1 shadow-xl">
                 {visibleBulkActions.length > 0 ? visibleBulkActions.map((action) => (
                   <button
                     key={action.key}
                     type="button"
                     disabled={action.disabled?.(selectedRows)}
                     onClick={() => void runBulkAction(action)}
-                    className="flex w-full items-center gap-2 rounded-sm bg-[#0b1627] px-3 py-2 text-left text-sm font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center gap-2 rounded-sm bg-sky-500 px-3 py-2 text-left text-sm font-semibold text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {action.icon}
                     <span>{action.label}</span>
                   </button>
                 )) : (
-                  <div className="px-3 py-2 text-sm font-semibold text-slate-200">No bulk action available.</div>
+                  <div className="px-3 py-2 text-sm font-semibold text-white">No bulk action available.</div>
                 )}
               </div>
             ) : null}

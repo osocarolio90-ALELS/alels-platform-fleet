@@ -50,3 +50,161 @@
   --ring: 199 89% 40%;
   color-scheme: light;
 }
+
+/*
+ * ALELS global readability hardening.
+ * Many feature pages were built first for dark mode and still use hardcoded
+ * text-white / text-slate-* utilities. Keep the current UI logic intact, but
+ * normalize text contrast in the content area when light mode is active.
+ */
+.theme-light .legacy-content {
+  color: #0f172a;
+}
+
+.theme-light .legacy-content .legacy-panel,
+.theme-light .legacy-content .bg-white\/5,
+.theme-light .legacy-content .bg-black\/20 {
+  background-color: #ffffff !important;
+  border-color: #d8e0ec !important;
+}
+
+.theme-light .legacy-content h1.text-white,
+.theme-light .legacy-content h2.text-white,
+.theme-light .legacy-content h3.text-white,
+.theme-light .legacy-content label.text-white,
+.theme-light .legacy-content label.text-slate-200,
+.theme-light .legacy-content label.text-slate-300,
+.theme-light .legacy-content table .text-white,
+.theme-light .legacy-content table .text-slate-200,
+.theme-light .legacy-content table .text-slate-300,
+.theme-light .legacy-content table .text-slate-400,
+.theme-light .legacy-content .text-muted-foreground {
+  color: #0f172a !important;
+}
+
+.theme-light .legacy-content .text-slate-500,
+.theme-light .legacy-content .text-slate-400,
+.theme-light .legacy-content .text-slate-300 {
+  color: #475569 !important;
+}
+
+.theme-light .legacy-content table th,
+.theme-light .legacy-content table td {
+  color: #0f172a;
+  border-color: #d8e0ec;
+}
+
+.theme-light .legacy-content table th {
+  color: #334155 !important;
+}
+
+.theme-light .legacy-content input,
+.theme-light .legacy-content textarea,
+.theme-light .legacy-content select {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.theme-light .legacy-content input::placeholder,
+.theme-light .legacy-content textarea::placeholder {
+  color: #64748b;
+}
+
+.theme-light .legacy-content button[disabled],
+.theme-light .legacy-content input[disabled],
+.theme-light .legacy-content textarea[disabled],
+.theme-light .legacy-content select[disabled] {
+  color: #475569;
+  background-color: #e2e8f0;
+  opacity: 1;
+}
+
+.theme-light .legacy-content .border-white\/10,
+.theme-light .legacy-content .border-white\/5 {
+  border-color: #d8e0ec !important;
+}
+
+/* Keep destructive/default action buttons readable after generic text overrides. */
+.theme-light .legacy-content button.bg-red-500,
+.theme-light .legacy-content button.bg-red-600,
+.theme-light .legacy-content button.bg-destructive,
+.theme-light .legacy-content .bg-destructive,
+.theme-light .legacy-content .bg-primary,
+.theme-light .legacy-content .bg-sky-500,
+.theme-light .legacy-content .bg-sky-600 {
+  color: #ffffff !important;
+}
+
+/*
+ * ALELS strict readable text/icon contrast standard.
+ * Requirement: dark mode uses white text/icons; light mode uses black text/icons.
+ * Keep backgrounds from existing tokens, only normalize foreground color so pages
+ * that still have old hardcoded Tailwind text utilities remain readable.
+ */
+.theme-dark .legacy-content,
+.theme-dark .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option),
+.theme-dark .legacy-content :where(svg,[data-lucide]) {
+  color: #ffffff !important;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.theme-light .legacy-content,
+.theme-light .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option),
+.theme-light .legacy-content :where(svg,[data-lucide]) {
+  color: #000000 !important;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+/* Form controls must stay visually clear in both modes. */
+.theme-dark .legacy-content :where(input,textarea,select),
+.theme-dark .legacy-content [role="combobox"] {
+  color: #ffffff !important;
+  background-color: #050912 !important;
+  border-color: #263246 !important;
+}
+
+.theme-light .legacy-content :where(input,textarea,select),
+.theme-light .legacy-content [role="combobox"] {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+
+.theme-dark .legacy-content ::placeholder {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+.theme-light .legacy-content ::placeholder {
+  color: rgba(0, 0, 0, 0.58) !important;
+}
+
+/* Table and panel foregrounds: prevent washed-out text in light mode and dim text in dark mode. */
+.theme-dark .legacy-content :where(table,thead,tbody,tr,td,th),
+.theme-dark .legacy-content :where(.legacy-panel,.bg-card,.bg-white\/5,.bg-black\/20) {
+  color: #ffffff !important;
+}
+
+.theme-light .legacy-content :where(table,thead,tbody,tr,td,th),
+.theme-light .legacy-content :where(.legacy-panel,.bg-card,.bg-white\/5,.bg-black\/20) {
+  color: #000000 !important;
+}
+
+/* Badges, status pills, and action buttons also follow the selected mode text rule. */
+.theme-dark .legacy-content :where(.badge,[class*="badge"],[class*="Badge"],button),
+.theme-dark .legacy-content :where(.bg-primary,.bg-destructive,.bg-red-500,.bg-red-600,.bg-sky-500,.bg-sky-600) {
+  color: #ffffff !important;
+}
+
+.theme-light .legacy-content :where(.badge,[class*="badge"],[class*="Badge"],button),
+.theme-light .legacy-content :where(.bg-primary,.bg-destructive,.bg-red-500,.bg-red-600,.bg-sky-500,.bg-sky-600) {
+  color: #000000 !important;
+}
+
+/* SVG/icon logos follow current text color; raster images cannot be recolored safely. */
+.theme-dark .legacy-content :where(svg,path,circle,rect,line,polyline,polygon),
+.theme-light .legacy-content :where(svg,path,circle,rect,line,polyline,polygon) {
+  stroke: currentColor !important;
+}

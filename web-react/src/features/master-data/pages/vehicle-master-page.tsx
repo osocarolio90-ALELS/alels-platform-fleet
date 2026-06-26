@@ -2,7 +2,7 @@ import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Database, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 
-import { DataTable, type DataTableColumn } from "@/components/data-table";
+import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,25 @@ export function VehicleMasterPage() {
     mutationFn: (row: MasterDataRow | VehicleModelRow) => isModelTab ? deleteVehicleModel(row.id) : deleteMasterData(activeTab, row.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["master-data"] })
   });
+
+
+  const bulkActions = useMemo<DataTableBulkAction<MasterDataRow | VehicleModelRow>[]>(() => {
+    if (!canEdit) return [];
+    return [
+      {
+        key: "delete-selected",
+        label: "Delete Selected",
+        icon: <Trash2 className="h-4 w-4" />,
+        variant: "destructive",
+        confirmMessage: (selectedRows) => `Delete ${selectedRows.length} selected ${activeTabLabel(activeTab)} item(s)?`,
+        disabled: () => deleteMutation.isPending,
+        onClick: async (selectedRows) => {
+          await Promise.all(selectedRows.map((row) => isModelTab ? deleteVehicleModel(row.id) : deleteMasterData(activeTab, row.id)));
+          await queryClient.invalidateQueries({ queryKey: ["master-data"] });
+        }
+      }
+    ];
+  }, [activeTab, canEdit, deleteMutation.isPending, isModelTab, queryClient]);
 
   const columns = useMemo<DataTableColumn<MasterDataRow | VehicleModelRow>[]>(() => {
     const base: DataTableColumn<MasterDataRow | VehicleModelRow>[] = [
@@ -158,6 +177,8 @@ export function VehicleMasterPage() {
           columns={columns}
           rowKey={(row) => row.id}
           emptyMessage={isLoading ? "Loading master data..." : "No master data found."}
+          selectable={canEdit}
+          bulkActions={bulkActions}
           actions={(row) => canEdit ? (
             <div className="flex items-center gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button>

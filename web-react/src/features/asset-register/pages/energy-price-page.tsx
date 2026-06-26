@@ -1,8 +1,8 @@
 import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Fuel, Pencil, Save, X } from "lucide-react";
+import { Fuel, Pencil, RefreshCw, Save, X } from "lucide-react";
 
-import { DataTable, type DataTableColumn } from "@/components/data-table";
+import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getEnergyPriceCountries, getEnergyPrices, updateEnergyPrice, type EnergyPriceRow } from "@/features/asset-register/api/energy-price-api";
@@ -43,14 +43,43 @@ export function EnergyPricePage() {
     onError: (error) => setNotice(error instanceof Error ? error.message : "Update harga energy gagal.")
   });
 
+  const bulkReferenceMutation = useMutation({
+    mutationFn: async (rows: EnergyPriceRow[]) => {
+      await Promise.all(rows.map((row) => updateEnergyPrice(row.id, {
+        countryCode: row.countryCode || selectedCountryCode,
+        priceEnergy: null
+      })));
+    },
+    onSuccess: () => {
+      setNotice("Harga energy terpilih berhasil dikembalikan ke reference price.");
+      queryClient.invalidateQueries({ queryKey: ["asset-register", "energy-prices"] });
+    },
+    onError: (error) => setNotice(error instanceof Error ? error.message : "Bulk update harga energy gagal.")
+  });
+
+
+  const bulkActions = useMemo<DataTableBulkAction<EnergyPriceRow>[]>(() => {
+    if (!canEdit) return [];
+    return [
+      {
+        key: "reset-to-reference",
+        label: "Reset Selected to Reference",
+        icon: <RefreshCw className="h-4 w-4" />,
+        confirmMessage: (rows) => `Reset ${rows.length} selected energy price(s) to reference price?`,
+        disabled: () => bulkReferenceMutation.isPending,
+        onClick: (rows) => bulkReferenceMutation.mutateAsync(rows)
+      }
+    ];
+  }, [bulkReferenceMutation, canEdit]);
+
   const columns = useMemo<DataTableColumn<EnergyPriceRow>[]>(() => [
-    { key: "energyName", label: "Energy", value: (row) => row.energyName, render: (row) => <div><p className="font-extrabold text-white">{row.energyName}</p><p className="text-xs text-slate-400">{row.energyCode}</p></div> },
+    { key: "energyName", label: "Energy", value: (row) => row.energyName, render: (row) => <div><p className="font-extrabold text-foreground">{row.energyName}</p><p className="text-xs text-muted-foreground">{row.energyCode}</p></div> },
     { key: "energyGroup", label: "Group", value: (row) => row.energyGroup, render: (row) => <StatusBadge status={row.energyGroup} /> },
-    { key: "unit", label: "Unit", value: (row) => row.unit, render: (row) => <span className="font-bold text-slate-100">{row.unit}</span> },
-    { key: "priceEnergy", label: "Price Energy", value: (row) => money(row.priceEnergy, row.currency), render: (row) => <span className="font-extrabold text-sky-200">{money(row.priceEnergy, row.currency)}</span> },
+    { key: "unit", label: "Unit", value: (row) => row.unit, render: (row) => <span className="font-bold text-foreground">{row.unit}</span> },
+    { key: "priceEnergy", label: "Price Energy", value: (row) => money(row.priceEnergy, row.currency), render: (row) => <span className="font-extrabold text-sky-600 dark:text-sky-200">{money(row.priceEnergy, row.currency)}</span> },
     { key: "referencePriceCountryIdr", label: "Reference Price Country", value: (row) => money(row.referencePriceCountryIdr, row.currency), render: (row) => <span>{money(row.referencePriceCountryIdr, row.currency)}</span> },
     { key: "referencePriceGlobalUsd", label: "Reference Price Global (USD)", value: (row) => usd(row.referencePriceGlobalUsd), render: (row) => <span>{usd(row.referencePriceGlobalUsd)}</span> },
-    { key: "country", label: "Country", value: (row) => `${row.country || "-"} ${row.countryCode || ""}`, render: (row) => <div><p>{row.country || "-"}</p><p className="text-xs text-slate-400">{row.countryCode || "-"} · {row.currency || "-"}</p></div> },
+    { key: "country", label: "Country", value: (row) => `${row.country || "-"} ${row.countryCode || ""}`, render: (row) => <div><p>{row.country || "-"}</p><p className="text-xs text-muted-foreground">{row.countryCode || "-"} · {row.currency || "-"}</p></div> },
     { key: "source", label: "Source", value: (row) => `${row.priceSource || "-"} ${row.referenceSource || ""}`, render: (row) => <div><p>{row.priceSource || "-"}</p><p className="line-clamp-2 text-xs text-slate-400">{row.referenceSource || "-"}</p></div> },
     { key: "updatedAt", label: "Updated at", value: (row) => formatDateTime(row.updatedAt), render: (row) => <span>{formatDateTime(row.updatedAt)}</span> }
   ], []);
@@ -80,11 +109,11 @@ export function EnergyPricePage() {
 
       {notice ? <Notice message={notice} /> : null}
 
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-[#111317] px-3 py-2">
-        <label className="grid gap-1 text-xs font-bold text-white">
+      <div className="alels-filter-card flex flex-wrap items-center gap-3 rounded-lg px-3 py-2">
+        <label className="grid gap-1 text-xs font-bold text-foreground">
           <span>Country</span>
           <select
-            className="h-9 min-w-[220px] rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white"
+            className="h-9 min-w-[220px] rounded-md border border-input bg-background px-3 text-sm text-foreground"
             value={selectedCountryCode}
             onChange={(event) => {
               setSelectedCountryCode(event.target.value);
@@ -100,7 +129,7 @@ export function EnergyPricePage() {
             ))}
           </select>
         </label>
-        <div className="pt-4 text-xs leading-5 text-slate-400">
+        <div className="pt-4 text-xs leading-5 text-muted-foreground">
           <span className="block"></span> 
           <span className="block">Harga referensi hanya rekomendasi, harga yang akan digunakan adalah Price Energy. Jika harga referensi tidak sesuai, tekan Edit untuk merubah Price Energy.</span>
         </div>
@@ -112,7 +141,7 @@ export function EnergyPricePage() {
             <ReadOnly label="Energy" value={editing.energyName} />
             <ReadOnly label="Unit" value={editing.unit} />
             <Field label="Country">
-              <select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={form.countryCode} onChange={(event) => changeCountry(event.target.value)}>
+              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground" value={form.countryCode} onChange={(event) => changeCountry(event.target.value)}>
                 {countries.map((country) => <option key={country.countryCode} value={country.countryCode}>{country.countryName} ({country.currency})</option>)}
               </select>
             </Field>
@@ -120,7 +149,7 @@ export function EnergyPricePage() {
             <Field label="Price Energy">
               <Input type="number" min="0" step="0.0001" value={form.priceEnergy} onChange={(event) => setForm((current) => ({ ...current, priceEnergy: event.target.value }))} />
             </Field>
-            <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 text-xs text-slate-300">
+            <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4 text-xs text-muted-foreground">
               Jika country diubah dan Price Energy dikosongkan, harga operasional akan mengikuti Reference Price Country terbaru untuk negara tersebut.
             </div>
             <div className="md:col-span-2 flex justify-end gap-3 pt-2">
@@ -138,7 +167,9 @@ export function EnergyPricePage() {
           columns={columns}
           rowKey={(row) => row.id}
           emptyMessage={isLoading ? "Loading energy prices..." : "No energy price found."}
-          actions={(row) => canEdit ? <Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button> : <span className="text-xs text-slate-400">Read only</span>}
+          selectable={canEdit}
+          bulkActions={bulkActions}
+          actions={(row) => canEdit ? <Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button> : <span className="text-xs text-muted-foreground">Read only</span>}
         />
       </OrganizationTableCard>
     </section>
@@ -182,7 +213,7 @@ function usd(value?: number | null) {
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="grid gap-2 text-xs font-bold text-white"><span>{label}</span>{children}</label>;
+  return <label className="grid gap-2 text-xs font-bold text-foreground"><span>{label}</span>{children}</label>;
 }
 
 function ReadOnly({ label, value }: { label: string; value?: string | null }) {

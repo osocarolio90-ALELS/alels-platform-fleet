@@ -2,7 +2,7 @@ import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DatabaseZap, Pencil, Plus, RefreshCw, Save, X } from "lucide-react";
 
-import { DataTable, type DataTableColumn } from "@/components/data-table";
+import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createEnergyReferenceCountry, getEnergyReferenceCountries, getEnergyReferences, updateEnergyReference, updateEnergyReferenceProvider, type EnergyReferenceCountryInput, type EnergyReferenceCountryRow, type EnergyReferenceRow } from "@/features/master-data/api/reference-price-api";
@@ -65,11 +65,47 @@ export function ReferencePricePage() {
     onError: (error) => setNotice(error instanceof Error ? error.message : "Create country gagal.")
   });
 
+
+  const bulkProviderMutation = useMutation({
+    mutationFn: async (rows: EnergyReferenceRow[]) => {
+      await Promise.all(rows.map((row) => updateEnergyReference(row.id, {
+        referencePriceCountry: row.providerReferencePriceCountry ?? row.referencePriceCountry ?? null,
+        referencePriceGlobalUsd: row.providerReferencePriceGlobalUsd ?? row.referencePriceGlobalUsd ?? null,
+        providerReferencePriceCountry: row.providerReferencePriceCountry ?? null,
+        providerReferencePriceGlobalUsd: row.providerReferencePriceGlobalUsd ?? null,
+        sourceName: row.sourceName || "ALELS_REFERENCE_PROVIDER",
+        sourceDetail: row.sourceDetail || null,
+        sourceUrl: row.sourceUrl || null,
+        providerStatus: row.providerStatus || "MANUAL_OVERRIDE"
+      })));
+    },
+    onSuccess: () => {
+      setNotice("Harga referensi terpilih berhasil diperbarui dari provider/reference.");
+      invalidateAll();
+    },
+    onError: (error) => setNotice(error instanceof Error ? error.message : "Bulk update harga referensi gagal.")
+  });
+
   function invalidateAll() {
     queryClient.invalidateQueries({ queryKey: ["master-data", "energy-reference-prices"] });
     queryClient.invalidateQueries({ queryKey: ["master-data", "energy-reference-countries"] });
     queryClient.invalidateQueries({ queryKey: ["asset-register", "energy-prices"] });
   }
+
+
+  const bulkActions = useMemo<DataTableBulkAction<EnergyReferenceRow>[]>(() => {
+    if (!isSuperAdmin) return [];
+    return [
+      {
+        key: "update-selected-from-provider",
+        label: "Update Selected from Provider",
+        icon: <RefreshCw className="h-4 w-4" />,
+        confirmMessage: (rows) => `Update ${rows.length} selected harga master row(s) from provider/reference?`,
+        disabled: () => bulkProviderMutation.isPending,
+        onClick: (rows) => bulkProviderMutation.mutateAsync(rows)
+      }
+    ];
+  }, [bulkProviderMutation, isSuperAdmin]);
 
   const columns = useMemo<DataTableColumn<EnergyReferenceRow>[]>(() => [
     { key: "energyName", label: "Energy", value: (row) => row.energyName, render: (row) => <div><p className="font-extrabold text-white">{row.energyName}</p><p className="text-xs text-slate-400">{row.energyCode}</p></div> },
@@ -160,6 +196,8 @@ export function ReferencePricePage() {
           columns={columns}
           rowKey={(row) => row.id}
           emptyMessage={isLoading ? "Loading harga referensi..." : "No reference price found."}
+          selectable={isSuperAdmin}
+          bulkActions={bulkActions}
           actions={(row) => isSuperAdmin ? <Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button> : <span className="text-xs text-slate-400">Read only</span>}
         />
       </OrganizationTableCard>

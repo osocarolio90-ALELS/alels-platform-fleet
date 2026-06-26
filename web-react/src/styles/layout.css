@@ -1,8 +1,23 @@
 /*
- * Server Operations app shell.
+ * ALELS 1M FOUNDATION MODE
+ * Server Operations app shell and Blue Ocean theme foundation.
  * Scope all layout styles under .legacy-shell to prevent leaking into feature pages.
  */
+
 .legacy-shell {
+  --alels-ocean-950: #071426;
+  --alels-ocean-900: #081120;
+  --alels-ocean-850: #0b1930;
+  --alels-ocean-800: #0f2747;
+  --alels-ocean-700: #16436f;
+  --alels-ocean-600: #2563eb;
+  --alels-ocean-border: rgba(37, 99, 235, 0.34);
+  --alels-ocean-border-strong: rgba(11, 25, 48, 0.58);
+  --alels-ocean-text: #0b1930;
+  --alels-shell-bg-color: #071426;
+  --alels-shell-bg-image:
+    linear-gradient(180deg, rgba(3, 13, 30, 0.72) 0%, rgba(6, 19, 42, 0.86) 52%, rgba(3, 10, 22, 0.94) 100%),
+    url('/assets/alels-shell-blue-paper-bg.jpg');
   min-height: 100vh;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
@@ -13,7 +28,8 @@
 }
 
 .legacy-shell.theme-light {
-  background: #f3f6fb;
+  background: #eef6ff;
+  color: var(--alels-ocean-text);
 }
 
 .legacy-content {
@@ -21,8 +37,25 @@
   transition: padding-left 180ms ease;
 }
 
+/* =========================================================
+   Sidebar + Topbar: fixed Blue Ocean paper background
+   ========================================================= */
+
+.legacy-sidebar,
+.legacy-topbar,
+.theme-light .legacy-sidebar,
+.theme-light .legacy-topbar,
+.theme-dark .legacy-sidebar,
+.theme-dark .legacy-topbar {
+  background-color: var(--alels-shell-bg-color) !important;
+  background-image: var(--alels-shell-bg-image) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  color: #ffffff !important;
+}
+
 .legacy-sidebar {
-  background: linear-gradient(180deg, #081120 0%, #0b1930 42%, #07101d 100%);
+  background-position: left center !important;
   border-right: 1px solid rgba(104, 131, 177, 0.26);
   box-shadow:
     inset -1px 0 0 rgba(255, 255, 255, 0.04),
@@ -30,6 +63,54 @@
   transition: width 180ms ease;
   overflow-x: hidden;
 }
+
+.legacy-topbar {
+  background-position: center top !important;
+  border-bottom: 1px solid rgba(104, 131, 177, 0.2);
+}
+
+.legacy-sidebar *,
+.legacy-topbar *,
+.theme-light .legacy-sidebar *,
+.theme-light .legacy-topbar *,
+.theme-dark .legacy-sidebar *,
+.theme-dark .legacy-topbar * {
+  color: #ffffff !important;
+}
+
+.legacy-sidebar svg,
+.legacy-sidebar svg *,
+.legacy-topbar svg,
+.legacy-topbar svg *,
+.theme-light .legacy-sidebar svg,
+.theme-light .legacy-sidebar svg *,
+.theme-light .legacy-topbar svg,
+.theme-light .legacy-topbar svg * {
+  color: #ffffff !important;
+  fill: none;
+  stroke: #ffffff !important;
+}
+
+.legacy-topbar button,
+.legacy-topbar .legacy-icon-btn,
+.legacy-topbar .legacy-logout-btn,
+.legacy-topbar > div:first-child,
+.legacy-sidebar-toggle {
+  background: rgba(7, 18, 36, 0.82) !important;
+  border-color: rgba(191, 219, 254, 0.28) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(6px);
+}
+
+.legacy-topbar button *,
+.legacy-topbar .legacy-icon-btn *,
+.legacy-topbar .legacy-logout-btn * {
+  color: #ffffff !important;
+}
+
+/* =========================================================
+   Sidebar navigation
+   ========================================================= */
 
 .legacy-brand-logo {
   width: 46px;
@@ -72,26 +153,25 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #dbeafe;
-  background: rgba(15, 23, 42, 0.28);
   flex-shrink: 0;
   transition: background .2s ease, color .2s ease, border-color .2s ease;
 }
 
 .legacy-sidebar-toggle:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+  background: rgba(255, 255, 255, 0.16) !important;
 }
 
 .legacy-nav-link {
-  color: #dbeafe;
+  color: #eaf4ff !important;
   transition: background .2s ease, color .2s ease, box-shadow .2s ease;
 }
 
 .legacy-nav-link:hover,
-.legacy-nav-link.active {
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+.legacy-nav-link.active,
+.legacy-subnav-link:hover,
+.legacy-subnav-link.active {
+  background: rgba(56, 189, 248, 0.22);
+  color: #ffffff !important;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 
@@ -99,21 +179,10 @@
   display: block;
   border-radius: 8px;
   padding: 8px 10px;
-  color: #bfdbfe;
+  color: #eaf4ff !important;
   font-size: 13px;
   text-decoration: none;
   transition: background .2s ease, color .2s ease;
-}
-
-.legacy-subnav-link:hover,
-.legacy-subnav-link.active {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-}
-
-.legacy-topbar {
-  background: linear-gradient(180deg, #081120 0%, #0a1628 100%);
-  border-bottom: 1px solid rgba(104, 131, 177, 0.2);
 }
 
 .legacy-icon-btn,
@@ -125,8 +194,6 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: #10131b;
-  color: #ffffff;
   cursor: pointer;
   transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
 }
@@ -140,52 +207,333 @@
   padding: 0 10px;
   font-size: 12px;
   font-weight: 700;
-  color: #fecaca;
 }
 
 .legacy-icon-btn:hover,
 .legacy-logout-btn:hover {
-  border-color: #33415c;
-  background: #172033;
+  border-color: rgba(191, 219, 254, 0.44) !important;
+  background: rgba(15, 36, 68, 0.92) !important;
   transform: translateY(-1px);
 }
 
-.legacy-logout-btn:hover {
-  border-color: rgba(239, 68, 68, 0.45);
-  background: rgba(127, 29, 29, 0.28);
-  color: #ffffff;
+/* =========================================================
+   Light mode board: Blue Ocean + white board
+   Topbar/sidebar intentionally stay Blue Ocean paper.
+   ========================================================= */
+
+.theme-light .legacy-content {
+  background: #eef6ff;
 }
 
-.legacy-panel {
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--border));
-  border-radius: 13px;
+.theme-light .legacy-panel,
+.theme-light .rounded-2xl,
+.theme-light .rounded-xl,
+.theme-light .rounded-lg,
+.theme-light .card,
+.theme-light [class*="border"] {
+  border-color: var(--alels-ocean-border) !important;
 }
 
-.theme-light .legacy-sidebar,
-.theme-light .legacy-topbar {
-  background: linear-gradient(180deg, #081120 0%, #0b1930 100%);
+.theme-light .bg-card,
+.theme-light .legacy-panel,
+.theme-light .rounded-2xl.bg-white\/5,
+.theme-light .rounded-xl.bg-white\/5,
+.theme-light .rounded-lg.bg-white\/5,
+.theme-light .border.bg-card,
+.theme-light .border-white\/10.bg-white\/5 {
+  background: #ffffff !important;
+  color: var(--alels-ocean-text) !important;
 }
 
-.theme-light .legacy-sidebar strong,
-.theme-light .legacy-sidebar small,
-.theme-light .legacy-sidebar p,
-.theme-light .legacy-nav-link,
-.theme-light .legacy-subnav-link,
-.theme-light .legacy-topbar strong,
-.theme-light .legacy-topbar .text-white {
-  color: #f3f6ff;
+.theme-light main,
+.theme-light section,
+.theme-light article,
+.theme-light .text-foreground {
+  color: var(--alels-ocean-text) !important;
 }
 
-.theme-light .legacy-topbar button,
-.theme-light .legacy-topbar .legacy-icon-btn,
-.theme-light .legacy-topbar .legacy-logout-btn,
-.theme-light .legacy-topbar > div:first-child {
-  background: rgba(12, 24, 42, 0.92);
-  border-color: rgba(104, 131, 177, 0.26);
-  color: #f3f6ff;
+.theme-light main svg,
+.theme-light section svg,
+.theme-light article svg {
+  color: var(--alels-ocean-text);
+  stroke: currentColor;
 }
 
-.theme-light .legacy-logout-btn {
-  color: #fecaca;
+.theme-light h1,
+.theme-light h2,
+.theme-light h3,
+.theme-light h4,
+.theme-light h5,
+.theme-light h6,
+.theme-light p,
+.theme-light span,
+.theme-light label,
+.theme-light th,
+.theme-light td,
+.theme-light input,
+.theme-light select,
+.theme-light textarea,
+.theme-light button {
+  color: var(--alels-ocean-text);
+}
+
+.theme-light input,
+.theme-light select,
+.theme-light textarea,
+.theme-light .bg-background,
+.theme-light .bg-input,
+.theme-light [role="combobox"] {
+  background: #ffffff !important;
+  border-color: var(--alels-ocean-border) !important;
+  color: var(--alels-ocean-text) !important;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: rgba(11, 25, 48, 0.56) !important;
+}
+
+.theme-light table,
+.theme-light thead,
+.theme-light tbody,
+.theme-light tr,
+.theme-light th,
+.theme-light td {
+  border-color: var(--alels-ocean-border) !important;
+}
+
+.theme-light th {
+  color: var(--alels-ocean-850) !important;
+  font-weight: 800;
+}
+
+.theme-light td {
+  color: var(--alels-ocean-text) !important;
+}
+
+.theme-light .text-white,
+.theme-light .text-slate-100,
+.theme-light .text-slate-200,
+.theme-light .text-slate-300,
+.theme-light .text-slate-400,
+.theme-light .text-muted-foreground {
+  color: var(--alels-ocean-text) !important;
+}
+
+.theme-light .text-sky-200,
+.theme-light .text-sky-300,
+.theme-light .text-sky-400,
+.theme-light .text-sky-500 {
+  color: var(--alels-ocean-600) !important;
+}
+
+.theme-light .bg-\[\#111317\],
+.theme-light .bg-\[\#070b12\],
+.theme-light .bg-\[\#070B12\] {
+  background: #ffffff !important;
+  color: var(--alels-ocean-text) !important;
+  border-color: var(--alels-ocean-border) !important;
+}
+
+/* =========================================================
+   Global page title card: same texture as sidebar, white text/icon
+   ========================================================= */
+
+.alels-page-header,
+.theme-light .alels-page-header,
+.theme-dark .alels-page-header {
+  background-color: var(--alels-shell-bg-color) !important;
+  background-image: var(--alels-shell-bg-image) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center !important;
+  border-color: rgba(191, 219, 254, 0.28) !important;
+  color: #ffffff !important;
+}
+
+.alels-page-header *,
+.theme-light .alels-page-header *,
+.theme-dark .alels-page-header * {
+  color: #ffffff !important;
+}
+
+.alels-page-header svg,
+.alels-page-header svg *,
+.theme-light .alels-page-header svg,
+.theme-light .alels-page-header svg * {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+.alels-page-header-icon,
+.theme-light .alels-page-header-icon,
+.theme-dark .alels-page-header-icon {
+  background: rgba(56, 189, 248, 0.16) !important;
+  border-color: rgba(191, 219, 254, 0.36) !important;
+  color: #ffffff !important;
+}
+
+/* =========================================================
+   Feature helper cards
+   ========================================================= */
+
+.alels-filter-card,
+.theme-light .alels-filter-card {
+  background: #ffffff !important;
+  color: var(--alels-ocean-text) !important;
+  border: 1px solid var(--alels-ocean-border) !important;
+}
+
+.theme-dark .alels-filter-card {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+.alels-filter-card *,
+.theme-light .alels-filter-card * {
+  color: var(--alels-ocean-text) !important;
+}
+
+.theme-dark .alels-filter-card * {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* =========================================================
+   ALELS Global Bulk Action Dropdown + Sidebar Brand Standard
+   ========================================================= */
+
+.data-table-bulk-actions-menu,
+[data-bulk-actions-menu],
+.bulk-actions-menu {
+  background: #0ea5e9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.34) !important;
+  color: #ffffff !important;
+  box-shadow: 0 18px 40px rgba(3, 15, 34, 0.32) !important;
+}
+
+.data-table-bulk-actions-menu *,
+[data-bulk-actions-menu] *,
+.bulk-actions-menu * {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+.data-table-bulk-actions-menu button,
+[data-bulk-actions-menu] button,
+.bulk-actions-menu button {
+  background: #0ea5e9 !important;
+  color: #ffffff !important;
+}
+
+.data-table-bulk-actions-menu button:hover,
+[data-bulk-actions-menu] button:hover,
+.bulk-actions-menu button:hover {
+  background: #0284c7 !important;
+}
+
+.data-table-bulk-actions-menu button:disabled,
+[data-bulk-actions-menu] button:disabled,
+.bulk-actions-menu button:disabled {
+  background: #0ea5e9 !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  opacity: 0.72 !important;
+}
+
+.legacy-sidebar .sidebar-text strong,
+.legacy-sidebar .sidebar-text strong span {
+  font-weight: 800;
+}
+
+.legacy-sidebar .sidebar-text small {
+  color: rgba(255, 255, 255, 0.92) !important;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   ALELS Shell Isolation Final
+   Topbar/sidebar are controlled by app-layout.tsx class names.
+   Prevent light-mode content rules from hiding shell text/icons.
+   ========================================================= */
+
+.legacy-sidebar,
+.legacy-topbar {
+  color: #ffffff !important;
+}
+
+.legacy-sidebar .legacy-nav-link,
+.legacy-sidebar .legacy-subnav-link,
+.legacy-sidebar .legacy-nav-link span,
+.legacy-sidebar .legacy-subnav-link span,
+.legacy-sidebar p,
+.legacy-sidebar button,
+.legacy-sidebar button span,
+.legacy-sidebar svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+.legacy-sidebar .alels-brand-text-white {
+  color: #ffffff !important;
+}
+
+.legacy-sidebar .alels-brand-text-tech {
+  color: #38bdf8 !important;
+}
+
+.legacy-sidebar .alels-sidebar-welcome {
+  color: rgba(255, 255, 255, 0.94) !important;
+}
+
+.legacy-topbar .alels-topbar-company-badge,
+.legacy-topbar .alels-topbar-language-button,
+.legacy-topbar .legacy-icon-btn,
+.legacy-topbar .legacy-logout-btn {
+  background: rgba(7, 18, 36, 0.82) !important;
+  border-color: rgba(191, 219, 254, 0.32) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+.legacy-topbar .alels-topbar-company-name,
+.legacy-topbar .alels-topbar-language-button,
+.legacy-topbar .alels-topbar-language-button span,
+.legacy-topbar .legacy-icon-btn,
+.legacy-topbar .legacy-icon-btn *,
+.legacy-topbar .legacy-logout-btn,
+.legacy-topbar .legacy-logout-btn * {
+  color: #ffffff !important;
+}
+
+.legacy-topbar .alels-topbar-company-icon,
+.legacy-topbar .alels-topbar-company-icon *,
+.legacy-topbar .alels-topbar-language-button svg,
+.legacy-topbar .alels-topbar-language-button svg *,
+.legacy-topbar .legacy-icon-btn svg,
+.legacy-topbar .legacy-icon-btn svg *,
+.legacy-topbar .legacy-logout-btn svg,
+.legacy-topbar .legacy-logout-btn svg * {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  fill: none !important;
+}
+
+.legacy-topbar .alels-topbar-language-button {
+  min-width: 68px !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+.legacy-topbar .alels-topbar-company-badge {
+  min-width: 210px !important;
+}
+
+.legacy-topbar .alels-topbar-company-badge:hover,
+.legacy-topbar .alels-topbar-language-button:hover,
+.legacy-topbar .legacy-icon-btn:hover,
+.legacy-topbar .legacy-logout-btn:hover {
+  background: rgba(15, 36, 68, 0.94) !important;
+  border-color: rgba(191, 219, 254, 0.54) !important;
 }

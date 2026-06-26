@@ -87,8 +87,10 @@ export function AppLayout() {
             <img src="/assets/logo-card.png" alt="ALELS" className="h-full w-full object-contain" />
           </div>
           <div className="sidebar-text">
-            <strong className="block text-base text-white">Alels<span className="text-sky-400">Tech</span>IDN</strong>
-            <small className="text-[11px] text-[#8e96a8]">Server Operations</small>
+            <strong className="block text-base font-extrabold tracking-tight">
+              <span className="alels-brand-text-white">Alels</span><span className="alels-brand-text-tech">Tech</span><span className="alels-brand-text-white">IDN</span>
+            </strong>
+            <small className="alels-sidebar-welcome text-[11px] font-semibold">Welcome To ATI</small>
           </div>
           <button
             className="legacy-sidebar-toggle ml-auto"
@@ -234,13 +236,13 @@ export function AppLayout() {
 
       <div className={cn("legacy-content", sidebarIsCompact ? "lg:pl-[76px]" : "lg:pl-[250px]")}> 
         <header className="legacy-topbar sticky top-0 z-10 flex h-[60px] items-center justify-between px-[22px]">
-          <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#222633] bg-[#10131b] px-3 text-white">
-            <ServerCog className="h-4 w-4 text-sky-400" />
-            <strong className="max-w-[260px] truncate text-sm">{currentCompanyName}</strong>
+          <div className="alels-topbar-company-badge inline-flex h-9 min-w-[210px] items-center gap-2 rounded-lg border px-3">
+            <ServerCog className="alels-topbar-company-icon h-4 w-4" />
+            <strong className="alels-topbar-company-name max-w-[280px] truncate text-sm font-extrabold tracking-wide">{currentCompanyName}</strong>
           </div>
           <div className="flex items-center gap-2.5">
-            <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#222633] bg-[#10131b] px-3 text-sm text-white" type="button" onClick={toggleLanguage} aria-label="Switch language" title={language === "en" ? "Bahasa Indonesia" : "English"}>
-              <Globe className="h-4 w-4" />{language === "en" ? "EN" : "ID"}
+            <button className="alels-topbar-language-button inline-flex h-9 min-w-[68px] items-center justify-center gap-2 rounded-lg border px-3 text-sm font-extrabold" type="button" onClick={toggleLanguage} aria-label="Switch language" title={language === "en" ? "Bahasa Indonesia" : "English"}>
+              <Globe className="h-4 w-4" /><span>{language === "en" ? "EN" : "ID"}</span>
             </button>
             <button className="legacy-icon-btn" type="button" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"}>
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
