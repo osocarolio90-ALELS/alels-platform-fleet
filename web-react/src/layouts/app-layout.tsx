@@ -84,7 +84,11 @@ export function AppLayout() {
       >
         <div className="mb-7 flex items-center gap-3">
           <div className="legacy-brand-logo">
-            <img src="/assets/logo-card.png" alt="ALELS" className="h-full w-full object-contain" />
+            <img
+              src={theme === "dark" ? "/assets/alels-mark-dark.png" : "/assets/alels-mark-light.png"}
+              alt="ALELS"
+              className="h-full w-full object-cover"
+            />
           </div>
           <div className="sidebar-text">
             <strong className="block text-base font-extrabold tracking-tight">

@@ -24,11 +24,11 @@
 }
 
 .legacy-shell.theme-dark {
-  background: #07080c;
+  background: #06142b;
 }
 
 .legacy-shell.theme-light {
-  background: #eef6ff;
+  background: #f8fbff;
   color: var(--alels-ocean-text);
 }
 
@@ -113,9 +113,9 @@
    ========================================================= */
 
 .legacy-brand-logo {
-  width: 46px;
-  height: 34px;
-  border-radius: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;

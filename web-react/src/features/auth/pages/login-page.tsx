@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Lock, Mail, Moon, Sun } from "lucide-react";
+import { Eye, EyeOff, Headphones, Lock, Moon, Sun, UserRound } from "lucide-react";
 import axios from "axios";
 
 import { login } from "@/lib/api";
@@ -55,48 +55,44 @@ export function LoginPage() {
       </button>
       <div className="legacy-login-page">
         <section className="legacy-hero-panel" aria-label="ALELS TECH Main Logo">
-          <div className="legacy-hero-logo" />
+          <div className="legacy-hero-art" role="img" aria-label="ALELS trusted telemetry and transport platform" />
         </section>
 
-        <section className="flex w-full items-center justify-center">
+        <section className="legacy-login-form-panel">
           <form className="legacy-login-card" onSubmit={onSubmit}>
-            <img
-              src="/assets/logo-card.png"
-              alt="ALELS TECH"
-              className="legacy-login-logo"
-            />
-
-            <h1 className="text-center text-2xl font-semibold leading-tight text-white">
+            <h1 className="legacy-login-title">
               Welcome Back
             </h1>
-            <p className="mb-6 mt-2 text-center text-sm text-[#9ca8bd]">
-              Please login to your account
+            <p className="legacy-login-subtitle">
+              Sign in to your <strong>ALELS</strong> account
             </p>
 
-            <label className="mb-3 block">
-              <span className="sr-only">Email</span>
+            <label className="legacy-field">
+              <span>Email or Username</span>
               <div className="legacy-input-box">
-                <Mail className="mr-3 h-4 w-4 text-[#9eb1c9]" />
+                <UserRound className="legacy-field-icon" />
                 <input
                   className="legacy-input"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Email"
-                  type="email"
+                  placeholder="Enter your email or username"
+                  type="text"
+                  autoComplete="username"
                 />
               </div>
             </label>
 
-            <label className="mb-3 block">
-              <span className="sr-only">Password</span>
+            <label className="legacy-field">
+              <span>Password</span>
               <div className="legacy-input-box">
-                <Lock className="mr-3 h-4 w-4 text-[#9eb1c9]" />
+                <Lock className="legacy-field-icon" />
                 <input
                   className="legacy-input"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Password"
+                  placeholder="Enter your password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
@@ -114,16 +110,16 @@ export function LoginPage() {
               </div>
             </label>
 
-            <div className="mb-5 mt-1 flex items-center gap-3 text-xs">
-              <label className="flex items-center gap-2 text-[#d9e1ef]">
+            <div className="legacy-login-options">
+              <label className="legacy-remember">
                 <input
                   type="checkbox"
-                  className="h-3.5 w-3.5 accent-cyan-400"
                   checked={rememberMe}
                   onChange={(event) => setRememberMe(event.target.checked)}
                 />
                 Remember me
               </label>
+              <a href="mailto:support@alels.co.id?subject=ALELS%20Password%20Support">Forgot password?</a>
             </div>
 
             {mutation.error ? (
@@ -133,11 +129,17 @@ export function LoginPage() {
             ) : null}
 
             <button className="legacy-login-btn" disabled={mutation.isPending}>
-              {mutation.isPending ? "SIGNING IN..." : "LOGIN"}
+              {mutation.isPending ? "Signing In..." : "Sign In"}
             </button>
+
+            <div className="legacy-login-support">
+              <Headphones aria-hidden="true" />
+              <span>Need help? Contact <a href="mailto:support@alels.co.id">ALELS Support</a></span>
+            </div>
           </form>
         </section>
       </div>
+      <footer className="legacy-login-footer">© {new Date().getFullYear()} ALELS. All rights reserved.</footer>
     </main>
   );
 }
