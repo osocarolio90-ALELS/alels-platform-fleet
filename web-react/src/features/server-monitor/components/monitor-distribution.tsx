@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatMonitorBytes } from "./monitor-utils";
+import { useLanguageStore } from "@/stores/language-store";
+import { formatMonitorBytes, localizeMonitorTerm } from "./monitor-utils";
 
 export type MonitorDistributionItem = { name: string; count: number; displayValue?: string | null };
 
@@ -18,14 +19,15 @@ export function MonitorDistributionBars({
   items: MonitorDistributionItem[];
   emptyMessage: string;
 }) {
+  const language = useLanguageStore((state) => state.language);
   const max = Math.max(...items.map((item) => item.count), 1);
 
   return (
-    <Card className="border shadow-sm">
+    <Card className="server-monitor-card border shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg text-card-foreground">
           {icon}
-          {title}
+          {localizeMonitorTerm(language, title)}
         </CardTitle>
         {subtitle ? <p className="text-sm font-semibold text-muted-foreground">{subtitle}</p> : null}
       </CardHeader>
@@ -40,7 +42,7 @@ export function MonitorDistributionBars({
                   <span className="text-sm font-black text-card-foreground">{item.displayValue || formatMonitorBytes(item.count)}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-background">
-                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${percent}%` }} />
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
                 </div>
               </div>
             );

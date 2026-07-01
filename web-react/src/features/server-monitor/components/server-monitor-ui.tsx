@@ -1,3 +1,5 @@
+import "../server-monitor.css";
+
 export * from "./monitor-utils";
 export * from "./monitor-hero";
 export * from "./monitor-kpi-grid";

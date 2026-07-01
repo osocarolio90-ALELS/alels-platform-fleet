@@ -336,7 +336,7 @@ export function StorageMonitorPage() {
   );
 
   return (
-    <section className="space-y-4 text-foreground">
+    <section className="server-operations-ui space-y-4 text-foreground">
       <MonitorHero
         eyebrow="ALELS STORAGE NOC"
         icon={<HardDrive className="h-4 w-4" />}

@@ -1,0 +1,92 @@
+.server-operations-ui {
+  color: hsl(var(--foreground));
+}
+
+.server-operations-ui .server-monitor-card {
+  border-color: hsl(var(--border)) !important;
+  border-radius: 0.5rem;
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+
+.theme-dark .server-operations-ui .server-monitor-card {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+.server-operations-ui .server-monitor-eyebrow {
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+.theme-light .legacy-content .server-operations-ui svg,
+.theme-light .legacy-content .server-operations-ui svg *,
+.theme-light .server-operations-ui :where(button,[role="button"]) svg {
+  color: hsl(var(--primary)) !important;
+  stroke: hsl(var(--primary)) !important;
+}
+
+.theme-dark .legacy-content .server-operations-ui svg,
+.theme-dark .legacy-content .server-operations-ui svg *,
+.theme-dark .server-operations-ui :where(button,[role="button"]) svg {
+  color: #ffffff !important;
+  fill: none !important;
+  stroke: #ffffff !important;
+}
+
+.theme-dark .legacy-content .server-operations-ui,
+.theme-dark .legacy-content .server-operations-ui :where(h1,h2,h3,h4,h5,h6,p,span,div,th,td,label,small,strong,em,a,button,input,select,option) {
+  color: #ffffff !important;
+}
+
+.theme-light .legacy-content .server-operations-ui,
+.theme-light .legacy-content .server-operations-ui :where(h1,h2,h3,h4,h5,h6,p,span,div,th,td,label,small,strong,em,a,input,select,option) {
+  color: #0f172a !important;
+}
+
+.theme-light .legacy-content .server-operations-ui :where(button,[role="button"]) {
+  color: hsl(var(--primary)) !important;
+}
+
+.theme-dark .legacy-content .server-operations-ui :where(input,select,option),
+.theme-dark .legacy-content .server-operations-ui table {
+  color: #ffffff !important;
+}
+
+.theme-dark .legacy-content .server-operations-ui :where(.text-muted-foreground,.text-card-foreground,.text-foreground) {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+.theme-light .legacy-content .server-operations-ui :where(.text-muted-foreground,.text-card-foreground,.text-foreground) {
+  color: #0f172a !important;
+  opacity: 1 !important;
+}
+
+/* Severity is communicated by the dot only. Keep badges neutral in both modes. */
+.server-operations-ui [class*="bg-amber-"]:not(.server-monitor-status-dot),
+.server-operations-ui [class*="bg-yellow-"]:not(.server-monitor-status-dot),
+.server-operations-ui [class*="bg-red-"]:not(.server-monitor-status-dot),
+.server-operations-ui [class*="bg-emerald-"]:not(.server-monitor-status-dot) {
+  background-color: hsl(var(--muted)) !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.theme-dark .legacy-content .server-operations-ui :where(button,[role="button"]) {
+  color: #ffffff !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.theme-dark .legacy-content .server-operations-ui :where(button,[role="button"]) :where(svg,svg *) {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+}
+
+.theme-light .legacy-content .server-operations-ui :where(button,[role="button"]) :where(svg,svg *) {
+  color: hsl(var(--primary)) !important;
+  stroke: hsl(var(--primary)) !important;
+}
+
+.server-operations-ui .server-monitor-status-dot {
+  box-shadow: 0 0 0 3px hsl(var(--background));
+}

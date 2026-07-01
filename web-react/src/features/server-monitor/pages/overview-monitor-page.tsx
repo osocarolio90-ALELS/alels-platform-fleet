@@ -163,7 +163,7 @@ export function OverviewMonitorPage() {
   );
 
   return (
-    <section className="space-y-5 text-foreground">
+    <section className="server-operations-ui space-y-5 text-foreground">
       <MonitorHero
         eyebrow="ALELS OVERVIEW NOC"
         icon={<ServerCog className="h-4 w-4" />}
