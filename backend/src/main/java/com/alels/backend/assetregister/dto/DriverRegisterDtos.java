@@ -17,6 +17,7 @@ public final class DriverRegisterDtos {
             String licenseType,
             String phoneNumber,
             String rfidIbutton,
+            String photoUrl,
             String status,
             String createdAt,
             String createdBy

@@ -14,6 +14,7 @@ export type DriverRegisterRow = {
   licenseType?: string | null;
   phoneNumber: string;
   rfidIbutton?: string | null;
+  photoUrl?: string | null;
   status: string;
   createdAt?: string | null;
   createdBy?: string | null;
@@ -73,5 +74,22 @@ export async function suspendDriver(id: number) {
 
 export async function activateDriver(id: number) {
   const response = await api.put<{ success: boolean }>(`${BASE}/${id}/activate`);
+  return response.data;
+}
+
+export async function updateDriverPhoto(id: number, photo: File) {
+  const data = new FormData();
+  data.append("photo", photo);
+  const response = await api.put<{ success: boolean; photoUrl: string }>(`${BASE}/${id}/photo`, data);
+  return response.data;
+}
+
+export async function removeDriverPhoto(id: number) {
+  const response = await api.delete<{ success: boolean }>(`${BASE}/${id}/photo`);
+  return response.data;
+}
+
+export async function getDriverPhoto(photoUrl: string) {
+  const response = await api.get<Blob>(photoUrl, { responseType: "blob" });
   return response.data;
 }

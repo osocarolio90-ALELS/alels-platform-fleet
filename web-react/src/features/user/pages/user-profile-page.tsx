@@ -1,25 +1,21 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Camera, Eye, EyeOff, Save, UserRound, X } from "lucide-react";
+import { Camera, Eye, EyeOff, Save, UserRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SquarePhotoEditor } from "@/components/media/square-photo-editor";
 import { formatCompanyName, formatDateTime, OrganizationPageHeader, OrganizationTableCard, StatusBadge } from "@/features/organization/components/organization-ui";
 import { getUserProfile, updateUserProfile } from "@/features/user/api/user-profile-api";
 import { useAuthStore } from "@/stores/auth-store";
 
 const fallbackAvatar = "/assets/logokecil.png";
 const allowedPhotoTypes = ["image/jpeg", "image/png"];
-const avatarSize = 512;
-const cropPreviewSize = 320;
 
 function withCacheBust(url?: string | null) {
   if (!url) return null;
   return `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
 }
-
-type ImageSize = { width: number; height: number };
-type DragState = { startX: number; startY: number; imageX: number; imageY: number };
 
 export function UserProfilePage() {
   const queryClient = useQueryClient();
@@ -37,21 +33,7 @@ export function UserProfilePage() {
   const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
-  const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
-  const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
-  const [cropImageSize, setCropImageSize] = useState<ImageSize | null>(null);
-  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
-  const [dragState, setDragState] = useState<DragState | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const cropFrameRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
-      if (cropSourceUrl) URL.revokeObjectURL(cropSourceUrl);
-    };
-  }, [photoPreviewUrl, cropSourceUrl]);
 
   const mutation = useMutation({
     mutationFn: updateUserProfile,
@@ -68,7 +50,6 @@ export function UserProfilePage() {
         }, rememberMe);
       }
       setEditing(false);
-      closeCropModal();
       clearPreparedPhoto();
       setNewPassword("");
       setChangePassword(false);
@@ -83,123 +64,21 @@ export function UserProfilePage() {
     setEmail(profile.email || "");
     setNewPassword("");
     setChangePassword(false);
-    closeCropModal();
     clearPreparedPhoto();
     setNotice(null);
     setEditing(true);
   }
 
   function clearPreparedPhoto() {
-    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
-    setPhotoPreviewUrl(null);
     setPhoto(null);
   }
 
-  function closeCropModal() {
-    if (cropSourceUrl) URL.revokeObjectURL(cropSourceUrl);
-    setCropSourceUrl(null);
-    setCropSourceFile(null);
-    setCropImageSize(null);
-    setCropOffset({ x: 0, y: 0 });
-    setDragState(null);
-  }
-
   function cancelEdit() {
-    closeCropModal();
     clearPreparedPhoto();
     setNewPassword("");
     setChangePassword(false);
     setEditing(false);
     setNotice(null);
-  }
-
-  function onSelectPhoto(file?: File | null) {
-    if (!file) return;
-    if (!allowedPhotoTypes.includes(file.type)) {
-      setNotice("Foto profile harus JPG atau PNG.");
-      return;
-    }
-    if (file.size > 5_000_000) {
-      setNotice("Ukuran foto maksimum 5 MB sebelum crop.");
-      return;
-    }
-    closeCropModal();
-    const sourceUrl = URL.createObjectURL(file);
-    setCropSourceFile(file);
-    setCropSourceUrl(sourceUrl);
-    setCropImageSize(null);
-    setCropOffset({ x: 0, y: 0 });
-    setNotice(null);
-  }
-
-  function onCropImageLoad(event: React.SyntheticEvent<HTMLImageElement>) {
-    setCropImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight });
-  }
-
-  function clampOffset(offset: { x: number; y: number }, imageSize = cropImageSize) {
-    if (!imageSize) return offset;
-    const scale = Math.max(cropPreviewSize / imageSize.width, cropPreviewSize / imageSize.height);
-    const drawWidth = imageSize.width * scale;
-    const drawHeight = imageSize.height * scale;
-    const maxX = Math.max(0, (drawWidth - cropPreviewSize) / 2);
-    const maxY = Math.max(0, (drawHeight - cropPreviewSize) / 2);
-    return {
-      x: Math.max(-maxX, Math.min(maxX, offset.x)),
-      y: Math.max(-maxY, Math.min(maxY, offset.y))
-    };
-  }
-
-  function startDrag(event: React.PointerEvent<HTMLDivElement>) {
-    if (!cropSourceUrl) return;
-    cropFrameRef.current?.setPointerCapture(event.pointerId);
-    setDragState({ startX: event.clientX, startY: event.clientY, imageX: cropOffset.x, imageY: cropOffset.y });
-  }
-
-  function dragCrop(event: React.PointerEvent<HTMLDivElement>) {
-    if (!dragState) return;
-    const next = {
-      x: dragState.imageX + event.clientX - dragState.startX,
-      y: dragState.imageY + event.clientY - dragState.startY
-    };
-    setCropOffset(clampOffset(next));
-  }
-
-  function stopDrag(event: React.PointerEvent<HTMLDivElement>) {
-    if (dragState) cropFrameRef.current?.releasePointerCapture(event.pointerId);
-    setDragState(null);
-  }
-
-  async function saveCrop() {
-    if (!cropSourceFile || !cropSourceUrl || !cropImageSize) return;
-    try {
-      const image = await loadImage(cropSourceUrl);
-      const canvas = document.createElement("canvas");
-      canvas.width = avatarSize;
-      canvas.height = avatarSize;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas browser tidak tersedia.");
-
-      const scale = Math.max(avatarSize / image.width, avatarSize / image.height);
-      const drawWidth = image.width * scale;
-      const drawHeight = image.height * scale;
-      const offsetScale = avatarSize / cropPreviewSize;
-      const dx = (avatarSize - drawWidth) / 2 + cropOffset.x * offsetScale;
-      const dy = (avatarSize - drawHeight) / 2 + cropOffset.y * offsetScale;
-
-      ctx.clearRect(0, 0, avatarSize, avatarSize);
-      ctx.drawImage(image, dx, dy, drawWidth, drawHeight);
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Gagal membuat crop foto.")), "image/png", 0.92);
-      });
-      const cropped = new File([blob], `profile-${Date.now()}.png`, { type: "image/png" });
-      if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
-      setPhoto(cropped);
-      setPhotoPreviewUrl(URL.createObjectURL(cropped));
-      closeCropModal();
-      setNotice("Foto 512 x 512 siap disimpan. Klik Save Profile untuk menyimpan ke database.");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Crop foto gagal.");
-    }
   }
 
   function submit(event: FormEvent) {
@@ -275,17 +154,20 @@ export function UserProfilePage() {
               ) : null}
             </div>
 
-            <div className="md:col-span-2 rounded-xl border border-white/10 bg-black/20 p-4">
-              <label className="space-y-1.5 text-sm font-semibold text-slate-200"><span>Foto Profile</span><Input type="file" accept="image/png,image/jpeg" onChange={(e) => onSelectPhoto(e.target.files?.[0] || null)} /></label>
-              {photoPreviewUrl ? (
-                <div className="mt-4 flex items-center gap-4 rounded-lg border border-sky-500/20 bg-sky-500/5 p-3">
-                  <img src={photoPreviewUrl} alt="Foto profile siap simpan" className="h-20 w-20 rounded-full object-cover" />
-                  <div className="text-sm text-slate-200">
-                    <p className="font-bold text-white">Foto sudah dicrop 512 x 512.</p>
-                    <p className="text-xs text-slate-400">Klik Save Profile untuk menyimpan foto ke database.</p>
-                  </div>
-                </div>
-              ) : null}
+            <div className="md:col-span-2">
+              <SquarePhotoEditor
+                existingUrl={avatar}
+                fallbackUrl={fallbackAvatar}
+                value={photo}
+                onChange={setPhoto}
+                onError={setNotice}
+                onPrepared={() => setNotice("Foto 512 x 512 siap disimpan. Klik Save Profile untuk menyimpan ke database.")}
+                cameraEnabled={false}
+                legacyProfileLayout
+                acceptedTypes={allowedPhotoTypes}
+                maximumBytes={5_000_000}
+                labels={profilePhotoLabels}
+              />
             </div>
 
             <div className="md:col-span-2 flex justify-end gap-3"><Button type="button" variant="outline" onClick={cancelEdit}>Cancel</Button><Button type="submit" disabled={mutation.isPending}><Save className="h-4 w-4" /> Save Profile</Button></div>
@@ -293,62 +175,26 @@ export function UserProfilePage() {
         ) : null}
       </OrganizationTableCard>
 
-      {cropSourceUrl ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold text-white">Crop Foto Profile</h2>
-                <p className="text-xs text-slate-400">Geser foto di dalam kotak. Area kotak akan disimpan sebagai avatar 512 x 512.</p>
-              </div>
-              <Button type="button" variant="outline" size="icon" onClick={closeCropModal}><X className="h-4 w-4" /></Button>
-            </div>
-            <div className="flex justify-center">
-              <div
-                ref={cropFrameRef}
-                className="relative h-80 w-80 cursor-move overflow-hidden rounded-xl border-2 border-sky-400 bg-black select-none"
-                onPointerDown={startDrag}
-                onPointerMove={dragCrop}
-                onPointerUp={stopDrag}
-                onPointerCancel={stopDrag}
-              >
-                {cropImageSize ? (
-                  <img
-                    src={cropSourceUrl}
-                    alt="Crop source"
-                    draggable={false}
-                    className="absolute left-1/2 top-1/2 max-w-none select-none"
-                    style={{
-                      width: `${cropImageSize.width * Math.max(cropPreviewSize / cropImageSize.width, cropPreviewSize / cropImageSize.height)}px`,
-                      height: `${cropImageSize.height * Math.max(cropPreviewSize / cropImageSize.width, cropPreviewSize / cropImageSize.height)}px`,
-                      transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px))`
-                    }}
-                  />
-                ) : null}
-                <img src={cropSourceUrl} alt="Loader" className="hidden" onLoad={onCropImageLoad} />
-                <div className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-inset ring-white/70" />
-              </div>
-            </div>
-            <div className="mt-5 flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={closeCropModal}>Cancel</Button>
-              <Button type="button" variant="outline" onClick={() => setCropOffset({ x: 0, y: 0 })}>Crop</Button>
-              <Button type="button" onClick={saveCrop} disabled={!cropImageSize}>Save</Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }
 
-function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Gambar tidak bisa dibaca."));
-    image.src = src;
-  });
-}
+const profilePhotoLabels = {
+  photo: "Foto Profile",
+  upload: "Upload Image",
+  camera: "Capture Camera",
+  replace: "Replace Photo",
+  remove: "Remove Photo",
+  cropTitle: "Crop Foto Profile",
+  cropHelp: "Geser foto di dalam kotak. Area kotak akan disimpan sebagai avatar 512 x 512.",
+  save: "Save",
+  cancel: "Cancel",
+  selectCamera: "Pilih Kamera",
+  capture: "Capture",
+  cameraError: "Kamera tidak dapat diakses.",
+  invalidType: "Foto profile harus JPG, JPEG, PNG, atau WEBP.",
+  maximumSize: "Ukuran foto maksimum 5 MB sebelum crop."
+};
 
 function Info({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="rounded-lg border border-white/10 bg-black/20 p-3"><p className="text-xs uppercase tracking-[0.12em] text-slate-400">{label}</p><div className="mt-1 font-bold text-white">{children || "-"}</div></div>;

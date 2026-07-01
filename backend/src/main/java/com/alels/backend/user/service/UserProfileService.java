@@ -1,18 +1,9 @@
 package com.alels.backend.user.service;
 
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
-
-import javax.imageio.ImageIO;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -23,25 +14,28 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.alels.backend.serverops.shared.security.JwtUserContext;
+import com.alels.backend.shared.storage.SquarePhotoStorageService;
 import com.alels.backend.user.dto.UserProfileDtos.UserProfileResponse;
 import com.alels.backend.user.repository.UserProfileRepository;
 
 @Service
 public class UserProfileService {
     private static final long MAX_PHOTO_BYTES = 2_000_000L;
-    private static final int AVATAR_SIZE = 512;
 
     private final UserProfileRepository repository;
     private final PasswordEncoder passwordEncoder;
     private final Path uploadDir;
+    private final SquarePhotoStorageService photoStorage;
 
     public UserProfileService(
             UserProfileRepository repository,
             PasswordEncoder passwordEncoder,
+            SquarePhotoStorageService photoStorage,
             @Value("${alels.upload.profile-photo-dir:uploads/profile-photos}") String uploadDir
     ) {
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
+        this.photoStorage = photoStorage;
         this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
@@ -75,9 +69,9 @@ public class UserProfileService {
         String newPhotoPath = null;
         String newPhotoContentType = null;
         if (photo != null && !photo.isEmpty()) {
-            newPhotoContentType = safeContentType(photo.getContentType());
-            validatePhoto(photo, newPhotoContentType);
-            newPhotoPath = savePhoto(actor.userId(), photo, newPhotoContentType);
+            var storedPhoto = photoStorage.store(uploadDir, "user-" + actor.userId(), photo, MAX_PHOTO_BYTES);
+            newPhotoContentType = storedPhoto.contentType();
+            newPhotoPath = "/api/user/profile/photo/" + storedPhoto.fileName();
             changedFields.add("photo");
         }
 
@@ -139,81 +133,12 @@ public class UserProfileService {
         return left.equalsIgnoreCase(right == null ? "" : right);
     }
 
-    private String savePhoto(Long userId, MultipartFile photo, String contentType) {
-        try {
-            Files.createDirectories(uploadDir);
-            String extension = extension(contentType);
-            Path destination = uploadDir.resolve("user-" + userId + "-" + UUID.randomUUID() + extension).normalize();
-            if (!destination.startsWith(uploadDir)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Path upload tidak valid.");
-            }
-            writeSquarePhoto(photo, destination, contentType);
-            return "/api/user/profile/photo/" + destination.getFileName();
-        } catch (IOException ex) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Gagal menyimpan foto profile.");
-        }
-    }
-
-    private void validatePhoto(MultipartFile photo, String contentType) {
-        if (!contentType.equals("image/jpeg") && !contentType.equals("image/png")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File profile harus JPG atau PNG.");
-        }
-        if (photo.getSize() > MAX_PHOTO_BYTES) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ukuran foto maksimum 2 MB setelah crop.");
-        }
-    }
-
-    private void writeSquarePhoto(MultipartFile photo, Path destination, String contentType) throws IOException {
-        BufferedImage source;
-        try (InputStream inputStream = photo.getInputStream()) {
-            source = ImageIO.read(inputStream);
-        }
-        if (source == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File gambar tidak valid atau rusak.");
-        }
-
-        int sourceWidth = source.getWidth();
-        int sourceHeight = source.getHeight();
-        int side = Math.min(sourceWidth, sourceHeight);
-        int sourceX = Math.max(0, (sourceWidth - side) / 2);
-        int sourceY = Math.max(0, (sourceHeight - side) / 2);
-        int imageType = contentType.equals("image/png") ? BufferedImage.TYPE_INT_ARGB : BufferedImage.TYPE_INT_RGB;
-        BufferedImage target = new BufferedImage(AVATAR_SIZE, AVATAR_SIZE, imageType);
-        Graphics2D graphics = target.createGraphics();
-        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        graphics.drawImage(source, 0, 0, AVATAR_SIZE, AVATAR_SIZE, sourceX, sourceY, sourceX + side, sourceY + side, null);
-        graphics.dispose();
-
-        String format = contentType.equals("image/png") ? "png" : "jpg";
-        if (!ImageIO.write(target, format, destination.toFile())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Format gambar tidak didukung.");
-        }
-    }
-
     private void deleteQuietly(String storedPath) {
-        String fileName = storedPath.substring(storedPath.lastIndexOf('/') + 1);
-        try {
-            Path file = uploadDir.resolve(fileName).normalize();
-            if (file.startsWith(uploadDir)) Files.deleteIfExists(file);
-        } catch (IOException ignored) {
-            // Best-effort cleanup only.
-        }
+        photoStorage.deleteQuietly(uploadDir, storedPath);
     }
 
     private void deleteNewPhotoIfUpdateFailed(String storedPath) {
         if (storedPath != null && !storedPath.isBlank()) deleteQuietly(storedPath);
-    }
-
-    private String safeContentType(String contentType) {
-        String clean = contentType == null ? "" : contentType.toLowerCase(Locale.ROOT).trim();
-        if (clean.equals("image/jpg")) return "image/jpeg";
-        return clean;
-    }
-
-    private String extension(String contentType) {
-        return contentType.equals("image/png") ? ".png" : ".jpg";
     }
 
     private String detailsJson(List<String> fields) {

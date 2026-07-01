@@ -1,22 +1,36 @@
 package com.alels.backend.assetregister.service;
 
 import java.util.List;
+import java.nio.file.Path;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.alels.backend.assetregister.dto.DriverRegisterDtos.DriverLookupOption;
 import com.alels.backend.assetregister.dto.DriverRegisterDtos.DriverRegisterRequest;
 import com.alels.backend.assetregister.dto.DriverRegisterDtos.DriverRegisterRow;
 import com.alels.backend.assetregister.repository.DriverRegisterRepository;
 import com.alels.backend.serverops.shared.security.JwtUserContext;
+import com.alels.backend.shared.storage.SquarePhotoStorageService;
 
 @Service
 public class DriverRegisterService {
     private final DriverRegisterRepository repository;
+    private final SquarePhotoStorageService photoStorage;
+    private final Path uploadDir;
 
-    public DriverRegisterService(DriverRegisterRepository repository) { this.repository = repository; }
+    public DriverRegisterService(
+            DriverRegisterRepository repository,
+            SquarePhotoStorageService photoStorage,
+            @Value("${alels.upload.driver-photo-dir:uploads/driver-photos}") String uploadDir
+    ) {
+        this.repository = repository;
+        this.photoStorage = photoStorage;
+        this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
+    }
 
     public List<DriverRegisterRow> list(JwtUserContext user) { return repository.list(user.companyId(), user.normalizedRole()); }
     public List<DriverLookupOption> companyOptions(JwtUserContext user) { return repository.companyOptions(user.companyId(), user.normalizedRole()); }
@@ -42,8 +56,37 @@ public class DriverRegisterService {
         repository.log(user.userId(), user.companyId(), id, "DRIVER_UPDATE");
     }
 
-    public void delete(JwtUserContext user, Long id) { assertDriverAccess(user, id); repository.softDelete(id, user.userId()); repository.log(user.userId(), user.companyId(), id, "DRIVER_DELETE"); }
+    public void delete(JwtUserContext user, Long id) {
+        assertDriverAccess(user, id);
+        repository.softDelete(id, user.userId());
+        repository.log(user.userId(), user.companyId(), id, "DRIVER_DELETE");
+    }
     public void setStatus(JwtUserContext user, Long id, String status) { assertDriverAccess(user, id); repository.setStatus(id, status, user.userId()); repository.log(user.userId(), user.companyId(), id, "DRIVER_" + status); }
+
+    public String updatePhoto(JwtUserContext user, Long id, MultipartFile photo) {
+        assertDriverAccess(user, id);
+        String previous = repository.photoFilename(id);
+        var stored = photoStorage.store(uploadDir, "driver-" + id, photo, 5_000_000L);
+        try {
+            repository.setPhotoFilename(id, stored.fileName(), user.userId());
+        } catch (RuntimeException ex) {
+            photoStorage.deleteQuietly(uploadDir, stored.fileName());
+            throw ex;
+        }
+        photoStorage.deleteQuietly(uploadDir, previous);
+        repository.log(user.userId(), user.companyId(), id, "DRIVER_PHOTO_UPDATE");
+        return stored.fileName();
+    }
+
+    public void removePhoto(JwtUserContext user, Long id) {
+        assertDriverAccess(user, id);
+        String previous = repository.photoFilename(id);
+        repository.removePhotoFilename(id, user.userId());
+        photoStorage.deleteQuietly(uploadDir, previous);
+        repository.log(user.userId(), user.companyId(), id, "DRIVER_PHOTO_REMOVE");
+    }
+
+    public Path uploadDir() { return uploadDir; }
 
     private void validate(DriverRegisterRequest request, Long excludeId) {
         if (request == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request driver wajib diisi.");

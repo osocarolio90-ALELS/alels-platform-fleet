@@ -1,12 +1,10 @@
 package com.alels.backend.user.controller;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -21,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.alels.backend.serverops.shared.security.JwtUserContext;
+import com.alels.backend.shared.storage.SquarePhotoStorageService;
 import com.alels.backend.user.dto.UserProfileDtos.UserProfileResponse;
 import com.alels.backend.user.dto.UserProfileDtos.UserProfileUpdateResponse;
 import com.alels.backend.user.service.UserProfileService;
@@ -30,12 +29,15 @@ import com.alels.backend.user.service.UserProfileService;
 public class UserProfileController {
     private final UserProfileService service;
     private final Path uploadDir;
+    private final SquarePhotoStorageService photoStorage;
 
     public UserProfileController(
             UserProfileService service,
+            SquarePhotoStorageService photoStorage,
             @Value("${alels.upload.profile-photo-dir:uploads/profile-photos}") String uploadDir
     ) {
         this.service = service;
+        this.photoStorage = photoStorage;
         this.uploadDir = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
@@ -58,17 +60,13 @@ public class UserProfileController {
 
     @GetMapping("/photo/{fileName:.+}")
     public ResponseEntity<Resource> photo(@PathVariable String fileName) throws IOException {
-        Path file = uploadDir.resolve(fileName).normalize();
-        if (!file.startsWith(uploadDir) || !Files.isRegularFile(file)) {
-            return ResponseEntity.notFound().build();
-        }
-        Resource resource = new UrlResource(file.toUri());
-        String contentType = Files.probeContentType(file);
-        MediaType mediaType = contentType == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(contentType);
+        Resource resource = photoStorage.load(uploadDir, fileName);
+        if (resource == null) return ResponseEntity.notFound().build();
+        MediaType mediaType = MediaType.parseMediaType(photoStorage.contentType(resource));
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noCache().cachePrivate())
                 .contentType(mediaType)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + file.getFileName() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + fileName + "\"")
                 .body(resource);
     }
 

@@ -85,6 +85,40 @@ public class DriverRegisterRepository {
                 """, normalizeStatus(status), actorUserId, id);
     }
 
+    public String photoFilename(Long id) {
+        List<String> filenames = jdbcTemplate.query("""
+                SELECT NULLIF(metadata ->> 'photo_filename', '') FROM asset_drivers
+                WHERE id = ? AND deleted_at IS NULL
+                """, (rs, rowNum) -> rs.getString(1), id);
+        return filenames.isEmpty() ? null : filenames.get(0);
+    }
+
+    public String photoFilenameIncludingDeleted(Long id) {
+        List<String> filenames = jdbcTemplate.query("""
+                SELECT NULLIF(metadata ->> 'photo_filename', '') FROM asset_drivers
+                WHERE id = ?
+                """, (rs, rowNum) -> rs.getString(1), id);
+        return filenames.isEmpty() ? null : filenames.get(0);
+    }
+
+    public void setPhotoFilename(Long id, String fileName, Long actorUserId) {
+        jdbcTemplate.update("""
+                UPDATE asset_drivers
+                SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('photo_filename', ?),
+                    updated_by = ?, updated_at = NOW()
+                WHERE id = ? AND deleted_at IS NULL
+                """, fileName, actorUserId, id);
+    }
+
+    public void removePhotoFilename(Long id, Long actorUserId) {
+        jdbcTemplate.update("""
+                UPDATE asset_drivers
+                SET metadata = COALESCE(metadata, '{}'::jsonb) - 'photo_filename',
+                    updated_by = ?, updated_at = NOW()
+                WHERE id = ? AND deleted_at IS NULL
+                """, actorUserId, id);
+    }
+
     public Optional<Long> companyIdByDriver(Long id) {
         return jdbcTemplate.query("SELECT company_id FROM asset_drivers WHERE id = ?", (rs, rowNum) -> rs.getObject("company_id", Long.class), id).stream().findFirst();
     }
@@ -145,7 +179,10 @@ public class DriverRegisterRepository {
         return """
                 SELECT ad.id, ad.company_id, c.company_name, ad.driver_code, ad.employee_id, ad.driver_name, ad.license_number,
                        ad.country_code, COALESCE(rc.country_name, ad.country_code) AS country_name, ad.license_master_id,
-                       lm.name AS license_type, ad.phone_number, ad.rfid_ibutton, ad.status, ad.created_at, COALESCE(u.email, '-') AS created_by
+                       lm.name AS license_type, ad.phone_number, ad.rfid_ibutton,
+                       CASE WHEN NULLIF(ad.metadata ->> 'photo_filename', '') IS NULL THEN NULL
+                            ELSE '/api/asset-register/drivers/photo/' || (ad.metadata ->> 'photo_filename') END AS photo_url,
+                       ad.status, ad.created_at, COALESCE(u.email, '-') AS created_by
                 FROM asset_drivers ad
                 LEFT JOIN companies c ON c.id = ad.company_id
                 LEFT JOIN energy_reference_countries rc ON rc.country_code = ad.country_code
@@ -159,7 +196,7 @@ public class DriverRegisterRepository {
         return (rs, rowNum) -> new DriverRegisterRow(
                 rs.getLong("id"), rs.getObject("company_id", Long.class), rs.getString("company_name"), rs.getString("driver_code"), rs.getString("employee_id"), rs.getString("driver_name"),
                 rs.getString("license_number"), rs.getString("country_code"), rs.getString("country_name"), rs.getObject("license_master_id", Long.class), rs.getString("license_type"),
-                rs.getString("phone_number"), rs.getString("rfid_ibutton"), rs.getString("status"), rs.getString("created_at"), rs.getString("created_by")
+                rs.getString("phone_number"), rs.getString("rfid_ibutton"), rs.getString("photo_url"), rs.getString("status"), rs.getString("created_at"), rs.getString("created_by")
         );
     }
 
