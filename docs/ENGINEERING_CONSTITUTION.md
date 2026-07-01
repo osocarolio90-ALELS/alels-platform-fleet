@@ -28,6 +28,10 @@ The specialized standards in this directory implement this constitution. When po
 
 Contract and operational changes require explicit compatibility and rollback review.
 
+## Development standards
+
+Day-to-day development is governed by `DEVELOPMENT_STANDARD.md`, `CODING_STANDARD.md`, the language-specific standards, and `CODE_REVIEW_CHECKLIST.md`. These standards refine this constitution; they do not authorize behavioral changes or mandatory refactoring of existing code.
+
 ## Future Refactor Recommendation
 
 Architecture cleanup discovered during unrelated work must be recorded for a separately approved phase; it must not be smuggled into foundation or maintenance changes.
