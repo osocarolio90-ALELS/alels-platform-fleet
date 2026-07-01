@@ -2,21 +2,36 @@ package com.alels.backend.assetregister.service;
 
 import java.util.List;
 import java.util.Locale;
+import java.nio.file.Path;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.alels.backend.assetregister.dto.AssetWastedDtos.AssetWastedRow;
 import com.alels.backend.assetregister.repository.AssetWastedRepository;
+import com.alels.backend.assetregister.repository.DriverRegisterRepository;
 import com.alels.backend.serverops.shared.security.JwtUserContext;
+import com.alels.backend.shared.storage.SquarePhotoStorageService;
 
 @Service
 public class AssetWastedService {
     private final AssetWastedRepository repository;
+    private final DriverRegisterRepository driverRepository;
+    private final SquarePhotoStorageService photoStorage;
+    private final Path driverPhotoDir;
 
-    public AssetWastedService(AssetWastedRepository repository) {
+    public AssetWastedService(
+            AssetWastedRepository repository,
+            DriverRegisterRepository driverRepository,
+            SquarePhotoStorageService photoStorage,
+            @Value("${alels.upload.driver-photo-dir:uploads/driver-photos}") String driverPhotoDir
+    ) {
         this.repository = repository;
+        this.driverRepository = driverRepository;
+        this.photoStorage = photoStorage;
+        this.driverPhotoDir = Path.of(driverPhotoDir).toAbsolutePath().normalize();
     }
 
     public List<AssetWastedRow> list(JwtUserContext user, String itemType) {
@@ -38,7 +53,9 @@ public class AssetWastedService {
         Long companyId = repository.companyIdIncludingDeleted(normalizedType, id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, normalizedType + " wasted item not found."));
         assertCompanyAccess(user, companyId);
+        String driverPhoto = "DRIVER".equals(normalizedType) ? driverRepository.photoFilenameIncludingDeleted(id) : null;
         repository.permanentDelete(normalizedType, id);
+        if ("DRIVER".equals(normalizedType)) photoStorage.deleteQuietly(driverPhotoDir, driverPhoto);
         repository.log(user.userId(), user.companyId(), id, normalizedType + "_PERMANENT_DELETE");
     }
 

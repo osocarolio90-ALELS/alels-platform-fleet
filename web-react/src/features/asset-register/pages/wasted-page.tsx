@@ -48,6 +48,8 @@ export function AssetWastedPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["asset-register", "wasted"] });
       queryClient.invalidateQueries({ queryKey: ["asset-register", "vehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["asset-register", "devices"] });
+      queryClient.invalidateQueries({ queryKey: ["driver-register"] });
     }
   });
 
