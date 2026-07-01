@@ -6,6 +6,7 @@ import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/com
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrganizationTableCard, StatusBadge, formatDateTime } from "@/features/organization/components/organization-ui";
 import { useAuthStore } from "@/stores/auth-store";
 import { hasRole, MASTER_DATA_EDIT_ROLES } from "@/lib/role-access";
@@ -42,6 +43,7 @@ export function VehicleMasterPage() {
   const [editing, setEditing] = useState<MasterDataRow | VehicleModelRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<MasterForm>(emptyForm());
+  const [notice, setNotice] = useState<string | null>(null);
   const isModelTab = activeTab === "vehicle-models";
 
   const { data: rows = [], isLoading } = useQuery({
@@ -62,7 +64,8 @@ export function VehicleMasterPage() {
     onSuccess: () => {
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["master-data"] });
-    }
+    },
+    onError: (error: any) => setNotice(error?.response?.data?.message || "Master Data gagal disimpan.")
   });
 
   const deleteMutation = useMutation({
@@ -91,9 +94,9 @@ export function VehicleMasterPage() {
 
   const columns = useMemo<DataTableColumn<MasterDataRow | VehicleModelRow>[]>(() => {
     const base: DataTableColumn<MasterDataRow | VehicleModelRow>[] = [
-      { key: "code", label: "Code", value: (row) => row.code, render: (row) => <span className="font-bold text-white">{row.code}</span> },
-      { key: "name", label: "Name", value: (row) => row.name, render: (row) => <span className="font-bold text-white">{row.name}</span> },
-      { key: "description", label: "Description", value: (row) => row.description || "-", render: (row) => <span className="text-slate-300">{row.description || "-"}</span> },
+      { key: "code", label: "Code", value: (row) => row.code, render: (row) => <span className="font-bold text-foreground">{row.code}</span> },
+      { key: "name", label: "Name", value: (row) => row.name, render: (row) => <span className="font-bold text-foreground">{row.name}</span> },
+      { key: "description", label: "Description", value: (row) => row.description || "-", render: (row) => <span className="text-muted-foreground">{row.description || "-"}</span> },
       { key: "status", label: "Status", value: (row) => row.status, render: (row) => <StatusBadge status={row.status} /> },
       { key: "sortOrder", label: "Sort", value: (row) => row.sortOrder },
       { key: "updatedAt", label: "Updated at", value: (row) => formatDateTime(row.updatedAt), render: (row) => <span>{formatDateTime(row.updatedAt)}</span> }
@@ -107,11 +110,13 @@ export function VehicleMasterPage() {
   function startCreate() {
     setEditing(null);
     setForm(emptyForm());
+    setNotice(null);
     setFormOpen(true);
   }
 
   function startEdit(row: MasterDataRow | VehicleModelRow) {
     setEditing(row);
+    setNotice(null);
     setForm({
       code: row.code || "",
       name: row.name || "",
@@ -132,6 +137,7 @@ export function VehicleMasterPage() {
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!canEdit) return;
+    if (isModelTab && !form.brandId) { setNotice("Vehicle Brand wajib dipilih."); return; }
     saveMutation.mutate();
   }
 
@@ -141,11 +147,12 @@ export function VehicleMasterPage() {
       <section className="space-y-5 text-foreground">
         <PageHeader title={`${editing ? "Edit" : "Create New"} ${activeTabLabel(activeTab)}`} icon={<Database className="h-5 w-5" />} />
         <OrganizationTableCard>
+          {notice ? <Notice message={notice} /> : null}
           <form className="grid gap-4 md:grid-cols-3" onSubmit={submit}>
-            {isModelTab ? <Field label="Brand"><select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={form.brandId} onChange={(event) => setForm((current) => ({ ...current, brandId: event.target.value }))}><option value="">Select Brand</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></Field> : null}
+            {isModelTab ? <SearchableSelect label="Brand" required value={form.brandId} onChange={(value) => setForm((current) => ({ ...current, brandId: value }))} options={brands.map((brand) => ({ value: String(brand.id), label: brand.name, extra: brand.code }))} placeholder="Select Brand" /> : null}
             <Field label="Code"><Input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} placeholder="AUTO_IF_EMPTY" /></Field>
             <Field label="Name"><Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required /></Field>
-            <Field label="Status"><select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></Field>
+            <Field label="Status"><select className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground" value={form.status} onChange={(event) => setForm((current) => ({ ...current, status: event.target.value }))}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></Field>
             <Field label="Sort"><Input type="number" value={form.sortOrder} onChange={(event) => setForm((current) => ({ ...current, sortOrder: event.target.value }))} /></Field>
             <div className="md:col-span-3"><Field label="Description"><Input value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} /></Field></div>
             <div className="md:col-span-3 flex justify-end gap-3">
@@ -195,6 +202,7 @@ type MasterForm = { code: string; name: string; description: string; status: str
 function emptyForm(): MasterForm { return { code: "", name: "", description: "", status: "ACTIVE", sortOrder: "1000", brandId: "" }; }
 function normalizeInput(input: MasterForm): MasterDataInput { return { code: input.code || null, name: input.name, description: input.description || null, status: input.status, sortOrder: toNumber(input.sortOrder) }; }
 function normalizeModelInput(input: MasterForm): VehicleModelInput { return { ...normalizeInput(input), brandId: toNumber(input.brandId) }; }
-function toNumber(value: string) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
+function toNumber(value: string) { if (!value.trim()) return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function activeTabLabel(tab: TabKey) { return tabs.find((item) => item.key === tab)?.label || "Vehicle Master"; }
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="grid gap-2 text-xs font-bold text-white"><span>{label}</span>{children}</label>; }
+function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="grid gap-2 text-xs font-bold text-foreground"><span>{label}</span>{children}</label>; }
+function Notice({ message }: { message: string }) { return <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{message}</div>; }

@@ -5,6 +5,7 @@ import { DatabaseZap, Pencil, Plus, RefreshCw, Save, X } from "lucide-react";
 import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { createEnergyReferenceCountry, getEnergyReferenceCountries, getEnergyReferences, updateEnergyReference, updateEnergyReferenceProvider, type EnergyReferenceCountryInput, type EnergyReferenceCountryRow, type EnergyReferenceRow } from "@/features/master-data/api/reference-price-api";
 import { OrganizationTableCard, StatusBadge, formatDateTime } from "@/features/organization/components/organization-ui";
 import { PageHeader } from "@/components/ui/page-header";
@@ -108,14 +109,14 @@ export function ReferencePricePage() {
   }, [bulkProviderMutation, isSuperAdmin]);
 
   const columns = useMemo<DataTableColumn<EnergyReferenceRow>[]>(() => [
-    { key: "energyName", label: "Energy", value: (row) => row.energyName, render: (row) => <div><p className="font-extrabold text-white">{row.energyName}</p><p className="text-xs text-slate-400">{row.energyCode}</p></div> },
+    { key: "energyName", label: "Energy", value: (row) => row.energyName, render: (row) => <div><p className="font-extrabold text-foreground">{row.energyName}</p><p className="text-xs text-muted-foreground">{row.energyCode}</p></div> },
     { key: "energyGroup", label: "Group", value: (row) => row.energyGroup, render: (row) => <StatusBadge status={row.energyGroup} /> },
-    { key: "unit", label: "Unit", value: (row) => row.unit, render: (row) => <span className="font-bold text-slate-100">{row.unit}</span> },
-    { key: "countryName", label: "Country", value: (row) => `${row.countryName} ${row.countryCode}`, render: (row) => <div><p className="font-bold text-white">{row.countryName}</p><p className="text-xs text-slate-400">{row.countryCode} · {row.currency}</p></div> },
-    { key: "referencePriceCountry", label: "Reference Country", value: (row) => money(row.referencePriceCountry, row.currency), render: (row) => <span className="font-extrabold text-sky-200">{money(row.referencePriceCountry, row.currency)}</span> },
+    { key: "unit", label: "Unit", value: (row) => row.unit, render: (row) => <span className="font-bold text-foreground">{row.unit}</span> },
+    { key: "countryName", label: "Country", value: (row) => `${row.countryName} ${row.countryCode}`, render: (row) => <div><p className="font-bold text-foreground">{row.countryName}</p><p className="text-xs text-muted-foreground">{row.countryCode} · {row.currency}</p></div> },
+    { key: "referencePriceCountry", label: "Reference Country", value: (row) => money(row.referencePriceCountry, row.currency), render: (row) => <span className="font-extrabold text-foreground">{money(row.referencePriceCountry, row.currency)}</span> },
     { key: "referencePriceGlobalUsd", label: "Reference Global USD", value: (row) => usd(row.referencePriceGlobalUsd), render: (row) => <span>{usd(row.referencePriceGlobalUsd)}</span> },
     { key: "providerStatus", label: "Provider Status", value: (row) => row.providerStatus || "-", render: (row) => <StatusBadge status={row.providerStatus || "-"} /> },
-    { key: "sourceName", label: "Source", value: (row) => `${row.sourceName} ${row.sourceUrl || ""}`, render: (row) => <div><p className="font-extrabold text-white">{row.sourceName || "-"}</p><p className="line-clamp-2 text-xs text-slate-400">{row.sourceUrl || row.sourceDetail || "-"}</p></div> },
+    { key: "sourceName", label: "Source", value: (row) => `${row.sourceName} ${row.sourceUrl || ""}`, render: (row) => <div><p className="font-extrabold text-foreground">{row.sourceName || "-"}</p><p className="line-clamp-2 text-xs text-muted-foreground">{row.sourceUrl || row.sourceDetail || "-"}</p></div> },
     { key: "lastSyncAt", label: "Last Sync", value: (row) => formatDateTime(row.lastSyncAt), render: (row) => <span>{formatDateTime(row.lastSyncAt)}</span> },
     { key: "updatedAt", label: "Updated at", value: (row) => formatDateTime(row.updatedAt), render: (row) => <span>{formatDateTime(row.updatedAt)}</span> }
   ], []);
@@ -177,11 +178,8 @@ export function ReferencePricePage() {
 
       <OrganizationTableCard>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-300">Country</span>
-            <select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={countryCode} onChange={(event) => setCountryCode(event.target.value)}>
-              {countries.map((country) => <option key={country.countryCode} value={country.countryCode}>{country.countryName} ({country.currency})</option>)}
-            </select>
+          <div className="w-full max-w-sm">
+            <SearchableSelect label="Country" value={countryCode} onChange={setCountryCode} options={countries.map((country) => ({ value: country.countryCode, label: country.countryName, extra: country.currency }))} />
           </div>
           <div className="flex items-center gap-2">
             <Button type="button" onClick={() => providerMutation.mutate()} disabled={providerMutation.isPending}>
@@ -301,7 +299,7 @@ function usd(value?: number | null) {
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="grid gap-2 text-xs font-bold text-white"><span>{label}</span>{children}</label>;
+  return <label className="grid gap-2 text-xs font-bold text-foreground"><span>{label}</span>{children}</label>;
 }
 
 function ReadOnly({ label, value }: { label: string; value?: string | null }) {

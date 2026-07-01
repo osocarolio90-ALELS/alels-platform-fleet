@@ -14,7 +14,7 @@ public class VehicleModelRepository {
     public VehicleModelRepository(JdbcTemplate jdbcTemplate) { this.jdbcTemplate = jdbcTemplate; }
 
     public List<VehicleModelRow> list(Long brandId) {
-        return jdbcTemplate.query("""
+        String sql = """
                 SELECT vm.id,
                        vm.brand_id,
                        vb.brand_name,
@@ -29,9 +29,10 @@ public class VehicleModelRepository {
                 FROM vehicle_models vm
                 LEFT JOIN vehicle_brands vb ON vb.id = vm.brand_id
                 WHERE vm.deleted_at IS NULL
-                  AND (? IS NULL OR vm.brand_id = ?)
-                ORDER BY COALESCE(vb.brand_name, ''), vm.sort_order, vm.model_name
-                """, (rs, rowNum) -> new VehicleModelRow(
+                """;
+        if (brandId != null) sql += " AND vm.brand_id = ?";
+        sql += " ORDER BY COALESCE(vb.brand_name, ''), vm.sort_order, vm.model_name";
+        var mapper = (org.springframework.jdbc.core.RowMapper<VehicleModelRow>) (rs, rowNum) -> new VehicleModelRow(
                 rs.getLong("id"),
                 rs.getObject("brand_id", Long.class),
                 rs.getString("brand_name"),
@@ -43,7 +44,8 @@ public class VehicleModelRepository {
                 rs.getInt("sort_order"),
                 rs.getString("created_at"),
                 rs.getString("updated_at")
-        ), brandId, brandId);
+        );
+        return brandId == null ? jdbcTemplate.query(sql, mapper) : jdbcTemplate.query(sql, mapper, brandId);
     }
 
     public void create(VehicleModelRequest request, Long userId) {

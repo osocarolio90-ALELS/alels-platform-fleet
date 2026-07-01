@@ -60,7 +60,7 @@ public class MasterOptionRepository {
                     deleted_reason = NULL,
                     delete_permanent_at = NULL
                 """.formatted(table, codeColumn, nameColumn, codeColumn, nameColumn, nameColumn),
-                normalizeCode(request.code()), request.name(), request.description(), request.active(), request.sortOrder(), userId, userId);
+                normalizeCode(request.code(), request.name()), request.name(), request.description(), request.active(), request.sortOrder(), userId, userId);
     }
 
     public void update(String table, String codeColumn, String nameColumn, Long id, MasterOptionRequest request, Long userId) {
@@ -76,7 +76,7 @@ public class MasterOptionRepository {
                 WHERE id = ?
                   AND deleted_at IS NULL
                 """.formatted(table, codeColumn, codeColumn, nameColumn, nameColumn),
-                normalizeCode(request.code()), request.name(), request.description(), request.active(), request.sortOrder(), userId, id);
+                normalizeCode(request.code(), request.name()), request.name(), request.description(), request.active(), request.sortOrder(), userId, id);
     }
 
     public void softDelete(String table, Long id, Long userId) {
@@ -101,8 +101,9 @@ public class MasterOptionRepository {
                 """, actorUserId, actorCompanyId, targetType, targetId, action);
     }
 
-    private String normalizeCode(String value) {
-        if (value == null || value.isBlank()) return null;
-        return value.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_").replaceAll("^_+|_+$", "");
+    private String normalizeCode(String value, String fallback) {
+        String source = value == null || value.isBlank() ? fallback : value;
+        if (source == null || source.isBlank()) return null;
+        return source.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_").replaceAll("^_+|_+$", "");
     }
 }

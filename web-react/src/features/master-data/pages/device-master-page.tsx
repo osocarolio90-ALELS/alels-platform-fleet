@@ -6,12 +6,14 @@ import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/com
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { OrganizationTableCard, StatusBadge, formatDateTime } from "@/features/organization/components/organization-ui";
 import { useAuthStore } from "@/stores/auth-store";
 import { hasRole, MASTER_DATA_EDIT_ROLES } from "@/lib/role-access";
 import {
   createDeviceModel,
   deleteDeviceModel,
+  getDeviceBrands,
   getDeviceModels,
   updateDeviceModel,
   type DeviceMasterInput,
@@ -25,18 +27,21 @@ export function DeviceMasterPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DeviceModelRow | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [notice, setNotice] = useState<string | null>(null);
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["device-master", "models"],
     queryFn: () => getDeviceModels()
   });
+  const { data: brands = [] } = useQuery({ queryKey: ["device-master", "brands"], queryFn: getDeviceBrands });
 
   const saveMutation = useMutation({
     mutationFn: () => editing ? updateDeviceModel(editing.id, toInput(form)) : createDeviceModel(toInput(form)),
     onSuccess: () => {
       closeForm();
       queryClient.invalidateQueries({ queryKey: ["device-master"] });
-    }
+    },
+    onError: (error: any) => setNotice(error?.response?.data?.message || "Device Master gagal disimpan.")
   });
 
   const deleteMutation = useMutation({
@@ -50,9 +55,9 @@ export function DeviceMasterPage() {
   });
 
   const columns = useMemo<DataTableColumn<DeviceModelRow>[]>(() => [
-    { key: "code", label: "Code", value: (row) => row.modelCode || "-", render: (row) => <span className="font-bold text-white">{row.modelCode || "-"}</span> },
-    { key: "brandName", label: "Device Brand", value: (row) => row.brandName || "-", render: (row) => <span className="font-bold text-white">{row.brandName || "-"}</span> },
-    { key: "modelName", label: "Device Model", value: (row) => row.modelName || "-", render: (row) => <span className="font-bold text-white">{row.modelName || "-"}</span> },
+    { key: "code", label: "Code", value: (row) => row.modelCode || "-", render: (row) => <span className="font-bold text-foreground">{row.modelCode || "-"}</span> },
+    { key: "brandName", label: "Device Brand", value: (row) => row.brandName || "-", render: (row) => <span className="font-bold text-foreground">{row.brandName || "-"}</span> },
+    { key: "modelName", label: "Device Model", value: (row) => row.modelName || "-", render: (row) => <span className="font-bold text-foreground">{row.modelName || "-"}</span> },
     { key: "createdAt", label: "Created at", value: (row) => row.createdAt || "", render: (row) => formatDateTime(row.createdAt) },
     { key: "createdBy", label: "Created By", value: (row) => row.createdBy || "-" },
     { key: "status", label: "Status", value: (row) => row.active ? "ACTIVE" : "INACTIVE", render: (row) => <StatusBadge status={row.active ? "ACTIVE" : "INACTIVE"} /> }
@@ -94,14 +99,16 @@ export function DeviceMasterPage() {
   function openCreate() {
     setEditing(null);
     setForm(emptyForm());
+    setNotice(null);
     setFormOpen(true);
   }
 
   function startEdit(row: DeviceModelRow) {
     setEditing(row);
+    setNotice(null);
     setForm({
       modelCode: row.modelCode || "",
-      brandName: row.brandName || "",
+      brandId: row.brandId ? String(row.brandId) : "",
       modelName: row.modelName || "",
       active: row.active ? "ACTIVE" : "INACTIVE"
     });
@@ -116,7 +123,9 @@ export function DeviceMasterPage() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (canEdit) saveMutation.mutate();
+    if (!canEdit) return;
+    if (!form.brandId) { setNotice("Device Brand wajib dipilih."); return; }
+    saveMutation.mutate();
   }
 
   if (formOpen) {
@@ -127,18 +136,17 @@ export function DeviceMasterPage() {
           icon={<Database className="h-5 w-5" />}
         />
         <OrganizationTableCard>
+          {notice ? <Notice message={notice} /> : null}
           <form className="grid gap-3 md:grid-cols-3" onSubmit={submit}>
             <Field label="Code">
               <Input value={form.modelCode} onChange={(event) => setForm((current) => ({ ...current, modelCode: event.target.value.toUpperCase() }))} placeholder="AUTO / MANUAL" />
             </Field>
-            <Field label="Device Brand">
-              <Input value={form.brandName} onChange={(event) => setForm((current) => ({ ...current, brandName: event.target.value }))} required />
-            </Field>
+            <SearchableSelect label="Device Brand" required value={form.brandId} onChange={(value) => setForm((current) => ({ ...current, brandId: value }))} options={brands.map((brand) => ({ value: String(brand.id), label: brand.brandName, extra: brand.brandCode }))} />
             <Field label="Device Model">
               <Input value={form.modelName} onChange={(event) => setForm((current) => ({ ...current, modelName: event.target.value }))} required />
             </Field>
             <Field label="Status">
-              <select className="h-10 rounded-md border border-white/10 bg-[#070b12] px-3 text-sm text-white" value={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.value }))}>
+              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground" value={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.value }))}>
                 <option value="ACTIVE">ACTIVE</option>
                 <option value="INACTIVE">INACTIVE</option>
               </select>
@@ -184,16 +192,15 @@ export function DeviceMasterPage() {
   );
 }
 
-type FormState = { modelCode: string; brandName: string; modelName: string; active: string };
+type FormState = { modelCode: string; brandId: string; modelName: string; active: string };
 
 function emptyForm(): FormState {
-  return { modelCode: "", brandName: "", modelName: "", active: "ACTIVE" };
+  return { modelCode: "", brandId: "", modelName: "", active: "ACTIVE" };
 }
 
 function toInput(form: FormState): DeviceMasterInput {
   return {
-    brandId: null,
-    brandName: form.brandName || null,
+    brandId: form.brandId ? Number(form.brandId) : null,
     modelCode: form.modelCode || null,
     modelName: form.modelName || null,
     active: form.active === "ACTIVE"
@@ -216,5 +223,9 @@ function rowToInput(row: DeviceModelRow, active: boolean): DeviceMasterInput {
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="grid gap-2 text-xs font-bold text-white"><span>{label}</span>{children}</label>;
+  return <label className="grid gap-2 text-xs font-bold text-foreground"><span>{label}</span>{children}</label>;
+}
+
+function Notice({ message }: { message: string }) {
+  return <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{message}</div>;
 }

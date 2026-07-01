@@ -17,6 +17,8 @@ export type VehicleModelRow = MasterDataRow & {
   brandName?: string | null;
   modelCode?: string | null;
   modelName?: string | null;
+  active?: boolean | null;
+  system?: boolean | null;
 };
 
 export type MasterDataInput = {
@@ -59,6 +61,10 @@ export async function getVehicleModels(brandId?: number | null) {
   });
   return response.data.map((row) => ({
     ...row,
+    code: row.modelCode ?? row.code,
+    name: row.modelName ?? row.name,
+    status: row.active === false ? "INACTIVE" : "ACTIVE",
+    isSystem: row.system ?? row.isSystem ?? false,
     modelCode: row.modelCode ?? row.code,
     modelName: row.modelName ?? row.name
   }));

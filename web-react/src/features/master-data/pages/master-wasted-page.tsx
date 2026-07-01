@@ -27,7 +27,7 @@ export function MasterWastedPage() {
   const permanentDeleteMutation = useMutation({ mutationFn: (row: MasterWastedRow) => permanentDeleteMasterWasted(activeTab, row.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["master-wasted"] }) });
 
   const columns = useMemo<DataTableColumn<MasterWastedRow>[]>(() => [
-    { key: "name", label: "Name", value: (row) => row.name || "-", render: (row) => <span className="font-bold text-white">{row.name || "-"}</span> },
+    { key: "name", label: "Name", value: (row) => row.name || "-", render: (row) => <span className="font-bold text-foreground">{row.name || "-"}</span> },
     { key: "code", label: "Code", value: (row) => row.code || "-" },
     { key: "extra", label: "Info", value: (row) => row.extra || "-" },
     { key: "status", label: "Status", value: (row) => row.status || "DELETED", render: (row) => <StatusBadge status={row.status || "DELETED"} /> },
