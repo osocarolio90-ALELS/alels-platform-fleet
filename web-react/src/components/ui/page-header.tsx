@@ -1,5 +1,7 @@
 import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { translateUiLabel } from "@/lib/i18n";
+import { useLanguageStore } from "@/stores/language-store";
 
 type PageHeaderProps = {
   title: string;
@@ -10,6 +12,7 @@ type PageHeaderProps = {
 };
 
 export function PageHeader({ title, icon, description, actions, className }: PageHeaderProps) {
+  const language = useLanguageStore((state) => state.language);
   return (
     <div className={cn("alels-page-header flex flex-col gap-2 rounded-2xl border px-3 py-2 shadow-sm md:flex-row md:items-center md:justify-between", className)}>
       <div className="flex items-center gap-2 pl-2">
@@ -19,7 +22,7 @@ export function PageHeader({ title, icon, description, actions, className }: Pag
           </div>
         ) : null}
         <div>
-          <h1 className="text-xl font-extrabold leading-tight">{title}</h1>
+          <h1 className="text-xl font-extrabold leading-tight">{translateUiLabel(language, title)}</h1>
           {description ? <p className="mt-0.5 text-xs opacity-85">{description}</p> : null}
         </div>
       </div>

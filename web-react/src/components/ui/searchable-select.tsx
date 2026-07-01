@@ -1,4 +1,4 @@
-import type { FocusEvent } from "react";
+import type { CSSProperties, FocusEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 import { ChevronDown, Search, X } from "lucide-react";
 
@@ -19,6 +19,30 @@ type SearchableSelectProps = {
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+};
+
+
+const dropdownPanelStyle: CSSProperties = {
+  backgroundColor: "hsl(var(--popover))",
+  color: "hsl(var(--popover-foreground))",
+  borderColor: "hsl(var(--border))",
+};
+
+const dropdownControlStyle: CSSProperties = {
+  backgroundColor: "hsl(var(--background))",
+  color: "hsl(var(--foreground))",
+  borderColor: "hsl(var(--input))",
+};
+
+const dropdownListStyle: CSSProperties = {
+  backgroundColor: "hsl(var(--popover))",
+  color: "hsl(var(--popover-foreground))",
+  borderColor: "hsl(var(--border))",
+};
+
+const dropdownOptionStyle: CSSProperties = {
+  backgroundColor: "hsl(var(--popover))",
+  color: "hsl(var(--popover-foreground))",
 };
 
 export function SearchableSelect({ label, value, onChange, options, placeholder = "Select option", disabled = false, required = false }: SearchableSelectProps) {
@@ -50,22 +74,23 @@ export function SearchableSelect({ label, value, onChange, options, placeholder 
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
         className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+        style={dropdownControlStyle}
       >
         <span className={selected ? "truncate" : "truncate text-muted-foreground"}>{selected?.label || placeholder}</span>
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
       </button>
       {required ? <select className="sr-only" tabIndex={-1} value={value} required onChange={() => undefined}><option value="" />{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : null}
       {open ? (
-        <div className="absolute left-0 right-0 top-[4.25rem] z-50 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-2xl">
+        <div className="absolute left-0 right-0 top-[4.25rem] z-50 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-2xl" style={dropdownPanelStyle}>
           <div className="relative mb-2">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." className="pl-9 pr-9" />
+            <Input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." className="pl-9 pr-9" style={dropdownControlStyle} />
             {query ? <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2" onClick={() => setQuery("")}><X className="h-3.5 w-3.5" /></Button> : null}
           </div>
-          <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
-            <button type="button" className="block w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted" onMouseDown={(event) => event.preventDefault()} onClick={() => select("")}>-</button>
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-border" style={dropdownListStyle}>
+            <button type="button" className="block w-full px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted" style={dropdownOptionStyle} onMouseDown={(event) => event.preventDefault()} onClick={() => select("")}>-</button>
             {filteredOptions.map((option) => (
-              <button key={option.value} type="button" className="block w-full px-3 py-2 text-left text-sm text-popover-foreground hover:bg-muted" onMouseDown={(event) => event.preventDefault()} onClick={() => select(option.value)}>
+              <button key={option.value} type="button" className="block w-full px-3 py-2 text-left text-sm text-popover-foreground hover:bg-muted" style={dropdownOptionStyle} onMouseDown={(event) => event.preventDefault()} onClick={() => select(option.value)}>
                 <span className="block truncate font-bold">{option.label}</span>
                 {option.extra ? <span className="block truncate text-xs text-muted-foreground">{option.extra}</span> : null}
               </button>

@@ -75,7 +75,7 @@ export function VehicleRegisterPage() {
     { key: "brand", label: "Brand", value: (row) => row.brand || "-" },
     { key: "model", label: "Model", value: (row) => row.model || "-" },
     { key: "yearManufacture", label: "Years", value: (row) => row.yearManufacture || "-" },
-    { key: "plateNumber", label: "Plat Number", value: (row) => row.plateNumber, render: (row) => <span className="font-extrabold text-sky-200">{row.plateNumber}</span> },
+    { key: "plateNumber", label: "Plat Number", value: (row) => row.plateNumber, render: (row) => <span className="font-extrabold text-foreground">{row.plateNumber}</span> },
     { key: "energyName", label: "Energi", value: (row) => row.energyName || row.energyCode || "-" },
     { key: "energyPriceSnapshot", label: "Harga Energy", value: (row) => money(row.energyPriceSnapshot, row.energyCurrency), render: (row) => <span>{money(row.energyPriceSnapshot, row.energyCurrency)}</span> },
     { key: "countryName", label: "Country", value: (row) => row.countryName || row.countryCode },

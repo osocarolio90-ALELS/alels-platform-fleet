@@ -172,23 +172,23 @@ export function DataTable<T>({
               size="sm"
               disabled={selectedRows.length === 0}
               onClick={() => setBulkMenuOpen((value) => !value)}
-              className={selectedRows.length > 0 ? "bg-sky-500 text-white hover:bg-sky-600" : ""}
+              className={selectedRows.length > 0 ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}
             >
               Actions{selectedRows.length > 0 ? ` (${selectedRows.length} selected)` : ""}
               <ChevronDown className="h-4 w-4" />
             </Button>
             {bulkMenuOpen && selectedRows.length > 0 ? (
-              <div data-bulk-actions-menu className="data-table-bulk-actions-menu absolute left-0 z-30 mt-2 min-w-56 rounded-md border border-sky-300 bg-sky-500 p-1 shadow-xl">
+              <div data-bulk-actions-menu className="data-table-bulk-actions-menu absolute left-0 z-30 mt-2 min-w-56 rounded-md border border-primary bg-primary p-1 shadow-xl">
                 {visibleBulkActions.length > 0 ? visibleBulkActions.map((action) => (
                   <button
                     key={action.key}
                     type="button"
                     disabled={action.disabled?.(selectedRows)}
                     onClick={() => void runBulkAction(action)}
-                    className="flex w-full items-center gap-2 rounded-sm bg-sky-500 px-3 py-2 text-left text-sm font-semibold text-white hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center gap-2 rounded-sm bg-transparent px-3 py-2 text-left text-sm font-semibold text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground focus:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50 [&_span]:text-primary-foreground [&_svg]:text-primary-foreground"
                   >
                     {action.icon}
-                    <span>{action.label}</span>
+                    <span className="text-primary-foreground">{action.label}</span>
                   </button>
                 )) : (
                   <div className="px-3 py-2 text-sm font-semibold text-white">No bulk action available.</div>

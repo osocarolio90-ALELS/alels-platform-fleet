@@ -70,6 +70,41 @@ const dictionary = {
     markAllRead: "Mark all read",
     clickAlertToRead: "Click an alert to mark it as read.",
     read: "Read"
+    ,
+    welcomeAti: "Welcome to ATI",
+    showSidebar: "Show sidebar",
+    hideSidebar: "Hide sidebar",
+    serverOperations: "Server Operations",
+    overviewMonitor: "Overview Monitor",
+    aiOpsMonitor: "AI Ops Monitor",
+    gatewayMonitor: "Gateway Monitor",
+    trafficMonitor: "Traffic Monitor",
+    databaseMonitor: "Database Monitor",
+    storageMonitor: "Storage Monitor",
+    securityMonitor: "Security Monitor",
+    organizations: "Organizations",
+    companyList: "Company List",
+    userList: "User List",
+    assetRegister: "Asset Register",
+    vehicleRegister: "Vehicle Register",
+    deviceRegister: "Device Register",
+    driverRegister: "Driver Register",
+    energyPrice: "Energy Price",
+    masterData: "Master Data",
+    vehicleMaster: "Vehicle Master",
+    deviceMaster: "Device Master",
+    referencePrice: "Reference Price",
+    licenseMaster: "License Master",
+    userProfile: "User Profile",
+    switchLanguage: "Switch language",
+    switchLight: "Switch to light mode",
+    switchDark: "Switch to dark mode",
+    lightMode: "Light mode",
+    darkMode: "Dark mode",
+    role: "Role",
+    username: "Username",
+    userEmail: "User Email",
+    settings: "Settings"
   },
   id: {
     ownerMenu: "MENU OWNER",
@@ -139,7 +174,41 @@ const dictionary = {
     unread: "Belum Dibaca",
     markAllRead: "Tandai semua dibaca",
     clickAlertToRead: "Klik alert untuk menandai sudah dibaca.",
-    read: "Dibaca"
+    read: "Dibaca",
+    welcomeAti: "Selamat Datang di ATI",
+    showSidebar: "Tampilkan sidebar",
+    hideSidebar: "Sembunyikan sidebar",
+    serverOperations: "Operasi Server",
+    overviewMonitor: "Ringkasan Monitor",
+    aiOpsMonitor: "Monitor Operasi AI",
+    gatewayMonitor: "Monitor Gateway",
+    trafficMonitor: "Monitor Trafik",
+    databaseMonitor: "Monitor Database",
+    storageMonitor: "Monitor Penyimpanan",
+    securityMonitor: "Monitor Keamanan",
+    organizations: "Organisasi",
+    companyList: "Daftar Perusahaan",
+    userList: "Daftar Pengguna",
+    assetRegister: "Registrasi Aset",
+    vehicleRegister: "Registrasi Kendaraan",
+    deviceRegister: "Registrasi Perangkat",
+    driverRegister: "Registrasi Pengemudi",
+    energyPrice: "Harga Energi",
+    masterData: "Data Master",
+    vehicleMaster: "Master Kendaraan",
+    deviceMaster: "Master Perangkat",
+    referencePrice: "Harga Referensi",
+    licenseMaster: "Master Lisensi",
+    userProfile: "Profil Pengguna",
+    switchLanguage: "Ganti bahasa",
+    switchLight: "Ganti ke mode terang",
+    switchDark: "Ganti ke mode gelap",
+    lightMode: "Mode terang",
+    darkMode: "Mode gelap",
+    role: "Peran",
+    username: "Nama Pengguna",
+    userEmail: "Email Pengguna",
+    settings: "Pengaturan"
   }
 } satisfies Record<Language, Record<string, string>>;
 
@@ -147,4 +216,12 @@ export type TranslationKey = keyof typeof dictionary.en;
 
 export function t(language: Language, key: TranslationKey) {
   return dictionary[language][key] ?? dictionary.en[key];
+}
+
+export function translateUiLabel(language: Language, value: string) {
+  if (language === "en") return value;
+  const key = (Object.keys(dictionary.en) as TranslationKey[]).find(
+    (candidate) => dictionary.en[candidate].toLowerCase() === value.toLowerCase()
+  );
+  return key ? dictionary.id[key] : value;
 }

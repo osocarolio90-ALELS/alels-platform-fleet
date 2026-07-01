@@ -3,44 +3,44 @@ import { useState } from "react";
 import { Bot, Building2, CarFront, ChevronDown, CircleUserRound, ClipboardList, Cpu, Database, DollarSign, Globe, IdCard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Recycle, ServerCog, Settings, Sun } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
-import { t } from "@/lib/i18n";
+import { t, type TranslationKey } from "@/lib/i18n";
 import { useLanguageStore } from "@/stores/language-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { cn } from "@/lib/utils";
 import { MASTER_DATA_ROLES, ORGANIZATION_ROLES, SERVER_MONITOR_ROLES, hasRole } from "@/lib/role-access";
 
-type SidebarItem = { to: string; label: string; roles?: readonly string[] };
+type SidebarItem = { to: string; labelKey: TranslationKey; roles?: readonly string[] };
 
 const organizationItems: SidebarItem[] = [
-  { to: "/organization/company-list", label: "Company List" },
-  { to: "/organization/user-list", label: "User List" },
-  { to: "/organization/wasted", label: "Wasted" }
+  { to: "/organization/company-list", labelKey: "companyList" },
+  { to: "/organization/user-list", labelKey: "userList" },
+  { to: "/organization/wasted", labelKey: "wasted" }
 ];
 
 const serverMonitorItems: SidebarItem[] = [
-  { to: "/server-monitor/overview", label: "Overview Monitor" },
-  { to: "/server-monitor/ai-ops", label: "AI Ops Monitor" },
-  { to: "/server-monitor/gateway", label: "Gateway Monitor" },
-  { to: "/server-monitor/traffic", label: "Traffic Monitor" },
-  { to: "/server-monitor/database", label: "Database Monitor" },
-  { to: "/server-monitor/storage", label: "Storage Monitor" },
-  { to: "/server-monitor/security", label: "Security Monitor" }
+  { to: "/server-monitor/overview", labelKey: "overviewMonitor" },
+  { to: "/server-monitor/ai-ops", labelKey: "aiOpsMonitor" },
+  { to: "/server-monitor/gateway", labelKey: "gatewayMonitor" },
+  { to: "/server-monitor/traffic", labelKey: "trafficMonitor" },
+  { to: "/server-monitor/database", labelKey: "databaseMonitor" },
+  { to: "/server-monitor/storage", labelKey: "storageMonitor" },
+  { to: "/server-monitor/security", labelKey: "securityMonitor" }
 ];
 
 const assetRegisterItems: SidebarItem[] = [
-  { to: "/asset-register/vehicle-register", label: "Vehicle Register" },
-  { to: "/asset-register/device-register", label: "Device Register" },
-  { to: "/asset-register/driver-register", label: "Driver Register" },
-  { to: "/asset-register/energy-price", label: "Harga Energy" },
-  { to: "/asset-register/wasted", label: "Wasted" }
+  { to: "/asset-register/vehicle-register", labelKey: "vehicleRegister" },
+  { to: "/asset-register/device-register", labelKey: "deviceRegister" },
+  { to: "/asset-register/driver-register", labelKey: "driverRegister" },
+  { to: "/asset-register/energy-price", labelKey: "energyPrice" },
+  { to: "/asset-register/wasted", labelKey: "wasted" }
 ];
 
 const masterDataItems: SidebarItem[] = [
-  { to: "/master-data/vehicle-master", label: "Vehicle Master" },
-  { to: "/master-data/device-master", label: "Device Master" },
-  { to: "/master-data/reference-price", label: "Harga Master" },
-  { to: "/master-data/license-master", label: "License Master" },
-  { to: "/master-data/wasted", label: "Wasted" }
+  { to: "/master-data/vehicle-master", labelKey: "vehicleMaster" },
+  { to: "/master-data/device-master", labelKey: "deviceMaster" },
+  { to: "/master-data/reference-price", labelKey: "referencePrice" },
+  { to: "/master-data/license-master", labelKey: "licenseMaster" },
+  { to: "/master-data/wasted", labelKey: "wasted" }
 ];
 
 export function AppLayout() {
@@ -94,14 +94,14 @@ export function AppLayout() {
             <strong className="block text-base font-extrabold tracking-tight">
               <span className="alels-brand-text-white">Alels</span><span className="alels-brand-text-tech">Tech</span><span className="alels-brand-text-white">IDN</span>
             </strong>
-            <small className="alels-sidebar-welcome text-[11px] font-semibold">Welcome To ATI</small>
+            <small className="alels-sidebar-welcome text-[11px] font-semibold">{t(language, "welcomeAti")}</small>
           </div>
           <button
             className="legacy-sidebar-toggle ml-auto"
             type="button"
             onClick={() => { setSidebarCollapsed((current) => !current); setSidebarHovered(false); }}
-            aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-            title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+            aria-label={sidebarCollapsed ? t(language, "showSidebar") : t(language, "hideSidebar")}
+            title={sidebarCollapsed ? t(language, "showSidebar") : t(language, "hideSidebar")}
           >
             {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </button>
@@ -110,22 +110,22 @@ export function AppLayout() {
         <nav className="flex-1 space-y-1">
           {canViewServerMonitor ? (
             <div>
-              <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Server Operations</p>
+              <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">{t(language, "serverOperations")}</p>
               <button
                 type="button"
                 className={cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", location.pathname.startsWith("/server-monitor") && "active")}
                 onClick={() => setServerMonitorOpen((current) => !current)}
-                title="Server Operations"
+                title={t(language, "serverOperations")}
               >
                 <ServerCog className="h-4 w-4 shrink-0" />
-                <span className="sidebar-text flex-1 text-left">Server Operations</span>
+                <span className="sidebar-text flex-1 text-left">{t(language, "serverOperations")}</span>
                 <ChevronDown className={cn("sidebar-text h-4 w-4 transition-transform", serverMonitorOpen && "rotate-180")} />
               </button>
               {serverMonitorOpen && !sidebarIsCompact ? (
                 <div className="legacy-subnav mb-1 ml-8 space-y-1">
                   {serverMonitorItems.map((item) => (
                     <NavLink key={item.to} to={item.to} className={({ isActive }) => cn("legacy-subnav-link", isActive && "active")}>
-                      <span className="inline-flex items-center gap-2"><Bot className="h-3.5 w-3.5" />{item.label}</span>
+                      <span className="inline-flex items-center gap-2"><Bot className="h-3.5 w-3.5" />{t(language, item.labelKey)}</span>
                     </NavLink>
                   ))}
                 </div>
@@ -135,22 +135,22 @@ export function AppLayout() {
 
           {canViewOrganization ? (
             <div>
-              <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Organizations</p>
+              <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">{t(language, "organizations")}</p>
               <button
                 type="button"
                 className={cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", location.pathname.startsWith("/organization") && "active")}
                 onClick={() => setOrganizationOpen((current) => !current)}
-                title="Organizations"
+                title={t(language, "organizations")}
               >
                 <Building2 className="h-4 w-4 shrink-0" />
-                <span className="sidebar-text flex-1 text-left">Organizations</span>
+                <span className="sidebar-text flex-1 text-left">{t(language, "organizations")}</span>
                 <ChevronDown className={cn("sidebar-text h-4 w-4 transition-transform", organizationOpen && "rotate-180")} />
               </button>
               {organizationOpen && !sidebarIsCompact ? (
                 <div className="legacy-subnav mb-1 ml-8 space-y-1">
                   {organizationItems.map((item) => (
                     <NavLink key={item.to} to={item.to} className={({ isActive }) => cn("legacy-subnav-link", isActive && "active")}>
-                      <span className="inline-flex items-center gap-2"><Building2 className="h-3.5 w-3.5" />{item.label}</span>
+                      <span className="inline-flex items-center gap-2"><Building2 className="h-3.5 w-3.5" />{t(language, item.labelKey)}</span>
                     </NavLink>
                   ))}
                 </div>
@@ -159,15 +159,15 @@ export function AppLayout() {
           ) : null}
 
           <div>
-            <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Asset Register</p>
+            <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">{t(language, "assetRegister")}</p>
             <button
               type="button"
               className={cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", location.pathname.startsWith("/asset-register") && "active")}
               onClick={() => setAssetRegisterOpen((current) => !current)}
-              title="Asset Register"
+              title={t(language, "assetRegister")}
             >
               <CarFront className="h-4 w-4 shrink-0" />
-              <span className="sidebar-text flex-1 text-left">Asset Register</span>
+              <span className="sidebar-text flex-1 text-left">{t(language, "assetRegister")}</span>
               <ChevronDown className={cn("sidebar-text h-4 w-4 transition-transform", assetRegisterOpen && "rotate-180")} />
             </button>
             {assetRegisterOpen && !sidebarIsCompact ? (
@@ -176,7 +176,7 @@ export function AppLayout() {
                   <NavLink key={item.to} to={item.to} className={({ isActive }) => cn("legacy-subnav-link", isActive && "active")}>
                     <span className="inline-flex items-center gap-2">
                       {item.to.includes("device") ? <Cpu className="h-3.5 w-3.5" /> : item.to.includes("driver") ? <IdCard className="h-3.5 w-3.5" /> : item.to.includes("energy-reference") ? <DollarSign className="h-3.5 w-3.5" /> : item.to.includes("energy") ? <DollarSign className="h-3.5 w-3.5" /> : item.to.includes("wasted") ? <Recycle className="h-3.5 w-3.5" /> : <CarFront className="h-3.5 w-3.5" />}
-                      {item.label}
+                      {t(language, item.labelKey)}
                     </span>
                   </NavLink>
                 ))}
@@ -186,22 +186,22 @@ export function AppLayout() {
 
           {canViewMasterData ? (
             <div>
-              <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Master Data</p>
+              <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">{t(language, "masterData")}</p>
               <button
                 type="button"
                 className={cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", location.pathname.startsWith("/master-data") && "active")}
                 onClick={() => setMasterDataOpen((current) => !current)}
-                title="Master Data"
+                title={t(language, "masterData")}
               >
                 <Database className="h-4 w-4 shrink-0" />
-                <span className="sidebar-text flex-1 text-left">Master Data</span>
+                <span className="sidebar-text flex-1 text-left">{t(language, "masterData")}</span>
                 <ChevronDown className={cn("sidebar-text h-4 w-4 transition-transform", masterDataOpen && "rotate-180")} />
               </button>
               {masterDataOpen && !sidebarIsCompact ? (
                 <div className="legacy-subnav mb-1 ml-8 space-y-1">
                   {masterDataItems.map((item) => (
                     <NavLink key={item.to} to={item.to} className={({ isActive }) => cn("legacy-subnav-link", isActive && "active")}>
-                      <span className="inline-flex items-center gap-2"><Database className="h-3.5 w-3.5" />{item.label}</span>
+                      <span className="inline-flex items-center gap-2"><Database className="h-3.5 w-3.5" />{t(language, item.labelKey)}</span>
                     </NavLink>
                   ))}
                 </div>
@@ -210,14 +210,14 @@ export function AppLayout() {
           ) : null}
 
           <div>
-            <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">Assignment</p>
+            <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">{t(language, "assignment")}</p>
             <NavLink
               to="/assignment"
               className={({ isActive }) => cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", isActive && "active")}
-              title="Assignment"
+              title={t(language, "assignment")}
             >
               <ClipboardList className="h-4 w-4 shrink-0" />
-              <span className="sidebar-text flex-1 text-left">Assignment</span>
+              <span className="sidebar-text flex-1 text-left">{t(language, "assignment")}</span>
             </NavLink>
           </div>
         </nav>
@@ -230,10 +230,10 @@ export function AppLayout() {
                 isActive && "active"
               )
             }
-            title="User Profile"
+            title={t(language, "userProfile")}
           >
             <CircleUserRound className="h-4 w-4 shrink-0" />
-            <span className="sidebar-text">User Profile</span>
+            <span className="sidebar-text">{t(language, "userProfile")}</span>
           </NavLink>
         </div>
       </aside>
@@ -245,30 +245,30 @@ export function AppLayout() {
             <strong className="alels-topbar-company-name max-w-[280px] truncate text-sm font-extrabold tracking-wide">{currentCompanyName}</strong>
           </div>
           <div className="flex items-center gap-2.5">
-            <button className="alels-topbar-language-button inline-flex h-9 min-w-[68px] items-center justify-center gap-2 rounded-lg border px-3 text-sm font-extrabold" type="button" onClick={toggleLanguage} aria-label="Switch language" title={language === "en" ? "Bahasa Indonesia" : "English"}>
+            <button className="alels-topbar-language-button inline-flex h-9 min-w-[68px] items-center justify-center gap-2 rounded-lg border px-3 text-sm font-extrabold" type="button" onClick={toggleLanguage} aria-label={t(language, "switchLanguage")} title={language === "en" ? "Bahasa Indonesia" : "English"}>
               <Globe className="h-4 w-4" /><span>{language === "en" ? "EN" : "ID"}</span>
             </button>
-            <button className="legacy-icon-btn" type="button" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Light mode" : "Dark mode"}>
+            <button className="legacy-icon-btn" type="button" onClick={toggleTheme} aria-label={theme === "dark" ? t(language, "switchLight") : t(language, "switchDark")} title={theme === "dark" ? t(language, "lightMode") : t(language, "darkMode")}>
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <div className="relative">
-              <button className="legacy-icon-btn h-10 w-10 overflow-hidden rounded-full p-0" type="button" onClick={() => setProfileOpen((current) => !current)} aria-label="User profile" title="User profile">
+              <button className="legacy-icon-btn h-10 w-10 overflow-hidden rounded-full p-0" type="button" onClick={() => setProfileOpen((current) => !current)} aria-label={t(language, "userProfile")} title={t(language, "userProfile")}>
                 <img src={user?.profilePhotoUrl || "/assets/logokecil.png"} alt="User" className="h-full w-full rounded-full object-cover" />
               </button>
               {profileOpen ? (
                 <div className="absolute right-0 mt-2 w-72 rounded-xl border border-white/10 bg-[#0b1220] p-3 shadow-2xl">
                   <div className="border-b border-white/10 pb-3">
-                    <p className="text-xs uppercase tracking-[0.12em] text-slate-400">Company</p>
+                    <p className="text-xs uppercase tracking-[0.12em] text-slate-400">{t(language, "company")}</p>
                     <p className="truncate text-sm font-bold text-white">{currentCompanyName}</p>
-                    <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">Role</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">{t(language, "role")}</p>
                     <p className="truncate text-sm font-bold text-white">{(user?.role || "-").toUpperCase()}</p>
-                    <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">Username</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">{t(language, "username")}</p>
                     <p className="truncate text-sm font-bold text-white">{user?.username || user?.fullName || "-"}</p>
-                    <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">User Email</p>
+                    <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-400">{t(language, "userEmail")}</p>
                     <p className="truncate text-sm font-bold text-white">{user?.email || "-"}</p>
                   </div>
                   <button className="mt-3 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-100 hover:bg-white/10" type="button" onClick={() => { setProfileOpen(false); navigate("/user/profile"); }}>
-                    <Settings className="h-4 w-4" /> Settings
+                    <Settings className="h-4 w-4" /> {t(language, "settings")}
                   </button>
                   <button className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-200 hover:bg-red-500/10" type="button" onClick={handleLogout}>
                     <LogOut className="h-4 w-4" /> {t(language, "logout")}
@@ -280,8 +280,8 @@ export function AppLayout() {
               className="legacy-icon-btn text-red-200 hover:bg-red-500/10 hover:text-red-100"
               type="button"
               onClick={handleLogout}
-              aria-label="Logout"
-              title="Logout"
+              aria-label={t(language, "logout")}
+              title={t(language, "logout")}
             >
               <LogOut className="h-4 w-4" />
             </button>

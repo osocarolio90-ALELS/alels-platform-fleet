@@ -255,8 +255,9 @@
 .theme-light main svg,
 .theme-light section svg,
 .theme-light article svg {
-  color: var(--alels-ocean-text);
-  stroke: currentColor;
+  color: hsl(var(--primary)) !important;
+  fill: none !important;
+  stroke: hsl(var(--primary)) !important;
 }
 
 .theme-light h1,
@@ -400,45 +401,45 @@
 }
 
 /* =========================================================
-   ALELS Global Bulk Action Dropdown + Sidebar Brand Standard
+   ALELS Global Bulk Action Dropdown
+   Follow Created New button color
    ========================================================= */
 
 .data-table-bulk-actions-menu,
 [data-bulk-actions-menu],
 .bulk-actions-menu {
-  background: #0ea5e9 !important;
-  border: 1px solid rgba(255, 255, 255, 0.34) !important;
-  color: #ffffff !important;
+  background: hsl(var(--primary)) !important;
+  border: 1px solid hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
   box-shadow: 0 18px 40px rgba(3, 15, 34, 0.32) !important;
 }
 
 .data-table-bulk-actions-menu *,
 [data-bulk-actions-menu] *,
 .bulk-actions-menu * {
-  color: #ffffff !important;
-  fill: #ffffff !important;
-  stroke: #ffffff !important;
+  color: hsl(var(--primary-foreground)) !important;
+  stroke: hsl(var(--primary-foreground)) !important;
+  fill: none !important;
 }
 
 .data-table-bulk-actions-menu button,
 [data-bulk-actions-menu] button,
 .bulk-actions-menu button {
-  background: #0ea5e9 !important;
-  color: #ffffff !important;
+  background: transparent !important;
+  color: hsl(var(--primary-foreground)) !important;
 }
 
 .data-table-bulk-actions-menu button:hover,
 [data-bulk-actions-menu] button:hover,
 .bulk-actions-menu button:hover {
-  background: #0284c7 !important;
+  background: rgba(255, 255, 255, 0.12) !important;
 }
 
 .data-table-bulk-actions-menu button:disabled,
 [data-bulk-actions-menu] button:disabled,
 .bulk-actions-menu button:disabled {
-  background: #0ea5e9 !important;
-  color: rgba(255, 255, 255, 0.72) !important;
-  opacity: 0.72 !important;
+  background: transparent !important;
+  opacity: 0.55 !important;
 }
 
 .legacy-sidebar .sidebar-text strong,

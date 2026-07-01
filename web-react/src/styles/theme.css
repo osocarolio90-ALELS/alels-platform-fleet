@@ -138,24 +138,32 @@
 
 /*
  * ALELS strict readable text/icon contrast standard.
- * Requirement: dark mode uses white text/icons; light mode uses black text/icons.
+ * Requirement: dark mode uses white text/icons; light mode uses dark text and blue icons.
  * Keep backgrounds from existing tokens, only normalize foreground color so pages
  * that still have old hardcoded Tailwind text utilities remain readable.
  */
 .theme-dark .legacy-content,
-.theme-dark .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option),
-.theme-dark .legacy-content :where(svg,[data-lucide]) {
+.theme-dark .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option) {
   color: #ffffff !important;
-  fill: currentColor;
-  stroke: currentColor;
 }
 
 .theme-light .legacy-content,
-.theme-light .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option),
-.theme-light .legacy-content :where(svg,[data-lucide]) {
+.theme-light .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option) {
   color: #000000 !important;
-  fill: currentColor;
-  stroke: currentColor;
+}
+
+.theme-dark .legacy-content :where(svg,[data-lucide]),
+.theme-dark .legacy-content :where(svg,[data-lucide]) * {
+  color: #ffffff !important;
+  fill: none !important;
+  stroke: #ffffff !important;
+}
+
+.theme-light .legacy-content :where(svg,[data-lucide]),
+.theme-light .legacy-content :where(svg,[data-lucide]) * {
+  color: hsl(var(--primary)) !important;
+  fill: none !important;
+  stroke: hsl(var(--primary)) !important;
 }
 
 /* Form controls must stay visually clear in both modes. */
@@ -203,8 +211,25 @@
   color: #000000 !important;
 }
 
-/* SVG/icon logos follow current text color; raster images cannot be recolored safely. */
-.theme-dark .legacy-content :where(svg,path,circle,rect,line,polyline,polygon),
-.theme-light .legacy-content :where(svg,path,circle,rect,line,polyline,polygon) {
-  stroke: currentColor !important;
+/* Raster logos use the dedicated light/dark assets selected by AppLayout. */
+
+/* ==========================================================
+   ALELS DATA TABLE BULK ACTION MENU TEXT STANDARD
+   Scope: only DataTable bulk action dropdown.
+   Keep menu background unchanged; force readable white text/icons in both themes.
+   ========================================================== */
+.theme-dark .legacy-content [data-bulk-actions-menu],
+.theme-light .legacy-content [data-bulk-actions-menu],
+.theme-dark .legacy-content [data-bulk-actions-menu] :where(button, span, div),
+.theme-light .legacy-content [data-bulk-actions-menu] :where(button, span, div) {
+  color: #ffffff !important;
+}
+
+.theme-dark .legacy-content [data-bulk-actions-menu] :where(svg, [data-lucide]),
+.theme-light .legacy-content [data-bulk-actions-menu] :where(svg, [data-lucide]),
+.theme-dark .legacy-content [data-bulk-actions-menu] :where(svg, [data-lucide]) *,
+.theme-light .legacy-content [data-bulk-actions-menu] :where(svg, [data-lucide]) * {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  fill: none !important;
 }
