@@ -44,3 +44,14 @@ ingestion-service/*.log
 *.zip
 *.7z
 *.rar
+
+# Local-only workspace archives
+*.zip
+*.7z
+*.rar
+
+# =========================================================
+# ALELS Runtime Upload Storage (never commit)
+# =========================================================
+backend/uploads/
+backend/uploads/**
