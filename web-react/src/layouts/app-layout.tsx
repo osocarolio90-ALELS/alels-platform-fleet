@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Bot, Building2, CarFront, ChevronDown, CircleUserRound, ClipboardList, Cpu, Database, DollarSign, Globe, IdCard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Recycle, ServerCog, Settings, Sun } from "lucide-react";
+import { Bot, Building2, CarFront, ChevronDown, CircleUserRound, ClipboardList, Cpu, Database, DollarSign, Globe, IdCard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, RadioTower, Recycle, ServerCog, Settings, Sun, UsersRound } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { t, type TranslationKey } from "@/lib/i18n";
@@ -42,6 +42,7 @@ const masterDataItems: SidebarItem[] = [
   { to: "/master-data/license-master", labelKey: "licenseMaster" },
   { to: "/master-data/wasted", labelKey: "wasted" }
 ];
+const telemetryItems: SidebarItem[] = [{ to: "/telemetry/group", labelKey: "telemetryGroup" }];
 
 export function AppLayout() {
   const navigate = useNavigate();
@@ -52,6 +53,7 @@ export function AppLayout() {
   const [organizationOpen, setOrganizationOpen] = useState(location.pathname.startsWith("/organization"));
   const [assetRegisterOpen, setAssetRegisterOpen] = useState(location.pathname.startsWith("/asset-register"));
   const [masterDataOpen, setMasterDataOpen] = useState(location.pathname.startsWith("/master-data"));
+  const [telemetryOpen, setTelemetryOpen] = useState(location.pathname.startsWith("/telemetry"));
   const [profileOpen, setProfileOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -208,6 +210,14 @@ export function AppLayout() {
               ) : null}
             </div>
           ) : null}
+
+          <div>
+            <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">{t(language, "telemetry")}</p>
+            <button type="button" className={cn("legacy-nav-link mb-[3px] flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium", location.pathname.startsWith("/telemetry") && "active")} onClick={() => setTelemetryOpen(v => !v)} title={t(language, "telemetry")}>
+              <RadioTower className="h-4 w-4 shrink-0" /><span className="sidebar-text flex-1 text-left">{t(language, "telemetry")}</span><ChevronDown className={cn("sidebar-text h-4 w-4 transition-transform", telemetryOpen && "rotate-180")} />
+            </button>
+            {telemetryOpen && !sidebarIsCompact ? <div className="legacy-subnav mb-1 ml-8 space-y-1">{telemetryItems.map(item => <NavLink key={item.to} to={item.to} className={({isActive})=>cn("legacy-subnav-link",isActive&&"active")}><span className="inline-flex items-center gap-2"><UsersRound className="h-3.5 w-3.5"/>{t(language,item.labelKey)}</span></NavLink>)}</div> : null}
+          </div>
 
           <div>
             <p className="sidebar-text mb-2 mt-[18px] px-2 text-[11px] uppercase tracking-[0.04em] text-[#8e96a8]">{t(language, "assignment")}</p>

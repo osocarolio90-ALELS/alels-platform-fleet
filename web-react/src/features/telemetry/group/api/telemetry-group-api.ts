@@ -1,0 +1,12 @@
+import { api } from "@/lib/api";
+import type { TelemetryDevice, TelemetryGroup, TelemetryGroupInput, TelemetryGroupLog } from "../types/telemetry-group";
+const BASE="/api/telemetry/groups";
+export const getTelemetryGroups=async()=> (await api.get<TelemetryGroup[]>(BASE)).data;
+export const getTelemetryGroupLogs=async()=> (await api.get<TelemetryGroupLog[]>(`${BASE}/logs`)).data;
+export const getTelemetryGroupWasted=async()=> (await api.get<TelemetryGroup[]>(`${BASE}/wasted`)).data;
+export const getTelemetryGroupDevices=async(currentGroupId?:number)=> (await api.get<TelemetryDevice[]>(`${BASE}/devices`,{params:currentGroupId?{currentGroupId}:undefined})).data;
+export const createTelemetryGroup=async(input:TelemetryGroupInput)=> (await api.post(BASE,input)).data;
+export const updateTelemetryGroup=async(id:number,input:TelemetryGroupInput)=> (await api.put(`${BASE}/${id}`,input)).data;
+export const deleteTelemetryGroup=async(id:number)=> (await api.delete(`${BASE}/${id}`)).data;
+export const restoreTelemetryGroup=async(id:number)=> (await api.post(`${BASE}/${id}/restore`)).data;
+export const permanentlyDeleteTelemetryGroup=async(id:number)=> (await api.delete(`${BASE}/${id}/permanent`)).data;

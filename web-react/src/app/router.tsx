@@ -75,6 +75,9 @@ const AssetWastedPage = lazy(() =>
 const AssignmentPage = lazy(() =>
   import("@/features/assignment/pages/assignment-page").then((module) => ({ default: module.AssignmentPage }))
 );
+const TelemetryGroupPage = lazy(() =>
+  import("@/features/telemetry/group/pages/telemetry-group-page").then((module) => ({ default: module.TelemetryGroupPage }))
+);
 
 
 function PageLoader() {
@@ -118,6 +121,8 @@ export const router = createBrowserRouter([
           },
           { path: "/asset-register", element: <Navigate to="/asset-register/vehicle-register" replace /> },
           { path: "/assignment", element: withSuspense(<AssignmentPage />) },
+          { path: "/telemetry/group", element: withSuspense(<TelemetryGroupPage />) },
+          { path: "/telemetry", element: <Navigate to="/telemetry/group" replace /> },
 
           {
             element: <ProtectedRoute allowedRoles={ORGANIZATION_ROLES} />,
