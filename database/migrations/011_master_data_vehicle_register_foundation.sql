@@ -129,6 +129,29 @@ CREATE TABLE IF NOT EXISTS vehicles (
     CONSTRAINT uq_vehicles_company_vehicle_code UNIQUE(company_id, vehicle_code),
     CONSTRAINT uq_vehicles_company_plate_number UNIQUE(company_id, plate_number)
 );
+
+-- 003 may already have created the smaller runtime vehicles shape.
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS vehicle_code VARCHAR(80);
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS vehicle_type_id BIGINT REFERENCES vehicle_types(id) ON DELETE SET NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS brand_id BIGINT REFERENCES vehicle_brands(id) ON DELETE SET NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS model_id BIGINT REFERENCES vehicle_models(id) ON DELETE SET NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS year_manufacture INTEGER;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS country_code VARCHAR(10) NOT NULL DEFAULT 'ID';
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS energy_id BIGINT REFERENCES energy_types(id) ON DELETE SET NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS energy_code VARCHAR(100);
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS energy_price_snapshot NUMERIC(18,4) NOT NULL DEFAULT 0;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS energy_currency VARCHAR(10) NOT NULL DEFAULT 'IDR';
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS ownership_type_id BIGINT REFERENCES vehicle_ownership_types(id) ON DELETE SET NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS capacity_value NUMERIC(18,2);
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS capacity_unit_id BIGINT REFERENCES vehicle_capacity_units(id) ON DELETE SET NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS operational_status VARCHAR(40) NOT NULL DEFAULT 'UNKNOWN';
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS maintenance_at TIMESTAMPTZ;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS maintenance_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS created_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS deleted_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+
 CREATE INDEX IF NOT EXISTS idx_vehicles_company_status ON vehicles(company_id, operational_status) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_vehicles_company_created ON vehicles(company_id, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_vehicles_type_brand_model ON vehicles(vehicle_type_id, brand_id, model_id) WHERE deleted_at IS NULL;

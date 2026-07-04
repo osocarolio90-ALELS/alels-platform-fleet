@@ -40,6 +40,9 @@ ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS ingestion_error TEXT;
 ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS kafka_topic VARCHAR(120);
 ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS kafka_partition INTEGER;
 ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS kafka_offset BIGINT;
+ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS protocol VARCHAR(80);
+ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS channel VARCHAR(40);
+ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS packet_sequence BIGINT;
 
 CREATE INDEX IF NOT EXISTS idx_telemetry_imei_server_time ON telemetry(imei, server_time DESC);
 CREATE INDEX IF NOT EXISTS idx_telemetry_device_time ON telemetry(device_time DESC NULLS LAST);

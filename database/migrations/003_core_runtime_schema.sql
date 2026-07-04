@@ -61,16 +61,16 @@ BEGIN
     FOR i IN 0..GREATEST(months_ahead, 0) LOOP
         m := alels_month_start(NOW() + (i || ' month')::interval);
         IF to_regclass('public.telemetry') IS NOT NULL
-           AND EXISTS (SELECT 1 FROM pg_partitioned_table WHERE partrelid = 'public.telemetry'::regclass) THEN
-            PERFORM alels_ensure_month_partition('telemetry'::regclass, 'telemetry_p', 'server_time', m);
+           AND EXISTS (SELECT 1 FROM pg_partitioned_table WHERE partrelid = to_regclass('public.telemetry')) THEN
+            PERFORM alels_ensure_month_partition(to_regclass('public.telemetry'), 'telemetry_p', 'server_time', m);
         END IF;
         IF to_regclass('public.raw_packets') IS NOT NULL
-           AND EXISTS (SELECT 1 FROM pg_partitioned_table WHERE partrelid = 'public.raw_packets'::regclass) THEN
-            PERFORM alels_ensure_month_partition('raw_packets'::regclass, 'raw_packets_p', 'received_at', m);
+           AND EXISTS (SELECT 1 FROM pg_partitioned_table WHERE partrelid = to_regclass('public.raw_packets')) THEN
+            PERFORM alels_ensure_month_partition(to_regclass('public.raw_packets'), 'raw_packets_p', 'received_at', m);
         END IF;
         IF to_regclass('public.tcp_logs') IS NOT NULL
-           AND EXISTS (SELECT 1 FROM pg_partitioned_table WHERE partrelid = 'public.tcp_logs'::regclass) THEN
-            PERFORM alels_ensure_month_partition('tcp_logs'::regclass, 'tcp_logs_p', 'created_at', m);
+           AND EXISTS (SELECT 1 FROM pg_partitioned_table WHERE partrelid = to_regclass('public.tcp_logs')) THEN
+            PERFORM alels_ensure_month_partition(to_regclass('public.tcp_logs'), 'tcp_logs_p', 'created_at', m);
         END IF;
     END LOOP;
 END;

@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS energy_reference_prices (
 CREATE INDEX IF NOT EXISTS idx_energy_reference_country ON energy_reference_prices(country_code, energy_code);
 CREATE INDEX IF NOT EXISTS idx_energy_reference_energy ON energy_reference_prices(energy_id);
 CREATE INDEX IF NOT EXISTS idx_energy_reference_updated_at ON energy_reference_prices(updated_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_energy_reference_prices_energy_country_code
+    ON energy_reference_prices(energy_id, country_code);
 
 CREATE TABLE IF NOT EXISTS energy_reference_update_logs (
     id BIGSERIAL PRIMARY KEY,

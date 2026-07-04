@@ -193,8 +193,10 @@ WITH global_price AS (
 INSERT INTO energy_reference_prices (
     energy_id,
     energy_code,
+    country,
     country_code,
     country_name,
+    country_currency,
     currency,
     unit,
     reference_price_country,
@@ -202,16 +204,20 @@ INSERT INTO energy_reference_prices (
     provider_reference_price_country,
     provider_reference_price_global_usd,
     source_name,
+    source,
     source_detail,
     source_url,
     provider_status,
+    provider_updated_at,
     provider_last_update_at,
     last_sync_at
 )
 SELECT gp.energy_id,
        gp.energy_code,
+       c.country_name,
        c.country_code,
        c.country_name,
+       c.currency,
        c.currency,
        gp.unit,
        ROUND(gp.global_usd * c.usd_to_local_rate, 4),
@@ -219,9 +225,11 @@ SELECT gp.energy_id,
        ROUND(gp.global_usd * c.usd_to_local_rate, 4),
        gp.global_usd,
        c.source_name,
+       c.source_name,
        CONCAT('ALELS ASEAN seed reference for ', gp.energy_name, ' in ', c.country_name, '. Provider URL can be updated by SUPERADMIN.'),
        c.source_url,
        c.provider_status,
+       COALESCE(c.provider_last_update_at, NOW()),
        COALESCE(c.provider_last_update_at, NOW()),
        NOW()
 FROM global_price gp
@@ -229,15 +237,19 @@ CROSS JOIN energy_reference_countries c
 WHERE c.status = 'ACTIVE'
 ON CONFLICT (energy_id, country_code) DO UPDATE
 SET energy_code = EXCLUDED.energy_code,
+    country = EXCLUDED.country,
     country_name = EXCLUDED.country_name,
+    country_currency = EXCLUDED.country_currency,
     currency = EXCLUDED.currency,
     unit = EXCLUDED.unit,
     provider_reference_price_country = EXCLUDED.provider_reference_price_country,
     provider_reference_price_global_usd = EXCLUDED.provider_reference_price_global_usd,
     source_name = EXCLUDED.source_name,
+    source = EXCLUDED.source,
     source_detail = EXCLUDED.source_detail,
     source_url = EXCLUDED.source_url,
     provider_status = EXCLUDED.provider_status,
+    provider_updated_at = EXCLUDED.provider_updated_at,
     provider_last_update_at = EXCLUDED.provider_last_update_at,
     updated_at = NOW();
 

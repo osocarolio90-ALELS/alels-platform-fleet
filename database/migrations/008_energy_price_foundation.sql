@@ -38,6 +38,38 @@ CREATE TABLE IF NOT EXISTS energy_reference_prices (
     UNIQUE (energy_id, country)
 );
 
+-- Compatibility for databases where the later country-code shape already exists.
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS country VARCHAR(120) NOT NULL DEFAULT 'Indonesia';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS country_currency VARCHAR(10) NOT NULL DEFAULT 'IDR';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS reference_price_country_idr NUMERIC(18,4);
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS fx_rate_to_idr NUMERIC(18,6);
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS source VARCHAR(255) NOT NULL DEFAULT 'ALELS_SEED_REFERENCE';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS provider_updated_at TIMESTAMPTZ;
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS energy_code VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS country_code VARCHAR(10) NOT NULL DEFAULT 'ID';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS country_name VARCHAR(120) NOT NULL DEFAULT 'Indonesia';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'IDR';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS unit VARCHAR(40) NOT NULL DEFAULT 'liter';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS provider_reference_price_country NUMERIC(18,4) NOT NULL DEFAULT 0;
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS provider_reference_price_global_usd NUMERIC(18,4) NOT NULL DEFAULT 0;
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS source_name VARCHAR(120) NOT NULL DEFAULT 'ALELS_REFERENCE_PROVIDER';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS source_detail TEXT NOT NULL DEFAULT 'ALELS controlled reference baseline. Replace with official provider integration when configured.';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS provider_status VARCHAR(40) NOT NULL DEFAULT 'SEEDED';
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS provider_last_update_at TIMESTAMPTZ;
+ALTER TABLE energy_reference_prices ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMPTZ;
+
+UPDATE energy_reference_prices erp
+SET country = COALESCE(NULLIF(erp.country_name, ''), erp.country),
+    country_currency = COALESCE(NULLIF(erp.currency, ''), erp.country_currency),
+    reference_price_country_idr = COALESCE(erp.reference_price_country_idr, erp.reference_price_country),
+    source = COALESCE(NULLIF(erp.source_name, ''), erp.source),
+    provider_updated_at = COALESCE(erp.provider_updated_at, erp.provider_last_update_at, erp.last_sync_at)
+WHERE erp.country IS DISTINCT FROM COALESCE(NULLIF(erp.country_name, ''), erp.country)
+   OR erp.country_currency IS DISTINCT FROM COALESCE(NULLIF(erp.currency, ''), erp.country_currency)
+   OR erp.reference_price_country_idr IS NULL
+   OR erp.source IS DISTINCT FROM COALESCE(NULLIF(erp.source_name, ''), erp.source)
+   OR erp.provider_updated_at IS NULL;
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_energy_reference_energy_country ON energy_reference_prices (energy_id, country);
 CREATE INDEX IF NOT EXISTS idx_energy_reference_country ON energy_reference_prices (country, energy_id);
 CREATE INDEX IF NOT EXISTS idx_energy_reference_updated ON energy_reference_prices (updated_at DESC);
@@ -156,8 +188,13 @@ WITH seed AS (
 )
 INSERT INTO energy_reference_prices (
     energy_id,
+    energy_code,
     country,
+    country_code,
+    country_name,
     country_currency,
+    currency,
+    unit,
     reference_price_country,
     reference_price_country_idr,
     reference_price_global_usd,
@@ -166,8 +203,13 @@ INSERT INTO energy_reference_prices (
     provider_updated_at
 )
 SELECT et.id,
+       et.energy_code,
+       seed.country,
+       'ID',
        seed.country,
        seed.country_currency,
+       seed.country_currency,
+       et.unit,
        seed.reference_price_country,
        seed.reference_price_country_idr,
        seed.reference_price_global_usd,
