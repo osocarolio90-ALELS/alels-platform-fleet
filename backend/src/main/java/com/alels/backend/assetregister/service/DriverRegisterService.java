@@ -49,10 +49,8 @@ public class DriverRegisterService {
     public void update(JwtUserContext user, Long id, DriverRegisterRequest request) {
         Long currentCompanyId = repository.companyIdByDriver(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver not found."));
         assertCompanyAccess(user, currentCompanyId);
-        Long targetCompanyId = request.companyId() == null ? currentCompanyId : request.companyId();
-        validate(new DriverRegisterRequest(targetCompanyId, request.driverId(), request.employeeId(), request.driverName(), request.licenseNumber(), request.countryCode(), request.licenseMasterId(), request.phoneNumber(), request.rfidIbutton(), request.status()), id);
-        assertCompanyAccess(user, targetCompanyId);
-        repository.update(id, new DriverRegisterRequest(targetCompanyId, request.driverId(), request.employeeId(), request.driverName(), request.licenseNumber(), request.countryCode(), request.licenseMasterId(), request.phoneNumber(), request.rfidIbutton(), request.status()), user.userId());
+        validate(new DriverRegisterRequest(currentCompanyId, request.driverId(), request.employeeId(), request.driverName(), request.licenseNumber(), request.countryCode(), request.licenseMasterId(), request.phoneNumber(), request.rfidIbutton(), request.status()), id);
+        repository.update(id, new DriverRegisterRequest(currentCompanyId, request.driverId(), request.employeeId(), request.driverName(), request.licenseNumber(), request.countryCode(), request.licenseMasterId(), request.phoneNumber(), request.rfidIbutton(), request.status()), user.userId());
         repository.log(user.userId(), user.companyId(), id, "DRIVER_UPDATE");
     }
 

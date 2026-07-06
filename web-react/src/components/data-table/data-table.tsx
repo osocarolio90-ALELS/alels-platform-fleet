@@ -20,6 +20,7 @@ type DataTableProps<T> = {
   bulkActions?: DataTableBulkAction<T>[];
   selectable?: boolean;
   isRowSelectable?: (row: T) => boolean;
+  rowClassName?: (row: T) => string | undefined;
   emptyMessage?: string;
   searchPlaceholder?: string;
 };
@@ -32,6 +33,7 @@ export function DataTable<T>({
   bulkActions = [],
   selectable,
   isRowSelectable,
+  rowClassName,
   emptyMessage = "No data found.",
   searchPlaceholder
 }: DataTableProps<T>) {
@@ -274,7 +276,7 @@ export function DataTable<T>({
               const key = toKey(rowKey(row));
               const rowSelectable = isSelectable(row, isRowSelectable);
               return (
-                <tr key={key}>
+                <tr key={key} className={rowClassName?.(row)}>
                   {selectionEnabled ? (
                     <Td>
                       <input

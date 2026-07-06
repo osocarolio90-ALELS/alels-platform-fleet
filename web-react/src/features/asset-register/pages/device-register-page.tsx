@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Cpu, Pencil, Plus, Save, Trash2, X } from "lucide-react";
+import { ArrowRightLeft, CheckCircle2, Cpu, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 
 import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { PageHeader } from "@/components/ui/page-header";
@@ -9,6 +9,10 @@ import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { getDeviceEndpoint } from "@/lib/api";
 import { OrganizationTableCard, formatDateTime, formatCompanyName } from "@/features/organization/components/organization-ui";
+import { moveAssets } from "@/features/asset-register/api/asset-move-api";
+import { AssetMoveDialog } from "@/features/asset-register/components/asset-move-dialog";
+import { normalizeRole } from "@/lib/role-access";
+import { useAuthStore } from "@/stores/auth-store";
 import {
   createDevice,
   deleteDevice,
@@ -26,6 +30,9 @@ export function DeviceRegisterPage() {
   const [editing, setEditing] = useState<DeviceRegisterRow | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [notice, setNotice] = useState<string | null>(null);
+  const [moveRows, setMoveRows] = useState<DeviceRegisterRow[]>([]);
+  const user = useAuthStore((state) => state.user);
+  const canMove = ["SUPERADMIN", "ADMIN", "OWNER", "MANAGER"].includes(normalizeRole(user?.role) || "");
 
   const { data: rows = [], isLoading } = useQuery({ queryKey: ["asset-register", "devices"], queryFn: getDevices });
   const { data: companies = [] } = useQuery({ queryKey: ["asset-register", "devices", "companies"], queryFn: getDeviceCompanyOptions });
@@ -47,6 +54,15 @@ export function DeviceRegisterPage() {
       queryClient.invalidateQueries({ queryKey: ["asset-wasted"] });
     }
   });
+  const moveMutation = useMutation({
+    mutationFn: (targetCompanyId: number) => moveAssets("DEVICE", moveRows.map((row) => row.id), targetCompanyId),
+    onSuccess: () => {
+      setMoveRows([]);
+      setNotice("Device berhasil dipindahkan.");
+      queryClient.invalidateQueries({ queryKey: ["asset-register", "devices"] });
+    },
+    onError: (error) => setNotice(error instanceof Error ? error.message : "Device gagal dipindahkan.")
+  });
 
   const columns = useMemo<DataTableColumn<DeviceRegisterRow>[]>(() => [
     { key: "companyName", label: "Company", value: (row) => row.companyName, render: (row) => <span className="font-bold text-white">{formatCompanyName(row.companyName)}</span> },
@@ -60,7 +76,12 @@ export function DeviceRegisterPage() {
     { key: "createdBy", label: "Created by", value: (row) => row.createdBy || "-" }
   ], []);
 
-  const bulkActions = useMemo<DataTableBulkAction<DeviceRegisterRow>[]>(() => [{
+  const bulkActions = useMemo<DataTableBulkAction<DeviceRegisterRow>[]>(() => [...(canMove ? [{
+    key: "move",
+    label: "Move",
+    icon: <ArrowRightLeft className="h-4 w-4" />,
+    onClick: async (selected: DeviceRegisterRow[]) => setMoveRows(selected)
+  }] : []), {
     key: "delete",
     label: "Delete",
     icon: <Trash2 className="h-4 w-4" />,
@@ -70,7 +91,7 @@ export function DeviceRegisterPage() {
       queryClient.invalidateQueries({ queryKey: ["asset-register", "devices"] });
       queryClient.invalidateQueries({ queryKey: ["asset-wasted"] });
     }
-  }], [queryClient]);
+  }], [canMove, queryClient]);
 
   function openCreate() {
     setNotice(null);
@@ -138,7 +159,7 @@ export function DeviceRegisterPage() {
       <OrganizationTableCard>
         {notice ? <div className="mb-3 rounded-md border border-amber-500/50 bg-amber-950/40 px-3 py-2 text-xs font-bold text-amber-100">{notice}</div> : null}
         <form className="grid gap-3 md:grid-cols-3" onSubmit={submit}>
-          <SearchableSelect label="Company" value={form.companyId} onChange={(value) => setForm((current) => ({ ...current, companyId: value }))} options={companies.map((company) => ({ value: String(company.id), label: company.label, extra: company.extra || company.code }))} required />
+          <SearchableSelect label="Company" value={form.companyId} onChange={(value) => setForm((current) => ({ ...current, companyId: value }))} options={companies.map((company) => ({ value: String(company.id), label: company.label, extra: company.extra || company.code }))} required disabled={Boolean(editing)} />
           <SearchableSelect label="Device" value={form.deviceModelId} onChange={(value) => setForm((current) => ({ ...current, deviceModelId: value }))} options={deviceOptions.map((device) => ({ value: String(device.id), label: device.extra ? `${device.extra} ${device.label}` : device.label, extra: device.code }))} required />
           <Field label="Device IMEI" required><Input value={form.imei} onChange={(event) => setForm((current) => ({ ...current, imei: event.target.value }))} /></Field>
           <Field label="GSM Number"><Input value={form.gsmNumber} onChange={(event) => setForm((current) => ({ ...current, gsmNumber: event.target.value }))} /></Field>
@@ -151,7 +172,7 @@ export function DeviceRegisterPage() {
     </section>;
   }
 
-  return <section className="space-y-5 text-foreground"><PageHeader title="Device Register" icon={<Cpu className="h-5 w-5" />} actions={<Button type="button" onClick={openCreate}><Plus className="h-4 w-4" /> Created New</Button>} /><OrganizationTableCard><DataTable data={rows} columns={columns} rowKey={(row) => row.id} emptyMessage={isLoading ? "Loading devices..." : "No device found."} bulkActions={bulkActions} actions={(row) => <div className="flex items-center gap-2"><Button type="button" size="icon" variant="outline" onClick={() => startEdit(row)} title="Edit"><Pencil className="h-4 w-4" /></Button><Button type="button" size="icon" variant="destructive" onClick={() => deleteMutation.mutate(row.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button></div>} /></OrganizationTableCard></section>;
+  return <section className="space-y-5 text-foreground"><PageHeader title="Device Register" icon={<Cpu className="h-5 w-5" />} actions={<Button type="button" onClick={openCreate}><Plus className="h-4 w-4" /> Created New</Button>} /><OrganizationTableCard>{notice ? <div className="mb-3 rounded-lg border border-border bg-muted p-3 text-sm">{notice}</div> : null}<DataTable data={rows} columns={columns} rowKey={(row) => row.id} emptyMessage={isLoading ? "Loading devices..." : "No device found."} bulkActions={bulkActions} actions={(row) => <div className="flex items-center gap-2">{canMove ? <Button type="button" size="icon" variant="outline" onClick={() => setMoveRows([row])} title="Move"><ArrowRightLeft className="h-4 w-4" /></Button> : null}<Button type="button" size="icon" variant="outline" onClick={() => startEdit(row)} title="Edit"><Pencil className="h-4 w-4" /></Button><Button type="button" size="icon" variant="destructive" onClick={() => deleteMutation.mutate(row.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button></div>} /></OrganizationTableCard><AssetMoveDialog open={moveRows.length > 0} assetCount={moveRows.length} companies={companies.map((company) => ({ value: String(company.id), label: company.label, extra: company.extra }))} pending={moveMutation.isPending} error={moveMutation.isError ? notice : null} onClose={() => setMoveRows([])} onMove={(target) => moveMutation.mutate(target)} /></section>;
 }
 
 type FormState = { companyId: string; deviceModelId: string; imei: string; gsmNumber: string; tcpHost: string; tcpPort: string; notes: string };

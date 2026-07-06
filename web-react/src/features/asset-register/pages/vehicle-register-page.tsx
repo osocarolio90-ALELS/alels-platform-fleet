@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CarFront, Pencil, Plus, Save, Trash2, Wrench, X } from "lucide-react";
+import { ArrowRightLeft, CarFront, Pencil, Plus, Save, Trash2, Wrench, X } from "lucide-react";
 
 import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { PageHeader } from "@/components/ui/page-header";
@@ -11,6 +11,10 @@ import { OrganizationTableCard, StatusBadge, formatDateTime } from "@/features/o
 import { getMasterCountries, getMasterOptions, getVehicleModels, type MasterOptionRow, type MasterCountryRow, type VehicleModelRow } from "@/features/master-data/api/master-data-api";
 import { getEnergyPrices, type EnergyPriceRow } from "@/features/asset-register/api/energy-price-api";
 import { createVehicle, deleteVehicle, getVehicleCompanyOptions, getVehicles, setVehicleMaintenance, updateVehicle, type VehicleRegisterInput, type VehicleRegisterRow } from "@/features/asset-register/api/vehicle-register-api";
+import { moveAssets } from "@/features/asset-register/api/asset-move-api";
+import { AssetMoveDialog } from "@/features/asset-register/components/asset-move-dialog";
+import { normalizeRole } from "@/lib/role-access";
+import { useAuthStore } from "@/stores/auth-store";
 
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: currentYear - 1970 + 2 }, (_, index) => currentYear + 1 - index);
@@ -37,6 +41,9 @@ export function VehicleRegisterPage() {
   const [editing, setEditing] = useState<VehicleRegisterRow | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<VehicleForm>(emptyForm());
+  const [moveRows, setMoveRows] = useState<VehicleRegisterRow[]>([]);
+  const user = useAuthStore((state) => state.user);
+  const canMove = ["SUPERADMIN", "ADMIN", "OWNER", "MANAGER"].includes(normalizeRole(user?.role) || "");
 
   const vehiclesQuery = useQuery({ queryKey: ["asset-register", "vehicles"], queryFn: getVehicles, refetchInterval: 30_000 });
   const companiesQuery = useQuery({ queryKey: ["asset-register", "vehicle-company-options"], queryFn: getVehicleCompanyOptions, refetchInterval: 60_000 });
@@ -61,12 +68,18 @@ export function VehicleRegisterPage() {
   });
   const deleteMutation = useMutation({ mutationFn: deleteVehicle, onSuccess: () => queryClient.invalidateQueries({ queryKey: ["asset-register", "vehicles"] }) });
   const maintenanceMutation = useMutation({ mutationFn: ({ id, active }: { id: number; active: boolean }) => setVehicleMaintenance(id, active), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["asset-register", "vehicles"] }) });
+  const moveMutation = useMutation({
+    mutationFn: (targetCompanyId: number) => moveAssets("VEHICLE", moveRows.map((row) => row.id), targetCompanyId),
+    onSuccess: () => { setMoveRows([]); setNotice("Vehicle berhasil dipindahkan."); queryClient.invalidateQueries({ queryKey: ["asset-register", "vehicles"] }); },
+    onError: (error) => setNotice(error instanceof Error ? error.message : "Vehicle gagal dipindahkan.")
+  });
 
   const bulkActions = useMemo<DataTableBulkAction<VehicleRegisterRow>[]>(() => [
+    ...(canMove ? [{ key: "move", label: "Move", icon: <ArrowRightLeft className="h-4 w-4" />, onClick: async (rows: VehicleRegisterRow[]) => setMoveRows(rows) }] : []),
     { key: "maintenance-on", label: "Set Maintenance", icon: <Wrench className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Set ${rows.length} vehicle(s) to maintenance?`, onClick: (rows) => rows.forEach((row) => maintenanceMutation.mutate({ id: row.id, active: true })) },
     { key: "maintenance-off", label: "Clear Maintenance", icon: <Wrench className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Clear maintenance for ${rows.length} vehicle(s)?`, onClick: (rows) => rows.forEach((row) => maintenanceMutation.mutate({ id: row.id, active: false })) },
     { key: "delete", label: "Delete", icon: <Trash2 className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Move ${rows.length} vehicle(s) to Wasted?`, onClick: (rows) => rows.forEach((row) => deleteMutation.mutate(row.id)) }
-  ], [deleteMutation, maintenanceMutation]);
+  ], [canMove, deleteMutation, maintenanceMutation]);
 
   const columns = useMemo<DataTableColumn<VehicleRegisterRow>[]>(() => [
     { key: "companyName", label: "Company Name", value: (row) => row.companyName, render: (row) => <span className="font-bold text-white">{row.companyName}</span> },
@@ -98,7 +111,7 @@ export function VehicleRegisterPage() {
         <OrganizationTableCard>
           {notice ? <Notice message={notice} /> : null}
           <form className="grid gap-4 md:grid-cols-2" onSubmit={submit}>
-            <SelectField label="Company" value={form.companyId} onChange={(v) => setForm((c) => ({ ...c, companyId: v }))} options={(companiesQuery.data || []).map((c) => ({ value: String(c.id), label: c.label, extra: c.extra }))} />
+            <SelectField label="Company" value={form.companyId} onChange={(v) => setForm((c) => ({ ...c, companyId: v }))} options={(companiesQuery.data || []).map((c) => ({ value: String(c.id), label: c.label, extra: c.extra }))} disabled={Boolean(editing)} />
             <Field label="Vehicle Name"><Input required value={form.vehicleName} onChange={(e) => setForm((c) => ({ ...c, vehicleName: e.target.value.toUpperCase() }))} placeholder="VEHICLE NAME" /></Field>
             <Field label="Plat Number"><Input required value={form.plateNumber} onChange={(e) => setForm((c) => ({ ...c, plateNumber: normalizePlateNumber(e.target.value) }))} placeholder="B 1234 ABC" /></Field>
             <SelectField label="Vehicle Type" value={form.vehicleTypeId} onChange={(v) => setForm((c) => ({ ...c, vehicleTypeId: v }))} options={toOptions(typeQuery.data || [])} />
@@ -123,8 +136,9 @@ export function VehicleRegisterPage() {
       <PageHeader icon={<CarFront className="h-5 w-5" />} title="Vehicle Register" actions={<Button type="button" onClick={startCreate}><Plus className="h-4 w-4" /> Created New</Button>} />
       <OrganizationTableCard>
         {notice ? <Notice message={notice} /> : null}
-        <DataTable data={vehiclesQuery.data || []} columns={columns} rowKey={(row) => row.id} emptyMessage={vehiclesQuery.isLoading ? "Loading vehicles..." : "No vehicle found."} bulkActions={bulkActions} actions={(row) => <div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button><Button type="button" size="sm" variant="outline" onClick={() => maintenanceMutation.mutate({ id: row.id, active: row.operationalStatus !== "MAINTENANCE" })}><Wrench className="h-4 w-4" /> Maintenance</Button><Button type="button" size="sm" variant="destructive" onClick={() => deleteMutation.mutate(row.id)}><Trash2 className="h-4 w-4" /> Delete</Button></div>} />
+        <DataTable data={vehiclesQuery.data || []} columns={columns} rowKey={(row) => row.id} emptyMessage={vehiclesQuery.isLoading ? "Loading vehicles..." : "No vehicle found."} bulkActions={bulkActions} actions={(row) => <div className="flex gap-2">{canMove ? <Button type="button" size="sm" variant="outline" onClick={() => setMoveRows([row])}><ArrowRightLeft className="h-4 w-4" /> Move</Button> : null}<Button type="button" size="sm" variant="outline" onClick={() => startEdit(row)}><Pencil className="h-4 w-4" /> Edit</Button><Button type="button" size="sm" variant="outline" onClick={() => maintenanceMutation.mutate({ id: row.id, active: row.operationalStatus !== "MAINTENANCE" })}><Wrench className="h-4 w-4" /> Maintenance</Button><Button type="button" size="sm" variant="destructive" onClick={() => deleteMutation.mutate(row.id)}><Trash2 className="h-4 w-4" /> Delete</Button></div>} />
       </OrganizationTableCard>
+      <AssetMoveDialog open={moveRows.length > 0} assetCount={moveRows.length} companies={(companiesQuery.data || []).map((company) => ({ value: String(company.id), label: company.label, extra: company.extra }))} pending={moveMutation.isPending} error={moveMutation.isError ? notice : null} onClose={() => setMoveRows([])} onMove={(target) => moveMutation.mutate(target)} />
     </section>
   );
 }
@@ -135,7 +149,7 @@ function VehicleStatus({ status }: { status?: string | null }) {
   return <span className="inline-flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${className}`} /><StatusBadge status={normalized} /></span>;
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-1 text-xs font-bold text-slate-300"><span>{label}</span>{children}</label>; }
-function SelectField({ label, value, onChange, options, hideLabel = false }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string; extra?: string | null }[]; hideLabel?: boolean }) { return hideLabel ? <SearchableSelect label="Unit" value={value} onChange={onChange} options={options} placeholder="Unit" /> : <SearchableSelect label={label} value={value} onChange={onChange} options={options} />; }
+function SelectField({ label, value, onChange, options, hideLabel = false, disabled = false }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string; extra?: string | null }[]; hideLabel?: boolean; disabled?: boolean }) { return hideLabel ? <SearchableSelect label="Unit" value={value} onChange={onChange} options={options} placeholder="Unit" /> : <SearchableSelect label={label} value={value} onChange={onChange} options={options} disabled={disabled} />; }
 function ReadOnly({ label, value }: { label: string; value: string }) { return <div className="grid gap-1 text-xs font-bold text-slate-300"><span>{label}</span><div className="flex h-10 items-center rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white">{value}</div></div>; }
 function Notice({ message }: { message: string }) { return <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{message}</div>; }
 function emptyForm(countryCode = "ID"): VehicleForm { return { companyId: "", vehicleName: "", plateNumber: "", vehicleTypeId: "", brandId: "", modelId: "", yearManufacture: String(currentYear), countryCode, energyCode: "", ownershipTypeId: "", capacityValue: "", capacityUnitId: "", notes: "" }; }

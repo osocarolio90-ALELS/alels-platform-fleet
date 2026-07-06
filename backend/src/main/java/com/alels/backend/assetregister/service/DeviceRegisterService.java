@@ -37,9 +37,7 @@ public class DeviceRegisterService {
         Long currentCompanyId = repository.companyIdByDevice(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found."));
         assertCompanyAccess(user, currentCompanyId);
         validate(request, id);
-        Long targetCompanyId = request.companyId() == null ? currentCompanyId : request.companyId();
-        assertCompanyAccess(user, targetCompanyId);
-        repository.update(id, new DeviceRegisterRequest(targetCompanyId, request.deviceBrandId(), request.deviceModelId(), request.imei(), request.gsmNumber(), request.tcpHost(), request.tcpPort(), request.registerStatus(), request.notes()), user.userId());
+        repository.update(id, new DeviceRegisterRequest(currentCompanyId, request.deviceBrandId(), request.deviceModelId(), request.imei(), request.gsmNumber(), request.tcpHost(), request.tcpPort(), request.registerStatus(), request.notes()), user.userId());
         repository.log(user.userId(), user.companyId(), id, "DEVICE_UPDATE");
     }
 
