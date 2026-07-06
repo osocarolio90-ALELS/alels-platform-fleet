@@ -14,9 +14,11 @@ public class DeviceReceiveStatusRepository {
         }
 
         String sql = """
-                SELECT COALESCE(receive_status, 'ACTIVE') AS receive_status
-                FROM device_receive_status
-                WHERE imei = ?
+                SELECT COALESCE(d.tcp_enabled, TRUE) AS tcp_enabled,
+                       COALESCE(s.receive_status, 'ACTIVE') AS receive_status
+                FROM devices d
+                LEFT JOIN device_receive_status s ON s.imei = d.imei
+                WHERE d.imei = ? AND d.deleted_at IS NULL
                 LIMIT 1
                 """;
 
@@ -31,7 +33,8 @@ public class DeviceReceiveStatusRepository {
                     return true;
                 }
 
-                return !"SUSPENDED".equalsIgnoreCase(rs.getString("receive_status"));
+                return rs.getBoolean("tcp_enabled")
+                        && !"SUSPENDED".equalsIgnoreCase(rs.getString("receive_status"));
             }
         } catch (Exception e) {
             System.err.println("[DEVICE RECEIVE STATUS ERROR] " + e.getMessage());
