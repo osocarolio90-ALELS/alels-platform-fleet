@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { ClipboardList, Link2, Pencil, Plus, Unlink, UserMinus } from "lucide-react";
 
 import { DataTable, type DataTableColumn } from "@/components/data-table";
@@ -13,7 +14,6 @@ import {
   AssignmentLookupOption,
   createAssetAssignment,
   getAssetAssignments,
-  getAssignmentCompanyOptions,
   getAssignmentDeviceOptions,
   getAssignmentDriverOptions,
   getAssignmentVehicleOptions,
@@ -21,7 +21,7 @@ import {
   unpairAssignmentDriver,
   unpairAssignmentVehicle,
   updateAssetAssignment
-} from "@/features/assignment/api/assignment-api";
+} from "@/features/telemetry/assignment/api/assignment-api";
 
 type FormMode = "list" | "form";
 
@@ -40,7 +40,6 @@ export function AssignmentPage() {
   const [loading, setLoading] = useState(false);
 
   const [rows, setRows] = useState<AssetAssignmentRow[]>([]);
-  const [companies, setCompanies] = useState<AssignmentLookupOption[]>([]);
   const [vehicles, setVehicles] = useState<AssignmentLookupOption[]>([]);
   const [devices, setDevices] = useState<AssignmentLookupOption[]>([]);
   const [drivers, setDrivers] = useState<AssignmentLookupOption[]>([]);
@@ -66,20 +65,18 @@ export function AssignmentPage() {
     setLoading(true);
     setError("");
     try {
-      const [assignmentRows, companyData, vehicleData, deviceData, driverData] = await Promise.all([
+      const [assignmentRows, vehicleData, deviceData, driverData] = await Promise.all([
         getAssetAssignments(),
-        getAssignmentCompanyOptions(),
         getAssignmentVehicleOptions(),
         getAssignmentDeviceOptions(),
         getAssignmentDriverOptions()
       ]);
       setRows(assignmentRows);
-      setCompanies(companyData);
       setVehicles(vehicleData);
       setDevices(deviceData);
       setDrivers(driverData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Assignment API belum tersedia atau backend belum berjalan.");
+      setError(apiErrorMessage(err, "Assignment API belum tersedia atau backend belum berjalan."));
     } finally {
       setLoading(false);
     }
@@ -101,8 +98,8 @@ export function AssignmentPage() {
         .filter(Boolean)
     );
 
-    return vehicles.filter((vehicle) => !pairedVehicleIds.has(vehicle.id));
-  }, [form.vehicleId, rows, vehicles]);
+    return vehicles.filter((vehicle) => vehicle.companyId === form.companyId && !pairedVehicleIds.has(vehicle.id));
+  }, [form.companyId, form.vehicleId, rows, vehicles]);
 
   const availableDevices = useMemo(() => {
     const pairedDeviceIds = new Set(
@@ -114,6 +111,24 @@ export function AssignmentPage() {
 
     return devices.filter((device) => !pairedDeviceIds.has(device.id));
   }, [form.deviceId, rows, devices]);
+
+  const availableDrivers = useMemo(
+    () => drivers.filter((driver) => driver.companyId === form.companyId),
+    [drivers, form.companyId]
+  );
+  const selectedDevice = devices.find((device) => device.id === form.deviceId);
+
+  function selectDevice(value: string) {
+    const deviceId = toNumber(value);
+    const device = devices.find((item) => item.id === deviceId);
+    setForm((current) => ({
+      ...current,
+      deviceId,
+      companyId: device?.companyId || null,
+      vehicleId: device?.companyId === current.companyId ? current.vehicleId : null,
+      driverId: device?.companyId === current.companyId ? current.driverId : null
+    }));
+  }
 
   function startAdd() {
     setMessage("");
@@ -146,8 +161,8 @@ export function AssignmentPage() {
 
   async function save() {
     setMessage("");
-    if (!form.companyId || !form.vehicleId || !form.deviceId) {
-      setError("Company, vehicle, dan device wajib diisi. Driver dan notes tidak wajib.");
+    if (!form.deviceId || !form.vehicleId) {
+      setError("Device dan vehicle wajib diisi. Driver dan notes tidak wajib.");
       return;
     }
     setLoading(true);
@@ -159,7 +174,7 @@ export function AssignmentPage() {
       cancelForm();
       await loadAll();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal menyimpan asset pairing.");
+      setError(apiErrorMessage(err, "Gagal menyimpan asset pairing."));
     } finally {
       setLoading(false);
     }
@@ -246,10 +261,10 @@ export function AssignmentPage() {
         {error ? <Alert tone="error" message={error} /> : null}
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
           <div className="grid gap-4 md:grid-cols-3">
-            <SearchableSelect required label="Company" value={String(form.companyId || "")} onChange={(value) => setForm((current) => ({ ...current, companyId: toNumber(value) }))} options={optionItems(companies)} />
+            <SearchableSelect required label="Device" value={String(form.deviceId || "")} onChange={selectDevice} options={optionItems(availableDevices)} />
+            <label className="grid gap-1 text-xs font-bold text-muted-foreground">Company<Input value={selectedDevice?.companyName || ""} readOnly aria-readonly="true" /></label>
             <SearchableSelect required label="Vehicle" value={String(form.vehicleId || "")} onChange={(value) => setForm((current) => ({ ...current, vehicleId: toNumber(value) }))} options={optionItems(availableVehicles)} />
-            <SearchableSelect required label="Device" value={String(form.deviceId || "")} onChange={(value) => setForm((current) => ({ ...current, deviceId: toNumber(value) }))} options={optionItems(availableDevices)} />
-            <SearchableSelect label="Driver" value={String(form.driverId || "")} onChange={(value) => setForm((current) => ({ ...current, driverId: toNumber(value) }))} options={optionItems(drivers)} />
+            <SearchableSelect label="Driver" value={String(form.driverId || "")} onChange={(value) => setForm((current) => ({ ...current, driverId: toNumber(value) }))} options={optionItems(availableDrivers)} />
             <label className="grid gap-1 text-xs font-bold text-slate-300 md:col-span-2">Notes<Input value={form.notes || ""} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></label>
           </div>
           <FormActions loading={loading} onCancel={cancelForm} onSave={save} />
@@ -309,4 +324,10 @@ function toNumber(value: string) {
   if (!value) return null;
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  if (!axios.isAxiosError(error)) return error instanceof Error ? error.message : fallback;
+  const data = error.response?.data as { detail?: string; message?: string; error?: string } | undefined;
+  return data?.detail || data?.message || data?.error || fallback;
 }

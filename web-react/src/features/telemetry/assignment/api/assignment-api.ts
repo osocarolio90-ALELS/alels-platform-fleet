@@ -7,6 +7,8 @@ export type AssignmentLookupOption = {
   label: string;
   code?: string | null;
   extra?: string | null;
+  companyId?: number | null;
+  companyName?: string | null;
 };
 
 export type AssetAssignmentRow = {

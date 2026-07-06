@@ -1,4 +1,4 @@
-package com.alels.backend.assignment.dto;
+package com.alels.backend.telemetry.assignment.dto;
 
 public final class AssignmentDtos {
     private AssignmentDtos() {}
@@ -7,7 +7,9 @@ public final class AssignmentDtos {
             Long id,
             String label,
             String code,
-            String extra
+            String extra,
+            Long companyId,
+            String companyName
     ) {}
 
     public record AssetAssignmentRow(

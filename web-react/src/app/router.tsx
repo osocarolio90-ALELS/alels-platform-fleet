@@ -73,10 +73,13 @@ const AssetWastedPage = lazy(() =>
   import("@/features/asset-register/pages/wasted-page").then((module) => ({ default: module.AssetWastedPage }))
 );
 const AssignmentPage = lazy(() =>
-  import("@/features/assignment/pages/assignment-page").then((module) => ({ default: module.AssignmentPage }))
+  import("@/features/telemetry/assignment/pages/assignment-page").then((module) => ({ default: module.AssignmentPage }))
 );
 const TelemetryGroupPage = lazy(() =>
   import("@/features/telemetry/group/pages/telemetry-group-page").then((module) => ({ default: module.TelemetryGroupPage }))
+);
+const TelemetryDevicePage = lazy(() =>
+  import("@/features/telemetry/device/pages/telemetry-device-page").then((module) => ({ default: module.TelemetryDevicePage }))
 );
 
 
@@ -122,6 +125,7 @@ export const router = createBrowserRouter([
           { path: "/asset-register", element: <Navigate to="/asset-register/vehicle-register" replace /> },
           { path: "/assignment", element: withSuspense(<AssignmentPage />) },
           { path: "/telemetry/group", element: withSuspense(<TelemetryGroupPage />) },
+          { path: "/telemetry/device", element: withSuspense(<TelemetryDevicePage />) },
           { path: "/telemetry", element: <Navigate to="/telemetry/group" replace /> },
 
           {

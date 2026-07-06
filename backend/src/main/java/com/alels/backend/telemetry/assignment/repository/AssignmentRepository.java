@@ -1,4 +1,4 @@
-package com.alels.backend.assignment.repository;
+package com.alels.backend.telemetry.assignment.repository;
 
 import java.util.List;
 import java.util.Optional;
@@ -7,12 +7,12 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import com.alels.backend.assignment.dto.AssignmentDtos.AssetAssignmentRow;
-import com.alels.backend.assignment.dto.AssignmentDtos.AssignmentLookupOption;
-import com.alels.backend.assignment.dto.AssignmentDtos.DriverManualAssignmentRequest;
-import com.alels.backend.assignment.dto.AssignmentDtos.DriverManualAssignmentRow;
-import com.alels.backend.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRequest;
-import com.alels.backend.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRow;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.AssetAssignmentRow;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.AssignmentLookupOption;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.DriverManualAssignmentRequest;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.DriverManualAssignmentRow;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRequest;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRow;
 
 @Repository
 public class AssignmentRepository {
@@ -150,13 +150,19 @@ public class AssignmentRepository {
     }
 
     public Optional<Long> driverCompanyId(Long driverId) {
-        return jdbcTemplate.query("SELECT company_id FROM asset_drivers WHERE id = ? AND deleted_at IS NULL", (rs, rowNum) -> rs.getLong("company_id"), driverId).stream().findFirst();
+        return jdbcTemplate.query(
+                "SELECT company_id FROM asset_drivers WHERE id = ? AND deleted_at IS NULL AND COALESCE(status, 'ACTIVE') = 'ACTIVE'",
+                (rs, rowNum) -> rs.getLong("company_id"), driverId
+        ).stream().findFirst();
     }
 
     public boolean canAccessCompany(Long targetCompanyId, Long actorCompanyId, String role) {
         if (targetCompanyId == null || actorCompanyId == null) return false;
         String normalizedRole = normalizeRole(role);
         if ("SUPERADMIN".equals(normalizedRole) || "ADMIN".equals(normalizedRole)) return true;
+        if ("CLIENTUSER".equals(normalizedRole) || "TECHUSER".equals(normalizedRole)) {
+            return targetCompanyId.equals(actorCompanyId);
+        }
         Integer count = jdbcTemplate.queryForObject("""
                 WITH RECURSIVE visible_companies AS (
                     SELECT id FROM companies WHERE id = ? AND deleted_at IS NULL
@@ -173,7 +179,7 @@ public class AssignmentRepository {
         if ("SUPERADMIN".equals(normalizedRole) || "ADMIN".equals(normalizedRole)) {
             return jdbcTemplate.query("""
                     SELECT id, company_name, company_code, status FROM companies WHERE deleted_at IS NULL ORDER BY company_name
-                    """, (rs, rowNum) -> new AssignmentLookupOption(rs.getLong("id"), rs.getString("company_name"), rs.getString("company_code"), rs.getString("status")));
+                    """, (rs, rowNum) -> new AssignmentLookupOption(rs.getLong("id"), rs.getString("company_name"), rs.getString("company_code"), rs.getString("status"), rs.getLong("id"), rs.getString("company_name")));
         }
         return jdbcTemplate.query("""
                 WITH RECURSIVE visible_companies AS (
@@ -182,18 +188,22 @@ public class AssignmentRepository {
                     SELECT c.id, c.company_name, c.company_code, c.status FROM companies c JOIN visible_companies vc ON c.parent_company_id = vc.id WHERE c.deleted_at IS NULL
                 )
                 SELECT id, company_name, company_code, status FROM visible_companies ORDER BY company_name
-                """, (rs, rowNum) -> new AssignmentLookupOption(rs.getLong("id"), rs.getString("company_name"), rs.getString("company_code"), rs.getString("status")), actorCompanyId);
+                """, (rs, rowNum) -> new AssignmentLookupOption(rs.getLong("id"), rs.getString("company_name"), rs.getString("company_code"), rs.getString("status"), rs.getLong("id"), rs.getString("company_name")), actorCompanyId);
     }
 
     public List<AssignmentLookupOption> vehicleOptions(Long actorCompanyId, String role) {
         String sql = """
                 SELECT v.id,
                        COALESCE(NULLIF(v.vehicle_name, ''), v.vehicle_number, CAST(v.id AS VARCHAR)) AS label,
-                       v.plate_number AS code, c.company_name AS extra
+                       v.plate_number AS code, c.company_name AS extra,
+                       v.company_id, c.company_name
                 FROM vehicles v JOIN companies c ON c.id = v.company_id
                 WHERE v.deleted_at IS NULL AND c.deleted_at IS NULL
                 """;
         if (isGlobalRole(role)) return jdbcTemplate.query(sql + " ORDER BY c.company_name, label", lookupMapper());
+        if (isOwnCompanyRole(role)) {
+            return jdbcTemplate.query(sql + " AND v.company_id = ? ORDER BY c.company_name, label", lookupMapper(), actorCompanyId);
+        }
         return jdbcTemplate.query("""
                 WITH RECURSIVE visible_companies AS (
                     SELECT id FROM companies WHERE id = ? AND deleted_at IS NULL
@@ -206,13 +216,17 @@ public class AssignmentRepository {
         String sql = """
                 SELECT d.id,
                        TRIM(CONCAT_WS(' ', NULLIF(db.brand_name, ''), COALESCE(NULLIF(dm.model_name, ''), NULLIF(d.device_model, '')))) AS label,
-                       d.imei AS code, c.company_name AS extra
+                       d.imei AS code, c.company_name AS extra,
+                       d.company_id, c.company_name
                 FROM devices d JOIN companies c ON c.id = d.company_id
                 LEFT JOIN device_brands db ON db.id = d.device_brand_id AND db.deleted_at IS NULL
                 LEFT JOIN device_models dm ON dm.id = d.device_model_id AND dm.deleted_at IS NULL
                 WHERE d.deleted_at IS NULL AND c.deleted_at IS NULL
                 """;
         if (isGlobalRole(role)) return jdbcTemplate.query(sql + " ORDER BY c.company_name, label", lookupMapper());
+        if (isOwnCompanyRole(role)) {
+            return jdbcTemplate.query(sql + " AND d.company_id = ? ORDER BY c.company_name, label", lookupMapper(), actorCompanyId);
+        }
         return jdbcTemplate.query("""
                 WITH RECURSIVE visible_companies AS (
                     SELECT id FROM companies WHERE id = ? AND deleted_at IS NULL
@@ -224,11 +238,15 @@ public class AssignmentRepository {
     public List<AssignmentLookupOption> driverOptions(Long actorCompanyId, String role) {
         String sql = """
                 SELECT d.id, COALESCE(NULLIF(d.driver_name, ''), NULLIF(d.full_name, ''), d.driver_code) AS label,
-                       d.driver_code AS code, COALESCE(d.rfid_ibutton, d.license_number, c.company_name) AS extra
+                       d.driver_code AS code, COALESCE(d.rfid_ibutton, d.license_number, c.company_name) AS extra,
+                       d.company_id, c.company_name
                 FROM asset_drivers d JOIN companies c ON c.id = d.company_id
                 WHERE d.deleted_at IS NULL AND c.deleted_at IS NULL AND COALESCE(d.status, 'ACTIVE') = 'ACTIVE'
                 """;
         if (isGlobalRole(role)) return jdbcTemplate.query(sql + " ORDER BY c.company_name, label", lookupMapper());
+        if (isOwnCompanyRole(role)) {
+            return jdbcTemplate.query(sql + " AND d.company_id = ? ORDER BY c.company_name, label", lookupMapper(), actorCompanyId);
+        }
         return jdbcTemplate.query("""
                 WITH RECURSIVE visible_companies AS (
                     SELECT id FROM companies WHERE id = ? AND deleted_at IS NULL
@@ -416,12 +434,19 @@ public class AssignmentRepository {
     }
 
     private org.springframework.jdbc.core.RowMapper<AssignmentLookupOption> lookupMapper() {
-        return (rs, rowNum) -> new AssignmentLookupOption(rs.getLong("id"), rs.getString("label"), rs.getString("code"), rs.getString("extra"));
+        return (rs, rowNum) -> new AssignmentLookupOption(
+                rs.getLong("id"), rs.getString("label"), rs.getString("code"), rs.getString("extra"),
+                rs.getObject("company_id", Long.class), rs.getString("company_name")
+        );
     }
 
     private boolean isGlobalRole(String role) {
         String normalizedRole = normalizeRole(role);
         return "SUPERADMIN".equals(normalizedRole) || "ADMIN".equals(normalizedRole);
+    }
+    private boolean isOwnCompanyRole(String role) {
+        String normalizedRole = normalizeRole(role);
+        return "CLIENTUSER".equals(normalizedRole) || "TECHUSER".equals(normalizedRole);
     }
     private String normalizeRole(String role) { return role == null ? "" : role.trim().toUpperCase().replaceAll("[\\s_-]+", ""); }
     private String clean(String value) { return value == null ? null : value.trim(); }

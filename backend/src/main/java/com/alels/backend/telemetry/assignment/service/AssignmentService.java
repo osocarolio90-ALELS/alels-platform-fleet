@@ -1,19 +1,20 @@
-package com.alels.backend.assignment.service;
+package com.alels.backend.telemetry.assignment.service;
 
 import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.alels.backend.assignment.dto.AssignmentDtos.AssetAssignmentRequest;
-import com.alels.backend.assignment.dto.AssignmentDtos.AssetAssignmentRow;
-import com.alels.backend.assignment.dto.AssignmentDtos.AssignmentLookupOption;
-import com.alels.backend.assignment.dto.AssignmentDtos.DriverManualAssignmentRequest;
-import com.alels.backend.assignment.dto.AssignmentDtos.DriverManualAssignmentRow;
-import com.alels.backend.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRequest;
-import com.alels.backend.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRow;
-import com.alels.backend.assignment.repository.AssignmentRepository;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.AssetAssignmentRequest;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.AssetAssignmentRow;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.AssignmentLookupOption;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.DriverManualAssignmentRequest;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.DriverManualAssignmentRow;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRequest;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRow;
+import com.alels.backend.telemetry.assignment.repository.AssignmentRepository;
 import com.alels.backend.serverops.shared.security.JwtUserContext;
 
 @Service
@@ -28,13 +29,16 @@ public class AssignmentService {
         return repository.assetAssignmentList(user.companyId(), user.normalizedRole());
     }
 
+    @Transactional
     public Long createAssetAssignment(JwtUserContext user, AssetAssignmentRequest request) {
         Long effectiveCompanyId = resolveVehicleDeviceCompany(user, request.companyId(), request.vehicleId(), request.deviceId());
+        if (request.driverId() != null) {
+            validateDriverForCompany(user, request.driverId(), effectiveCompanyId);
+        }
         VehicleDeviceAssignmentRequest vehicleDeviceRequest = new VehicleDeviceAssignmentRequest(effectiveCompanyId, request.vehicleId(), request.deviceId(), request.notes());
         Long id = repository.createVehicleDevice(vehicleDeviceRequest, user.userId());
         repository.log(user.userId(), user.companyId(), "ASSET_ASSIGNMENT", id, "ASSET_PAIR");
         if (request.driverId() != null) {
-            validateDriverForCompany(request.driverId(), effectiveCompanyId);
             DriverManualAssignmentRequest driverRequest = new DriverManualAssignmentRequest(effectiveCompanyId, request.vehicleId(), request.deviceId(), request.driverId(), request.notes());
             Long driverAssignmentId = repository.createDriverManual(driverRequest, user.userId());
             repository.log(user.userId(), user.companyId(), "DRIVER_MANUAL_ASSIGNMENT", driverAssignmentId, "DRIVER_MANUAL_ASSIGN");
@@ -42,9 +46,13 @@ public class AssignmentService {
         return id;
     }
 
+    @Transactional
     public void updateAssetAssignment(JwtUserContext user, Long id, AssetAssignmentRequest request) {
         assertAssignmentAccess(user, "vehicle_device_assignments", id);
         Long effectiveCompanyId = resolveVehicleDeviceCompany(user, request.companyId(), request.vehicleId(), request.deviceId());
+        if (request.driverId() != null) {
+            validateDriverForCompany(user, request.driverId(), effectiveCompanyId);
+        }
         VehicleDeviceAssignmentRequest vehicleDeviceRequest = new VehicleDeviceAssignmentRequest(effectiveCompanyId, request.vehicleId(), request.deviceId(), request.notes());
         repository.updateVehicleDevice(id, vehicleDeviceRequest, user.userId());
         repository.log(user.userId(), user.companyId(), "ASSET_ASSIGNMENT", id, "ASSET_PAIR_UPDATE");
@@ -56,7 +64,6 @@ public class AssignmentService {
             }
         });
         if (request.driverId() != null) {
-            validateDriverForCompany(request.driverId(), effectiveCompanyId);
             DriverManualAssignmentRequest driverRequest = new DriverManualAssignmentRequest(effectiveCompanyId, request.vehicleId(), request.deviceId(), request.driverId(), request.notes());
             var currentDriverAssignmentId = repository.activeDriverManualIdByVehicleDevice(request.vehicleId(), request.deviceId());
             if (currentDriverAssignmentId.isPresent()) {
@@ -155,18 +162,22 @@ public class AssignmentService {
     }
 
     private Long resolveVehicleDeviceCompany(JwtUserContext user, Long requestedCompanyId, Long vehicleId, Long deviceId) {
-        if (requestedCompanyId == null || vehicleId == null || deviceId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company, vehicle, dan device wajib diisi. Driver dan notes tidak wajib.");
+        if (deviceId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Device wajib dipilih.");
         }
-        assertCompanyAccess(user, requestedCompanyId);
-        Long vehicleCompanyId = repository.vehicleCompanyId(vehicleId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vehicle tidak ditemukan."));
-        Long deviceCompanyId = repository.deviceCompanyId(deviceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device tidak ditemukan."));
-        assertCompanyAccess(user, vehicleCompanyId);
+        Long deviceCompanyId = repository.deviceCompanyId(deviceId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device tidak ditemukan atau sudah dihapus."));
         assertCompanyAccess(user, deviceCompanyId);
-        if (!vehicleCompanyId.equals(deviceCompanyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vehicle dan device harus berada dalam company yang sama.");
+        if (vehicleId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vehicle wajib dipilih.");
         }
-        return vehicleCompanyId;
+        Long vehicleCompanyId = repository.vehicleCompanyId(vehicleId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vehicle tidak ditemukan atau sudah dihapus."));
+        if (!vehicleCompanyId.equals(deviceCompanyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vehicle harus berada dalam company yang sama dengan device.");
+        }
+        if (requestedCompanyId != null && !requestedCompanyId.equals(deviceCompanyId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company assignment harus mengikuti company device.");
+        }
+        return deviceCompanyId;
     }
 
     private void validateDriverManual(JwtUserContext user, DriverManualAssignmentRequest request) {
@@ -174,13 +185,14 @@ public class AssignmentService {
         if (request.driverId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Driver wajib diisi untuk manual driver pairing.");
         }
-        validateDriverForCompany(request.driverId(), effectiveCompanyId);
+        validateDriverForCompany(user, request.driverId(), effectiveCompanyId);
     }
 
-    private void validateDriverForCompany(Long driverId, Long companyId) {
+    private void validateDriverForCompany(JwtUserContext user, Long driverId, Long companyId) {
         Long driverCompanyId = repository.driverCompanyId(driverId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver tidak ditemukan."));
+        assertCompanyAccess(user, driverCompanyId);
         if (!companyId.equals(driverCompanyId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Driver harus berada dalam company yang sama dengan vehicle dan device.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Driver harus berada dalam company yang sama dengan device.");
         }
     }
 

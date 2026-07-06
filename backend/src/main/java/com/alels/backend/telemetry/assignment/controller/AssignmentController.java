@@ -1,4 +1,4 @@
-package com.alels.backend.assignment.controller;
+package com.alels.backend.telemetry.assignment.controller;
 
 import java.util.List;
 import java.util.Map;
@@ -12,14 +12,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.alels.backend.assignment.dto.AssignmentDtos.AssetAssignmentRequest;
-import com.alels.backend.assignment.dto.AssignmentDtos.AssetAssignmentRow;
-import com.alels.backend.assignment.dto.AssignmentDtos.AssignmentLookupOption;
-import com.alels.backend.assignment.dto.AssignmentDtos.DriverManualAssignmentRequest;
-import com.alels.backend.assignment.dto.AssignmentDtos.DriverManualAssignmentRow;
-import com.alels.backend.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRequest;
-import com.alels.backend.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRow;
-import com.alels.backend.assignment.service.AssignmentService;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.AssetAssignmentRequest;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.AssetAssignmentRow;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.AssignmentLookupOption;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.DriverManualAssignmentRequest;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.DriverManualAssignmentRow;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRequest;
+import com.alels.backend.telemetry.assignment.dto.AssignmentDtos.VehicleDeviceAssignmentRow;
+import com.alels.backend.telemetry.assignment.service.AssignmentService;
 import com.alels.backend.serverops.shared.security.JwtUserContext;
 
 @RestController
