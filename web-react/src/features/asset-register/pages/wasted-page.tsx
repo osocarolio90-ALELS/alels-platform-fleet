@@ -120,7 +120,16 @@ export function AssetWastedPage() {
 }
 
 function TabButton({ active, children, onClick }: { active: boolean; children: ReactNode; onClick: () => void }) {
-  return <Button type="button" variant={active ? "default" : "outline"} onClick={onClick}>{children}</Button>;
+  return (
+    <Button
+      type="button"
+      variant={active ? "default" : "outline"}
+      className={active ? "!text-white [&_*]:!text-white" : undefined}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
 }
 
 

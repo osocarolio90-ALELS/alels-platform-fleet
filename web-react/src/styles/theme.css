@@ -206,11 +206,18 @@
   color: #ffffff !important;
 }
 
-.theme-light .legacy-content :where(.badge,[class*="badge"],[class*="Badge"],button),
-.theme-light .legacy-content :where(.bg-primary,.bg-destructive,.bg-red-500,.bg-red-600,.bg-sky-500,.bg-sky-600) {
+.theme-light .legacy-content :where(.badge,[class*="badge"],[class*="Badge"],button) {
   color: #000000 !important;
 }
 
+.theme-light .legacy-content :where(.bg-primary,.bg-destructive,.bg-red-500,.bg-red-600,.bg-sky-500,.bg-sky-600),
+.theme-light .legacy-content :where(.bg-primary,.bg-destructive,.bg-red-500,.bg-red-600,.bg-sky-500,.bg-sky-600) *,
+.theme-light .legacy-content :where(.bg-primary,.bg-destructive,.bg-red-500,.bg-red-600,.bg-sky-500,.bg-sky-600) :where(svg,[data-lucide]),
+.theme-light .legacy-content :where(.bg-primary,.bg-destructive,.bg-red-500,.bg-red-600,.bg-sky-500,.bg-sky-600) :where(svg,[data-lucide]) * {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  fill: none !important;
+}
 /* Raster logos use the dedicated light/dark assets selected by AppLayout. */
 
 /* ==========================================================
