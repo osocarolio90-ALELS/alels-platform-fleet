@@ -40,14 +40,6 @@ function getAuthToken(): string | null {
   return useAuthStore.getState().token || readTokenFromBrowserStorage();
 }
 
-function persistAuthToken(token: string) {
-  if (typeof window === "undefined" || !token) {
-    return;
-  }
-
-  localStorage.setItem(TOKEN_STORAGE_KEY, token);
-}
-
 function clearPersistedAuthToken() {
   if (typeof window === "undefined") {
     return;
@@ -681,12 +673,15 @@ export type OwnerDashboard = {
 
 export async function login(email: string, password: string) {
   const response = await api.post<LoginResponse>("/api/auth/login", { email, password });
-
-  if (response.data?.token) {
-    persistAuthToken(response.data.token);
-  }
-
   return response.data;
+}
+
+export async function logoutSession() {
+  await api.post("/api/auth/logout");
+}
+
+export async function heartbeatSession() {
+  await api.post("/api/auth/heartbeat");
 }
 
 export async function getOwnerDashboard() {

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bot, Building2, CarFront, ChevronDown, CircleUserRound, Cpu, Database, DollarSign, Globe, IdCard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, RadioTower, Recycle, ServerCog, Settings, Sun, UsersRound } from "lucide-react";
 
 import { useAuthStore } from "@/stores/auth-store";
@@ -7,6 +7,7 @@ import { t, type TranslationKey } from "@/lib/i18n";
 import { useLanguageStore } from "@/stores/language-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { cn } from "@/lib/utils";
+import { heartbeatSession, logoutSession } from "@/lib/api";
 import { MASTER_DATA_ROLES, ORGANIZATION_ROLES, SERVER_MONITOR_ROLES, hasRole } from "@/lib/role-access";
 
 type SidebarItem = { to: string; labelKey: TranslationKey; roles?: readonly string[] };
@@ -73,9 +74,21 @@ export function AppLayout() {
   const sidebarIsCompact = sidebarCollapsed && !sidebarHovered;
   const currentCompanyName = (user?.companyName || "ALELS TECH INDONESIA").trim().toUpperCase();
 
-  function handleLogout() {
-    logout();
-    navigate("/login");
+  useEffect(() => {
+    let stopped=false;
+    const heartbeat=()=>{if(!stopped)void heartbeatSession().catch(()=>undefined);};
+    heartbeat();
+    const interval=window.setInterval(heartbeat,2_000);
+    return ()=>{stopped=true;window.clearInterval(interval);};
+  }, []);
+
+  async function handleLogout() {
+    try {
+      await logoutSession();
+    } finally {
+      logout();
+      navigate("/login");
+    }
   }
 
   return (

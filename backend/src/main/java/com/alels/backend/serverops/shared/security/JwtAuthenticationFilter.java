@@ -56,16 +56,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private boolean isSessionAllowed(JwtUserContext user) {
         if (user.userId() == null) return false;
-        Integer count = jdbcTemplate.queryForObject("""
-                SELECT COUNT(*)
+        List<SessionState> states = jdbcTemplate.query("""
+                SELECT COALESCE(u.session_version, 0) session_version,
+                       u.company_id,
+                       u.role
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
                 WHERE u.id = ?
                   AND u.deleted_at IS NULL
                   AND UPPER(COALESCE(u.status, '')) = 'ACTIVE'
                   AND (c.id IS NULL OR (c.deleted_at IS NULL AND UPPER(COALESCE(c.status, '')) IN ('ACTIVE', 'PROVISION')))
-                """, Integer.class, user.userId());
-        return count != null && count == 1;
+                """, (rs, rowNum) -> new SessionState(
+                        rs.getLong("session_version"),
+                        rs.getObject("company_id", Long.class),
+                        rs.getString("role")
+                ), user.userId());
+        if (states.size() != 1) return false;
+        SessionState state = states.getFirst();
+        return state.sessionVersion == user.sessionVersion()
+                && java.util.Objects.equals(state.companyId, user.companyId())
+                && RoleNormalizer.normalize(state.role).equals(user.normalizedRole());
     }
 
     private String extractBearerToken(HttpServletRequest request) {
@@ -74,4 +84,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = header.substring(7).trim();
         return token.isEmpty() ? null : token;
     }
+
+    private record SessionState(long sessionVersion, Long companyId, String role) {}
 }

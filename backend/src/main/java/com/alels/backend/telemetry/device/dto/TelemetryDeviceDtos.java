@@ -17,6 +17,9 @@ public final class TelemetryDeviceDtos {
     ) {}
 
     public record GroupFolder(Long id, String name, int deviceCount, boolean deleted) {}
-    public record Overview(List<GroupFolder> groups, List<GroupFolder> wastedGroups, List<DeviceRow> devices) {}
+    public record Overview(
+            List<GroupFolder> groups, List<GroupFolder> wastedGroups, List<DeviceRow> devices,
+            long totalDevices, long filteredDevices, long ungroupedDevices, Long nextCursor, boolean hasMore
+    ) {}
     public record TcpRequest(boolean enabled) {}
 }

@@ -1,15 +1,20 @@
 -- ALELS Emergency Recovery: reset root superadmin password
--- Default email: osocarolio90@gmail.com
--- Default password for the hash below: alels1234567
--- Generate a new hash with backend/BcryptTool.java if you need a different password.
+-- Required psql variable: new_password_hash (BCrypt generated with backend/BcryptTool.java).
+-- Example: psql ... -v new_password_hash='<bcrypt-hash>' -f this-file.sql
 -- Safe to rerun. This is not a migration.
+
+\if :{?new_password_hash}
+\else
+\echo 'ERROR: new_password_hash psql variable is required'
+\quit
+\endif
 
 BEGIN;
 
 WITH target_user AS (
     UPDATE users
-    SET password_hash = '$2a$12$11WIGjtlvg82AJqFKZVZ8e7SGcS2v8//N8uTW.ropBp0yoNzTZzOe',
-        must_change_password = FALSE,
+    SET password_hash = :'new_password_hash',
+        must_change_password = TRUE,
         status = 'ACTIVE',
         deleted_at = NULL,
         deleted_by = NULL,

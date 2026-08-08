@@ -1,25 +1,17 @@
 package com.alels.gateway.config;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 
 public class DatabaseConfig {
 
-    private static final String URL =
-            "jdbc:postgresql://localhost:5432/alels_db";
-
-    private static final String USER =
-            "postgres";
-
-    private static final String PASSWORD =
-            "123456";
+    private static final HikariDataSource DATA_SOURCE = createDataSource();
 
     static {
         try {
             Class.forName("org.postgresql.Driver");
-
-            System.out.println("[DATABASE] PostgreSQL Driver Loaded");
 
         } catch (Exception e) {
 
@@ -30,11 +22,7 @@ public class DatabaseConfig {
 
     public static Connection getConnection() throws SQLException {
 
-        return DriverManager.getConnection(
-                URL,
-                USER,
-                PASSWORD
-        );
+        return DATA_SOURCE.getConnection();
     }
 
     public static boolean testConnection() {
@@ -59,5 +47,25 @@ public class DatabaseConfig {
 
             return false;
         }
+    }
+
+    private static HikariDataSource createDataSource() {
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(required("ALELS_DB_URL"));
+        config.setUsername(required("ALELS_DB_USER"));
+        config.setPassword(required("ALELS_DB_PASSWORD"));
+        config.setMaximumPoolSize(Integer.parseInt(System.getenv().getOrDefault("ALELS_GATEWAY_DB_POOL_MAX", "20")));
+        config.setMinimumIdle(Integer.parseInt(System.getenv().getOrDefault("ALELS_GATEWAY_DB_POOL_MIN_IDLE", "2")));
+        config.setConnectionTimeout(5_000);
+        config.setPoolName("alels-gateway-pool");
+        return new HikariDataSource(config);
+    }
+
+    private static String required(String name) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(name + " must be configured");
+        }
+        return value.trim();
     }
 }

@@ -1,11 +1,13 @@
 package com.alels.gateway.publisher;
 
 import com.alels.gateway.model.TelemetryData;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 public class LoggingTelemetryPublisher implements TelemetryPublisher {
 
     @Override
-    public Long publish(
+    public CompletionStage<Long> publish(
             TelemetryData telemetryData,
             String protocol,
             String channel,
@@ -24,6 +26,6 @@ public class LoggingTelemetryPublisher implements TelemetryPublisher {
                 + " channel=" + channel
                 + " dictionary=" + dictionaryCode);
 
-        return null;
+        return CompletableFuture.completedFuture(null);
     }
 }

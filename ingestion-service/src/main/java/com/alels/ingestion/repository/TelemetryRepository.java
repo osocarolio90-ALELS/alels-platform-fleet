@@ -8,10 +8,13 @@ import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 import com.alels.ingestion.model.TelemetryMessage;
 import com.alels.ingestion.model.IngestionRecord;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.alels.ingestion.validation.service.TelemetryMessageValidator;
 
 public class TelemetryRepository {
 
@@ -368,6 +371,7 @@ public class TelemetryRepository {
              PreparedStatement latestPositionStmt = conn.prepareStatement(latestPositionSql)) {
 
             conn.setAutoCommit(false);
+            Set<String> claimedOffsets = claimOffsets(conn, records, messages);
 
             for (int i = 0; i < records.size(); i++) {
                 IngestionRecord record = records.get(i);
@@ -379,6 +383,12 @@ public class TelemetryRepository {
                 }
 
                 try {
+                    if (record.topic != null && !record.topic.isBlank()) {
+                        if (!claimedOffsets.contains(offsetKey(record))) {
+                            continue;
+                        }
+                    }
+
                     rawStmt.setString(1, message.imei);
                     rawStmt.setString(2, message.protocol);
                     rawStmt.setString(3, message.channel);
@@ -445,8 +455,10 @@ public class TelemetryRepository {
                     latestPositionStmt.addBatch();
                     processed++;
                 } catch (Exception itemError) {
-                    failed++;
-                    System.err.println("[INGESTION BATCH ITEM ERROR] imei=" + message.imei + " error=" + itemError.getMessage());
+                    throw new IllegalArgumentException(
+                            "Invalid ingestion item imei=" + message.imei,
+                            itemError
+                    );
                 }
             }
 
@@ -457,12 +469,73 @@ public class TelemetryRepository {
             latestPositionStmt.executeBatch();
             conn.commit();
         } catch (Exception e) {
-            failed += processed;
-            processed = 0;
-            System.err.println("[INGESTION BATCH DB ERROR] " + e.getMessage());
+            throw new IllegalStateException("Atomic ingestion batch failed", e);
         }
 
-        return new BatchIngestionResult(processed, failed);
+        return new BatchIngestionResult(processed, failed, records.size() - processed - failed, List.of());
+    }
+
+    private Set<String> claimOffsets(
+            Connection connection,
+            List<IngestionRecord> records,
+            List<TelemetryMessage> messages
+    ) throws Exception {
+        List<Integer> claimable = new java.util.ArrayList<>();
+        for (int i = 0; i < records.size(); i++) {
+            IngestionRecord record = records.get(i);
+            TelemetryMessage message = messages.get(i);
+            if (record != null && record.topic != null && !record.topic.isBlank()
+                    && message != null && message.imei != null && !message.imei.isBlank()) {
+                claimable.add(i);
+            }
+        }
+
+        if (claimable.isEmpty()) {
+            return Set.of();
+        }
+
+        String values = String.join(",", java.util.Collections.nCopies(
+                claimable.size(), "(?, ?, ?, 'alels-ingestion-service', ?, ?, 'PROCESSED', NOW(), NOW())"
+        ));
+        String sql = """
+                INSERT INTO kafka_processed_offsets (
+                    topic_name, partition_no, offset_no, consumer_group,
+                    message_key, payload_hash, status, first_seen_at, processed_at
+                ) VALUES %s
+                ON CONFLICT DO NOTHING
+                RETURNING topic_name, partition_no, offset_no
+                """.formatted(values);
+
+        Set<String> claimed = new HashSet<>();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            int parameter = 1;
+            for (int index : claimable) {
+                IngestionRecord record = records.get(index);
+                statement.setString(parameter++, record.topic);
+                statement.setInt(parameter++, record.partition);
+                statement.setLong(parameter++, record.offset);
+                statement.setString(parameter++, record.key);
+                statement.setString(parameter++, sha256(record.payload));
+            }
+            try (java.sql.ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    claimed.add(offsetKey(
+                            result.getString("topic_name"),
+                            result.getInt("partition_no"),
+                            result.getLong("offset_no")
+                    ));
+                }
+            }
+        }
+        return claimed;
+    }
+
+    private String offsetKey(IngestionRecord record) {
+        return offsetKey(record.topic, record.partition, record.offset);
+    }
+
+    private String offsetKey(String topic, int partition, long offset) {
+        return topic + '\u0000' + partition + '\u0000' + offset;
     }
 
     public List<DlqItem> fetchOpenDlqItems(int limit) {
@@ -538,23 +611,8 @@ public class TelemetryRepository {
         if (value == null || value.isBlank()) {
             return null;
         }
-
-        try {
-            String normalized = value.trim().replace("T", " ");
-
-            if (normalized.length() == 16) {
-                normalized += ":00";
-            }
-
-            if (normalized.length() > 19) {
-                normalized = normalized.substring(0, 19);
-            }
-
-            return Timestamp.valueOf(normalized);
-
-        } catch (Exception e) {
-            return null;
-        }
+        java.time.Instant parsed = TelemetryMessageValidator.parseUtc(value);
+        return parsed == null ? null : Timestamp.from(parsed);
     }
 
     private String sha256(String value) {

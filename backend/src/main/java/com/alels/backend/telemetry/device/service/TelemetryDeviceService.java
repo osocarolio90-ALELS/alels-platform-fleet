@@ -16,11 +16,23 @@ public class TelemetryDeviceService {
     private final TelemetryDeviceRepository repository;
     public TelemetryDeviceService(TelemetryDeviceRepository repository) { this.repository=repository; }
 
-    public Overview overview(JwtUserContext user) {
+    public Overview overview(JwtUserContext user,Long afterId,int requestedLimit,String search,String folder) {
+        int limit=Math.max(10,Math.min(requestedLimit,100));
+        long cursor=afterId==null?0:Math.max(afterId,0);
+        List<com.alels.backend.telemetry.device.dto.TelemetryDeviceDtos.DeviceRow> page=
+            repository.list(user.companyId(),user.normalizedRole(),cursor,limit+1,search,folder);
+        boolean hasMore=page.size()>limit;
+        List<com.alels.backend.telemetry.device.dto.TelemetryDeviceDtos.DeviceRow> devices=
+            hasMore?List.copyOf(page.subList(0,limit)):page;
         return new Overview(
             repository.folders(user.companyId(),user.normalizedRole(),false),
             repository.folders(user.companyId(),user.normalizedRole(),true),
-            repository.list(user.companyId(),user.normalizedRole())
+            devices,
+            repository.count(user.companyId(),user.normalizedRole(),"","ALL"),
+            repository.count(user.companyId(),user.normalizedRole(),search,folder),
+            repository.count(user.companyId(),user.normalizedRole(),"","UNGROUP"),
+            hasMore?devices.get(devices.size()-1).id():null,
+            hasMore
         );
     }
 

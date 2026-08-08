@@ -15,7 +15,19 @@ public class ProtocolRegistryResolver {
     private static final Map<String, ProtocolInfo> cache =
             new ConcurrentHashMap<>();
 
+    private static final Map<String, Boolean> activeDecisions =
+            new ConcurrentHashMap<>();
+
     private ProtocolRegistryResolver() {
+    }
+
+    public static void preload() {
+        for (ProtocolType protocolType : ProtocolType.values()) {
+            if (protocolType != ProtocolType.UNKNOWN) {
+                ProtocolInfo info = resolve(protocolType);
+                activeDecisions.put(protocolType.name(), info != null && info.isActive());
+            }
+        }
     }
 
     public static ProtocolInfo resolve(ProtocolType protocolType) {
@@ -71,15 +83,13 @@ public class ProtocolRegistryResolver {
     }
 
     public static boolean isActive(ProtocolType protocolType) {
-
-        ProtocolInfo info =
-                resolve(protocolType);
-
-        return info != null && info.isActive();
+        return protocolType != null
+                && activeDecisions.getOrDefault(protocolType.name(), false);
     }
 
     public static void clearCache() {
         cache.clear();
+        activeDecisions.clear();
         System.out.println("[PROTOCOL REGISTRY] cache cleared");
     }
 }

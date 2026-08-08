@@ -39,13 +39,12 @@ public class DevicePresenceRepository {
         String sql = """
                 UPDATE devices
                 SET
-                    presence_status = CASE
-                        WHEN last_seen IS NOT NULL
-                             AND EXTRACT(EPOCH FROM (NOW() - last_seen)) <= presence_timeout_seconds
-                        THEN 'ONLINE'
-                        ELSE 'OFFLINE'
-                    END,
+                    presence_status = 'OFFLINE',
+                    online = FALSE,
                     status_updated_at = NOW()
+                WHERE presence_status = 'ONLINE'
+                  AND (last_seen IS NULL
+                       OR last_seen < NOW() - (presence_timeout_seconds * interval '1 second'))
                 """;
 
         try (

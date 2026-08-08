@@ -47,6 +47,10 @@ public class DeviceChannelTracker {
         return state;
     }
 
+    public static void remove(String imei) {
+        if (imei != null) channelStates.remove(imei);
+    }
+
     private static void refreshOnlineStatus(ChannelState state, long now) {
         state.gsmOnline = state.lastGsmSeen > 0 && (now - state.lastGsmSeen <= ONLINE_TIMEOUT_MS);
         state.wifiOnline = state.lastWifiSeen > 0 && (now - state.lastWifiSeen <= ONLINE_TIMEOUT_MS);

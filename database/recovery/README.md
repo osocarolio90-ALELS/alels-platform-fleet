@@ -20,11 +20,11 @@ Urutan recovery superadmin root:
 pg_dump -U alels -d alels_db -f D:\backup_alels_before_recovery.sql
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U alels -d alels_db -f D:\alels-platform-work\database\recovery\002_restore_root_company.sql
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U alels -d alels_db -f D:\alels-platform-work\database\recovery\001_unlock_root_superadmin.sql
-& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U alels -d alels_db -f D:\alels-platform-work\database\recovery\003_reset_root_superadmin_password.sql
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U alels -d alels_db -v "new_password_hash=$hash" -f D:\alels-platform-work\database\recovery\003_reset_root_superadmin_password.sql
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U alels -d alels_db -f D:\alels-platform-work\database\recovery\004_recovery_status_check.sql
 ```
 
-Default script `003_reset_root_superadmin_password.sql` memakai email `osocarolio90@gmail.com` dan hash BCrypt untuk password `alels1234567` dari ALELS BcryptTool lokal.
+Script `003_reset_root_superadmin_password.sql` tidak memiliki password atau hash bawaan. Hash BCrypt wajib diberikan melalui variabel `psql` `new_password_hash` pada setiap recovery.
 
 Jika ingin password lain:
 
@@ -36,4 +36,8 @@ javac -cp "$cp" .\BcryptTool.java
 java -cp ".;$cp" BcryptTool PASSWORD_BARU
 ```
 
-Copy hash hasilnya ke `003_reset_root_superadmin_password.sql`, lalu jalankan script.
+Jangan menyalin hash ke source repository. Berikan hash hanya saat eksekusi:
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U alels -d alels_db -v "new_password_hash=$hash" -f D:\alels-platform-work\database\recovery\003_reset_root_superadmin_password.sql
+```

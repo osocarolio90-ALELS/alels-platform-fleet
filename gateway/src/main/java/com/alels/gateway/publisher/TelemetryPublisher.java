@@ -1,10 +1,11 @@
 package com.alels.gateway.publisher;
 
 import com.alels.gateway.model.TelemetryData;
+import java.util.concurrent.CompletionStage;
 
 public interface TelemetryPublisher {
 
-    Long publish(
+    CompletionStage<Long> publish(
             TelemetryData telemetryData,
             String protocol,
             String channel,

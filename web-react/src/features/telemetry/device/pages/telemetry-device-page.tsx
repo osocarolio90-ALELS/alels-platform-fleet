@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Power, RadioTower } from "lucide-react";
 
@@ -17,10 +17,13 @@ import type { TelemetryDeviceRow } from "../types/telemetry-device";
 
 export function TelemetryDevicePage(){
  const client=useQueryClient(),user=useAuthStore(state=>state.user),language=useLanguageStore(state=>state.language),viewOnly=normalizeRole(user?.role)==="TECHUSER";
- const [folder,setFolder]=useState<DeviceFolder>("ALL"),[notice,setNotice]=useState("");
- const query=useQuery({queryKey:["telemetry-devices"],queryFn:getTelemetryDevices,refetchInterval:15_000});
+ const [folder,setFolder]=useState<DeviceFolder>("ALL"),[notice,setNotice]=useState(""),[search,setSearch]=useState(""),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(10),[cursors,setCursors]=useState<number[]>([0]);
+ const deferredSearch=useDeferredValue(search.trim());
+ useEffect(()=>{setPage(1);setCursors([0]);},[folder,deferredSearch,pageSize]);
+ const cursor=cursors[page-1]??0;
+ const query=useQuery({queryKey:["telemetry-devices",folder,deferredSearch,pageSize,cursor],queryFn:()=>getTelemetryDevices({afterId:cursor,limit:pageSize,search:deferredSearch,folder}),placeholderData:previous=>previous,refetchInterval:15_000});
  const toggle=useMutation({mutationFn:({id,enabled}:{id:number;enabled:boolean})=>setTelemetryDeviceTcp(id,enabled),onSuccess:()=>client.invalidateQueries({queryKey:["telemetry-devices"]}),onError:error=>setNotice(error instanceof Error?error.message:"TCP update failed.")});
- const rows=useMemo(()=>filterRows(query.data?.devices||[],folder),[query.data?.devices,folder]);
+ const rows=query.data?.devices||[];
  const columns=useMemo<DataTableColumn<TelemetryDeviceRow>[]>(()=>[
   {key:"device",label:t(language,"device"),value:r=>`${r.imei} ${r.brand} ${r.model}`,render:r=><Cell lines={[r.imei,r.brand,r.model]} strong/>},
   {key:"vehicle",label:t(language,"vehicle"),value:r=>`${r.vehicleModel} ${r.vehicleType} ${r.plateNumber}`,render:r=><Cell lines={[r.vehicleModel,r.vehicleType,r.plateNumber]}/>},
@@ -32,10 +35,12 @@ export function TelemetryDevicePage(){
   {key:"company",label:t(language,"company"),value:r=>r.company},
   {key:"updated",label:t(language,"lastUpdated"),value:r=>r.lastUpdated||"",render:r=>relativeTime(r.lastUpdated)}
  ],[language,toggle.isPending,viewOnly]);
- const allDevices=query.data?.devices||[],ungroup=allDevices.filter(row=>!row.groupId).length;
- return <section className="space-y-5 text-foreground"><PageHeader icon={<RadioTower className="h-5 w-5"/>} title={t(language,"telemetryDevice")}/>{notice?<div className="rounded-lg border border-border bg-muted p-3 text-sm">{notice}</div>:null}<div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]"><DeviceFolderTree groups={query.data?.groups||[]} wasted={query.data?.wastedGroups||[]} total={allDevices.length} ungroup={ungroup} value={folder} onChange={setFolder}/><OrganizationTableCard><DataTable data={rows} columns={columns} rowKey={row=>row.id} rowClassName={row=>row.connected?"bg-primary/15 text-foreground":undefined} searchPlaceholder="Search IMEI, vehicle, driver..." emptyMessage={query.isLoading?t(language,"loading"):"No device found."}/></OrganizationTableCard></div></section>;
+ function changePage(nextPage:number){
+  if(nextPage===page+1&&query.data?.hasMore&&query.data.nextCursor){setCursors(current=>{const next=[...current];next[page]=query.data!.nextCursor!;return next;});setPage(nextPage);}
+  else if(nextPage<page&&nextPage>=1)setPage(nextPage);
+ }
+ return <section className="space-y-5 text-foreground"><PageHeader icon={<RadioTower className="h-5 w-5"/>} title={t(language,"telemetryDevice")}/>{notice?<div className="rounded-lg border border-border bg-muted p-3 text-sm">{notice}</div>:null}<div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]"><DeviceFolderTree groups={query.data?.groups||[]} wasted={query.data?.wastedGroups||[]} total={query.data?.totalDevices||0} ungroup={query.data?.ungroupedDevices||0} value={folder} onChange={setFolder}/><OrganizationTableCard><DataTable data={rows} columns={columns} rowKey={row=>row.id} rowClassName={row=>row.connected?"bg-primary/15 text-foreground":undefined} searchPlaceholder="Search IMEI, vehicle, driver..." emptyMessage={query.isLoading?t(language,"loading"):"No device found."} remote={{page,pageSize,totalRows:query.data?.filteredDevices||0,search,onPageChange:changePage,onPageSizeChange:setPageSize,onSearchChange:setSearch}}/></OrganizationTableCard></div></section>;
 }
-function filterRows(rows:TelemetryDeviceRow[],folder:DeviceFolder){if(folder==="ALL")return rows;if(folder==="UNGROUP")return rows.filter(r=>!r.groupId);const id=Number(folder.split(":")[1]);return rows.filter(r=>r.groupId===id);}
 function Cell({lines,strong=false}:{lines:(string|number|null|undefined)[];strong?:boolean}){return <div className="space-y-1">{lines.map((line,index)=><div key={index} className={cn("whitespace-nowrap text-xs",strong&&index===0&&"font-bold")}>{line||"-"}</div>)}</div>;}
 function MovementStatus({status}:{status:string}){const normalized=status.toUpperCase();return <span className={cn("inline-flex items-center gap-2 text-sm font-semibold",normalized==="MOVING"?"text-primary":normalized==="IDLE"?"text-amber-500":"text-destructive")}><span className="h-2 w-2 rounded-full bg-current"/>{normalized==="MOVING"?"Moving":normalized==="IDLE"?"Idle":"Stop"}</span>;}
 function formatCurrency(value:number){return new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(value||0);}

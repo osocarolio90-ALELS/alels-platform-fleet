@@ -1,11 +1,11 @@
 package com.alels.gateway;
 
+import com.alels.gateway.admission.service.DeviceAdmissionRegistry;
 import com.alels.gateway.config.DatabaseConfig;
 import com.alels.gateway.netty.NettyTcpServer;
 import com.alels.gateway.poller.PendingCommandPoller;
-import com.alels.gateway.server.HybridTcpServer;
-import com.alels.gateway.service.DevicePresenceScheduler;
 import com.alels.gateway.service.DictionaryStartupImporter;
+import com.alels.gateway.service.ProtocolRegistryResolver;
 
 public class Main {
 
@@ -15,11 +15,13 @@ public class Main {
         System.out.println("ALELS TECH INDONESIA");
         System.out.println("========================================");
 
-        DatabaseConfig.testConnection();
+        if (!DatabaseConfig.testConnection()) {
+            throw new IllegalStateException("Database startup check failed");
+        }
 
         DictionaryStartupImporter.runStartupCheck();
-
-        DevicePresenceScheduler.start();
+        DeviceAdmissionRegistry.start();
+        ProtocolRegistryResolver.preload();
 
         Thread commandPollerThread =
                 new Thread(
@@ -50,28 +52,12 @@ public class Main {
                 "[CONFIG] TCP Port = " + port
         );
 
-        String serverMode =
-                System.getenv()
-                        .getOrDefault(
-                                "ALELS_TCP_SERVER",
-                                "legacy"
-                        );
-
-        System.out.println(
-                "[CONFIG] TCP Server = " + serverMode
-        );
-
-        if ("netty".equalsIgnoreCase(serverMode)) {
-            NettyTcpServer server =
-                    new NettyTcpServer(port);
-
-            server.start();
-            return;
+        String serverMode = System.getenv().getOrDefault("ALELS_TCP_SERVER", "netty");
+        if (!"netty".equalsIgnoreCase(serverMode)) {
+            throw new IllegalStateException("ALELS_TCP_SERVER must be 'netty' in the production gateway");
         }
 
-        HybridTcpServer server =
-                new HybridTcpServer(port);
-
-        server.start();
+        System.out.println("[CONFIG] TCP Server = netty");
+        new NettyTcpServer(port).start();
     }
 }

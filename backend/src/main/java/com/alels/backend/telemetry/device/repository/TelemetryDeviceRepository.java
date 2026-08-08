@@ -14,8 +14,9 @@ public class TelemetryDeviceRepository {
     private final JdbcTemplate jdbc;
     public TelemetryDeviceRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
-    public List<DeviceRow> list(Long companyId, String role) {
+    public List<DeviceRow> list(Long companyId,String role,long afterId,int limit,String search,String folder) {
         String scope = scope(role, "d");
+        String filter = deviceFilter(search,folder);
         String sql = """
             WITH RECURSIVE visible_companies AS (
               SELECT id FROM companies WHERE id=?
@@ -29,8 +30,8 @@ public class TelemetryDeviceRepository {
                    COALESCE(NULLIF(TRIM(CONCAT_WS(' / ',driver.license_type,driver.license_number)),''),'-') driver_license,
                    CASE
                      WHEN latest.server_time IS NULL OR latest.server_time < NOW()-(COALESCE(d.presence_timeout_seconds,420)||' seconds')::interval THEN 'STOP'
-                     WHEN LOWER(COALESCE(latest.ignition,'')) IN ('1','true','on','yes') AND COALESCE(latest.speed,0)>0 THEN 'MOVING'
-                     WHEN LOWER(COALESCE(latest.ignition,'')) IN ('1','true','on','yes') THEN 'IDLE'
+                     WHEN UPPER(COALESCE(latest.vehicle_status,'')) IN ('MOVING','IDLE','STOP') THEN UPPER(latest.vehicle_status)
+                     WHEN COALESCE(latest.speed,0)>0 THEN 'MOVING'
                      ELSE 'STOP'
                    END movement_status,
                    COALESCE(d.tcp_enabled,TRUE) tcp_enabled,
@@ -66,16 +67,17 @@ public class TelemetryDeviceRepository {
               LEFT JOIN license_master lm ON lm.id=ad.license_master_id AND lm.deleted_at IS NULL
               ORDER BY active_driver.event_time DESC LIMIT 1
             ) driver ON TRUE
-            LEFT JOIN LATERAL (
-              SELECT telemetry.speed,telemetry.server_time,
-                     COALESCE(telemetry.io_data->>'ignition',telemetry.io->>'ignition',telemetry.io_data->>'239',telemetry.io->>'239') ignition
-              FROM telemetry WHERE telemetry.imei=d.imei ORDER BY telemetry.server_time DESC LIMIT 1
-            ) latest ON TRUE
+            LEFT JOIN device_latest_position latest ON latest.imei=d.imei
             LEFT JOIN telemetry_group_devices membership ON membership.device_id=d.id
             LEFT JOIN telemetry_groups g ON g.id=membership.group_id
-            WHERE d.deleted_at IS NULL %s
-            ORDER BY c.company_name,d.imei
-            """.formatted(scope);
+            WHERE d.deleted_at IS NULL %s AND d.id>? %s
+            ORDER BY d.id
+            LIMIT ?
+            """.formatted(scope,filter);
+        java.util.List<Object> parameters=new java.util.ArrayList<>(java.util.Arrays.asList(scopeParameters(companyId,role)));
+        parameters.add(afterId);
+        addFilterParameters(parameters,search,folder);
+        parameters.add(limit);
         return jdbc.query(sql, (rs,n)->new DeviceRow(
             rs.getLong("id"),rs.getString("imei"),rs.getString("brand"),rs.getString("model"),
             rs.getString("vehicle_model"),rs.getString("vehicle_type"),rs.getString("plate_number"),
@@ -84,7 +86,26 @@ public class TelemetryDeviceRepository {
             rs.getString("movement_status"),rs.getBoolean("tcp_enabled"),rs.getBoolean("connected"),
             rs.getObject("group_id",Long.class),rs.getString("group_name"),rs.getBoolean("group_deleted"),
             rs.getString("company_name"),rs.getString("last_updated")
-        ), companyId);
+        ), parameters.toArray());
+    }
+
+    public long count(Long companyId,String role,String search,String folder) {
+        String scope=scope(role,"d");
+        String sql="""
+            WITH RECURSIVE visible_companies AS (
+              SELECT id FROM companies WHERE id=?
+              UNION ALL SELECT child.id FROM companies child JOIN visible_companies parent ON child.parent_company_id=parent.id WHERE child.deleted_at IS NULL
+            )
+            SELECT COUNT(DISTINCT d.id)
+            FROM devices d
+            JOIN companies c ON c.id=d.company_id AND c.deleted_at IS NULL
+            LEFT JOIN telemetry_group_devices membership ON membership.device_id=d.id
+            WHERE d.deleted_at IS NULL %s %s
+            """.formatted(scope,deviceFilter(search,folder));
+        java.util.List<Object> parameters=new java.util.ArrayList<>(java.util.Arrays.asList(scopeParameters(companyId,role)));
+        addFilterParameters(parameters,search,folder);
+        Long result=jdbc.queryForObject(sql,Long.class,parameters.toArray());
+        return result==null?0:result;
     }
 
     public List<GroupFolder> folders(Long companyId,String role,boolean deleted) {
@@ -98,19 +119,64 @@ public class TelemetryDeviceRepository {
             FROM telemetry_groups g LEFT JOIN telemetry_group_devices m ON m.group_id=g.id
             WHERE g.deleted_at IS %s %s GROUP BY g.id,g.group_name ORDER BY g.group_name
             """.formatted(deleted?"NOT NULL":"NULL",scope);
-        return jdbc.query(sql,(rs,n)->new GroupFolder(rs.getLong("id"),rs.getString("group_name"),rs.getInt("device_count"),deleted),companyId);
+        return jdbc.query(sql,(rs,n)->new GroupFolder(rs.getLong("id"),rs.getString("group_name"),rs.getInt("device_count"),deleted),scopeParameters(companyId, role));
     }
 
     public Optional<String> imeiById(Long id,Long companyId,String role) {
-        return list(companyId,role).stream().filter(row->row.id().equals(id)).map(DeviceRow::imei).findFirst();
+        String scope = scope(role, "d");
+        String sql = """
+            WITH RECURSIVE visible_companies AS (
+              SELECT id FROM companies WHERE id=?
+              UNION ALL SELECT child.id FROM companies child JOIN visible_companies parent ON child.parent_company_id=parent.id WHERE child.deleted_at IS NULL
+            )
+            SELECT d.imei
+            FROM devices d
+            WHERE d.id=? AND d.deleted_at IS NULL %s
+            LIMIT 1
+            """.formatted(scope);
+        java.util.List<Object> parameters = new java.util.ArrayList<>();
+        parameters.add(companyId);
+        parameters.add(id);
+        if (usesDirectCompanyScope(role)) parameters.add(companyId);
+        return jdbc.query(sql, (rs, rowNum) -> rs.getString("imei"), parameters.toArray()).stream().findFirst();
     }
     public void setTcp(Long id,boolean enabled) {
         jdbc.update("UPDATE devices SET tcp_enabled=?,updated_at=NOW() WHERE id=? AND deleted_at IS NULL",enabled,id);
     }
-    private String scope(String role,String alias) {
+    String scope(String role,String alias) {
         String normalized=role==null?"":role.replaceAll("[\\s_-]+","").toUpperCase();
         if ("SUPERADMIN".equals(normalized)||"ADMIN".equals(normalized)) return "";
         if ("CLIENTUSER".equals(normalized)||"TECHUSER".equals(normalized)) return "AND "+alias+".company_id=?";
         return "AND "+alias+".company_id IN (SELECT id FROM visible_companies)";
+    }
+
+    Object[] scopeParameters(Long companyId, String role) {
+        return usesDirectCompanyScope(role)
+                ? new Object[]{companyId, companyId}
+                : new Object[]{companyId};
+    }
+
+    private boolean usesDirectCompanyScope(String role) {
+        String normalized=role==null?"":role.replaceAll("[\\s_-]+","").toUpperCase();
+        return "CLIENTUSER".equals(normalized)||"TECHUSER".equals(normalized);
+    }
+
+    private String deviceFilter(String search,String folder) {
+        StringBuilder filter=new StringBuilder();
+        if (search!=null&&!search.isBlank()) filter.append(" AND (LOWER(d.imei) LIKE ? OR LOWER(COALESCE(d.device_model,'')) LIKE ? OR LOWER(c.company_name) LIKE ?)");
+        if ("UNGROUP".equalsIgnoreCase(folder)) filter.append(" AND membership.group_id IS NULL");
+        else if (folder!=null&&folder.toUpperCase().startsWith("GROUP:")) filter.append(" AND membership.group_id=?");
+        return filter.toString();
+    }
+
+    private void addFilterParameters(java.util.List<Object> parameters,String search,String folder) {
+        if (search!=null&&!search.isBlank()) {
+            String pattern="%"+search.trim().toLowerCase()+"%";
+            parameters.add(pattern); parameters.add(pattern); parameters.add(pattern);
+        }
+        if (folder!=null&&folder.toUpperCase().startsWith("GROUP:")) {
+            try { parameters.add(Long.parseLong(folder.substring(folder.indexOf(':')+1))); }
+            catch (NumberFormatException exception) { parameters.add(-1L); }
+        }
     }
 }

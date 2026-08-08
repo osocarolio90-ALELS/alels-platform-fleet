@@ -21,7 +21,7 @@ public class AuthRepository {
 
     public Optional<AuthUserRow> findActiveByEmail(String email) {
         String sql = """
-                SELECT u.id, u.company_id, c.company_name, c.status AS company_status, u.username, u.full_name, u.email, u.role, u.status, u.password_hash, u.must_change_password, u.profile_photo_path
+                SELECT u.id, u.company_id, c.company_name, c.status AS company_status, u.username, u.full_name, u.email, u.role, u.status, u.password_hash, u.must_change_password, u.profile_photo_path, COALESCE(u.session_version, 0) session_version
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
                 WHERE LOWER(u.email) = LOWER(?) AND u.deleted_at IS NULL
@@ -39,7 +39,8 @@ public class AuthRepository {
                 rs.getString("status"),
                 rs.getString("password_hash"),
                 rs.getBoolean("must_change_password"),
-                rs.getString("profile_photo_path")
+                rs.getString("profile_photo_path"),
+                rs.getLong("session_version")
         ), email).stream().findFirst();
     }
 
@@ -138,6 +139,39 @@ public class AuthRepository {
         }
     }
 
+    public void revokeSessions(Long userId) {
+        jdbcTemplate.update("""
+                UPDATE users
+                SET session_version = COALESCE(session_version, 0) + 1,
+                    session_last_seen_at = NULL,
+                    updated_at = NOW()
+                WHERE id = ? AND deleted_at IS NULL
+                """, userId);
+    }
+
+    public Optional<Long> claimSingleSession(Long userId) {
+        return jdbcTemplate.query("""
+                UPDATE users
+                SET session_version = COALESCE(session_version, 0) + 1,
+                    session_last_seen_at = NOW(),
+                    updated_at = NOW()
+                WHERE id = ?
+                  AND deleted_at IS NULL
+                  AND (session_last_seen_at IS NULL OR session_last_seen_at < NOW() - INTERVAL '5 seconds')
+                RETURNING session_version
+                """, (rs,rowNum)->rs.getLong("session_version"), userId).stream().findFirst();
+    }
+
+    public boolean touchSession(Long userId,long sessionVersion) {
+        return jdbcTemplate.update("""
+                UPDATE users
+                SET session_last_seen_at = NOW()
+                WHERE id = ?
+                  AND deleted_at IS NULL
+                  AND session_version = ?
+                """, userId,sessionVersion)==1;
+    }
+
     public void insertOrganizationActivity(Long actorUserId, Long actorCompanyId, String targetType, Long targetId, String action, String detailsJson) {
         jdbcTemplate.update("""
                 INSERT INTO organization_activity_logs (actor_user_id, actor_company_id, target_type, target_id, action, details)
@@ -172,6 +206,7 @@ public class AuthRepository {
             String status,
             String passwordHash,
             boolean mustChangePassword,
-            String profilePhotoUrl
+            String profilePhotoUrl,
+            long sessionVersion
     ) {}
 }

@@ -24,7 +24,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/health", "/api/auth/login", "/api/user/profile/photo/**").permitAll()
+                        .requestMatchers("/api/health", "/api/auth/login", "/api/user/profile/photo/**", "/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers("/api/server-monitor/**").hasRole("SUPERADMIN")
                         .requestMatchers("/api/organization/**", "/api/organizations/**", "/api/user/**", "/api/asset-register/**", "/api/master-data/**").authenticated()
                         .anyRequest().authenticated())

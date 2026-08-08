@@ -18,7 +18,7 @@ public class RootPasswordBootstrapper implements ApplicationRunner {
     public RootPasswordBootstrapper(
             JdbcTemplate jdbcTemplate,
             PasswordEncoder passwordEncoder,
-            @Value("${alels.bootstrap.root-password:Alels@2026!}") String initialPassword
+            @Value("${alels.bootstrap.root-password}") String initialPassword
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.passwordEncoder = passwordEncoder;
@@ -31,7 +31,7 @@ public class RootPasswordBootstrapper implements ApplicationRunner {
         jdbcTemplate.update("""
                 UPDATE users
                 SET password_hash = ?, must_change_password = TRUE, updated_at = NOW()
-                WHERE username = 'alels-root' AND password_hash = ?
+                WHERE username IN ('alels-root', 'superadmin') AND password_hash = ?
                 """, encodedPassword, TEMP_PASSWORD_MARKER);
     }
 }

@@ -1,0 +1,15 @@
+[Unit]
+Description=ALELS Telemetry Ingestion Service
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/alels/ingestion-service
+EnvironmentFile=/etc/alels/alels.env
+ExecStart=/usr/bin/java -jar /opt/alels/ingestion-service/target/alels-ingestion-service-1.0.0.jar
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

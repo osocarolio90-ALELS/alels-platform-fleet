@@ -11,30 +11,31 @@ import java.util.Map;
 import com.alels.gateway.detector.ProtocolType;
 import com.alels.gateway.model.TelemetryData;
 import com.alels.gateway.util.ByteUtil;
+import com.alels.gateway.util.TeltonikaCrc16;
 
 public class TeltonikaCodec8Parser implements PacketParser {
 
     @Override
     public ParserResult parse(byte[] packet) {
         if (packet == null || packet.length < 15) {
-            System.out.println("[CODEC8] Invalid packet: too short");
             return new ParserResult(null, ProtocolType.TELTONIKA_CODEC8, 0, false);
         }
 
         try {
+            int declaredDataLength = java.nio.ByteBuffer.wrap(packet, 4, 4).getInt();
+            if (declaredDataLength <= 0 || declaredDataLength > 1_048_576
+                    || packet.length != declaredDataLength + 12) {
+                return new ParserResult(null, ProtocolType.TELTONIKA_CODEC8, 0, false);
+            }
             int codecId = packet[8] & 0xFF;
 
             if (codecId != 0x08) {
-                System.out.println("[CODEC8] Invalid codec id: 0x" + String.format("%02X", codecId));
                 return new ParserResult(null, ProtocolType.TELTONIKA_CODEC8, 0, false);
             }
 
             int recordCount = packet[9] & 0xFF;
             List<TelemetryData> telemetryList = new ArrayList<>();
-
-            System.out.println("========== TELTONIKA CODEC8 PARSER ==========");
-            System.out.println("CODEC ID     : 0x08");
-            System.out.println("RECORD COUNT : " + recordCount);
+            boolean ioCountsValid = true;
 
             ByteUtil reader = new ByteUtil(packet, 10);
 
@@ -83,6 +84,8 @@ public class TeltonikaCodec8Parser implements PacketParser {
                     ioData.put(String.valueOf(ioId), value);
                 }
 
+                ioCountsValid &= totalIo == n1 + n2 + n4 + n8;
+
                 double longitude = longitudeRaw / 10_000_000.0;
                 double latitude = latitudeRaw / 10_000_000.0;
 
@@ -93,8 +96,8 @@ public class TeltonikaCodec8Parser implements PacketParser {
 
                 TelemetryData telemetryData = new TelemetryData();
                 telemetryData.setSourceProtocol(ProtocolType.TELTONIKA_CODEC8);
-                telemetryData.setDeviceTime(gpsTime.toString());
-                telemetryData.setPacketSequence(recordIndex);
+                telemetryData.setDeviceTime(Instant.ofEpochMilli(timestampMs).toString());
+                telemetryData.setPacketSequence(timestampMs * 256L + recordIndex);
                 telemetryData.setLongitude(longitude);
                 telemetryData.setLatitude(latitude);
                 telemetryData.setAltitude(altitude);
@@ -108,26 +111,6 @@ public class TeltonikaCodec8Parser implements PacketParser {
 
                 telemetryList.add(telemetryData);
 
-                System.out.println();
-                System.out.println("RECORD #" + recordIndex);
-                System.out.println("TIME        : " + gpsTime + " UTC");
-                System.out.println("TIMESTAMP   : " + timestampMs);
-                System.out.println("PRIORITY    : " + priority);
-                System.out.println("LON RAW     : " + longitudeRaw);
-                System.out.println("LAT RAW     : " + latitudeRaw);
-                System.out.println("LON         : " + longitude);
-                System.out.println("LAT         : " + latitude);
-                System.out.println("ALTITUDE    : " + altitude);
-                System.out.println("ANGLE       : " + angle);
-                System.out.println("SATELLITES  : " + satellites);
-                System.out.println("SPEED       : " + speed);
-                System.out.println("EVENT IO    : " + eventIoId);
-                System.out.println("TOTAL IO    : " + totalIo);
-                System.out.println("N1          : " + n1);
-                System.out.println("N2          : " + n2);
-                System.out.println("N4          : " + n4);
-                System.out.println("N8          : " + n8);
-                System.out.println("IO DATA     : " + ioData);
             }
 
             int recordCount2 = reader.readUInt8();
@@ -137,18 +120,12 @@ public class TeltonikaCodec8Parser implements PacketParser {
                 crc = reader.readUInt32();
             }
 
-            System.out.println();
-            System.out.println("RECORD COUNT 2 : " + recordCount2);
-            System.out.println("CRC            : " + String.format("0x%08X", crc));
-            System.out.println("END POSITION   : " + reader.position() + " / " + packet.length);
-            System.out.println("============================================");
-
-            boolean valid = recordCount == recordCount2;
-
-            if (!valid) {
-                System.out.println("[CODEC8] WARNING: record count mismatch. count1="
-                        + recordCount + " count2=" + recordCount2);
-            }
+            int expectedCrc = (int) (crc & 0xFFFF);
+            int actualCrc = TeltonikaCrc16.calculate(packet, 8, declaredDataLength);
+            boolean valid = recordCount == recordCount2
+                    && reader.position() == packet.length
+                    && ioCountsValid
+                    && expectedCrc == actualCrc;
 
             return new ParserResult(
                     null,

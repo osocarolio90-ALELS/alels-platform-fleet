@@ -4,9 +4,13 @@ After=network.target
 
 [Service]
 WorkingDirectory=/opt/alels/gateway
+EnvironmentFile=/etc/alels/alels.env
+Environment=ALELS_TCP_SERVER=netty
 ExecStart=/usr/bin/java -jar /opt/alels/gateway/target/alels-gateway-1.0.0.jar
 Restart=always
 RestartSec=5
+LimitNOFILE=1048576
+TimeoutStopSec=120
 
 [Install]
 WantedBy=multi-user.target

@@ -21,7 +21,7 @@ public class JwtService {
     @Value("${alels.jwt.expiration-ms}")
     private long expirationMs;
 
-    public String generateToken(Long userId, Long companyId, String role, String email, String username, String fullName) {
+    public String generateToken(Long userId, Long companyId, String role, String email, String username, String fullName, long sessionVersion) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(email)
@@ -30,6 +30,7 @@ public class JwtService {
                 .claim("role", role)
                 .claim("username", username)
                 .claim("fullName", fullName)
+                .claim("sessionVersion", sessionVersion)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expirationMs)))
                 .signWith(getSigningKey())
@@ -41,7 +42,8 @@ public class JwtService {
         Long userId = numberToLong(claims.get("userId"));
         Long companyId = numberToLong(claims.get("companyId"));
         String role = claims.get("role", String.class);
-        return new JwtUserContext(userId, companyId, role, claims.getSubject());
+        Long sessionVersion = numberToLong(claims.get("sessionVersion"));
+        return new JwtUserContext(userId, companyId, role, claims.getSubject(), sessionVersion == null ? -1L : sessionVersion);
     }
 
     private Long numberToLong(Object value) {

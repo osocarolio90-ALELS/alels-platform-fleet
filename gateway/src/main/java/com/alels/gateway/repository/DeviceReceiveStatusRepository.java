@@ -30,7 +30,9 @@ public class DeviceReceiveStatusRepository {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) {
-                    return true;
+                    return Boolean.parseBoolean(
+                            System.getenv().getOrDefault("ALELS_ALLOW_UNKNOWN_DEVICES", "false")
+                    );
                 }
 
                 return rs.getBoolean("tcp_enabled")
@@ -38,7 +40,7 @@ public class DeviceReceiveStatusRepository {
             }
         } catch (Exception e) {
             System.err.println("[DEVICE RECEIVE STATUS ERROR] " + e.getMessage());
-            return true;
+            return false;
         }
     }
 }

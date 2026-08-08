@@ -3,13 +3,13 @@ package com.alels.gateway.parser;
 import java.nio.charset.StandardCharsets;
 
 import com.alels.gateway.detector.ProtocolType;
+import com.alels.gateway.util.TeltonikaCrc16;
 
 public class TeltonikaCodec12ResponseParser implements PacketParser {
 
     @Override
     public ParserResult parse(byte[] packet) {
         if (packet == null || packet.length < 16) {
-            System.out.println("[CODEC12 RESPONSE] Invalid packet length");
             return new ParserResult(null, ProtocolType.TELTONIKA_CODEC12_RESPONSE, 0, false);
         }
 
@@ -21,6 +21,9 @@ public class TeltonikaCodec12ResponseParser implements PacketParser {
 
             long dataLength = readUInt32(packet, index);
             index += 4;
+            if (dataLength <= 0 || dataLength > 1_048_576 || packet.length != dataLength + 12) {
+                return new ParserResult(null, ProtocolType.TELTONIKA_CODEC12_RESPONSE, 0, false);
+            }
 
             int codecId = readUInt8(packet, index);
             index += 1;
@@ -35,15 +38,12 @@ public class TeltonikaCodec12ResponseParser implements PacketParser {
             index += 4;
 
             if (responseSize < 0 || index + responseSize > packet.length) {
-                System.out.println("[CODEC12 RESPONSE] Invalid response size=" + responseSize);
                 return new ParserResult(null, ProtocolType.TELTONIKA_CODEC12_RESPONSE, 0, false);
             }
 
             byte[] responseBytes = new byte[(int) responseSize];
             System.arraycopy(packet, index, responseBytes, 0, (int) responseSize);
             index += (int) responseSize;
-
-            String responseText = new String(responseBytes, StandardCharsets.US_ASCII);
 
             int recordCount2 = readUInt8(packet, index);
             index += 1;
@@ -54,22 +54,11 @@ public class TeltonikaCodec12ResponseParser implements PacketParser {
             boolean valid =
                     preamble == 0
                             && codecId == 0x0C
+                            && responseType == 0x06
                             && recordCount1 == recordCount2
-                            && recordCount1 > 0;
-
-            System.out.println("========== TELTONIKA CODEC12 RESPONSE ==========");
-            System.out.println("PREAMBLE      : " + preamble);
-            System.out.println("DATA LENGTH   : " + dataLength);
-            System.out.println("CODEC ID      : 0x" + String.format("%02X", codecId));
-            System.out.println("RECORD COUNT  : " + recordCount1);
-            System.out.println("RESPONSE TYPE : 0x" + String.format("%02X", responseType));
-            System.out.println("RESPONSE SIZE : " + responseSize);
-            System.out.println("RESPONSE TEXT : " + responseText);
-            System.out.println("RECORD COUNT2 : " + recordCount2);
-            System.out.println("CRC           : 0x" + String.format("%08X", crc));
-            System.out.println("END POSITION  : " + index + " / " + packet.length);
-            System.out.println("VALID         : " + valid);
-            System.out.println("===============================================");
+                            && recordCount1 > 0
+                            && index == packet.length
+                            && (crc & 0xFFFF) == TeltonikaCrc16.calculate(packet, 8, (int) dataLength);
 
             return new ParserResult(
                     null,
@@ -79,7 +68,6 @@ public class TeltonikaCodec12ResponseParser implements PacketParser {
             );
 
         } catch (Exception e) {
-            System.out.println("[CODEC12 RESPONSE] Parse error: " + e.getMessage());
             return new ParserResult(null, ProtocolType.TELTONIKA_CODEC12_RESPONSE, 0, false);
         }
     }

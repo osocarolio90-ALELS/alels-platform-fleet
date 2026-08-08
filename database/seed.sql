@@ -14,13 +14,12 @@ INSERT INTO users (
     id, company_id, username, email, password_hash, full_name, role, status, must_change_password
 )
 VALUES (
-    1, 1, 'superadmin', 'superadmin@alels.local', '123456', 'ALELS Super Admin', 'SUPERADMIN', 'ACTIVE', FALSE
+    1, 1, 'superadmin', 'superadmin@alels.local', 'TEMP_OWNER_PASSWORD', 'ALELS Super Admin', 'SUPERADMIN', 'ACTIVE', TRUE
 )
 ON CONFLICT (id) DO UPDATE SET
     company_id = EXCLUDED.company_id,
     username = EXCLUDED.username,
     email = EXCLUDED.email,
-    password_hash = EXCLUDED.password_hash,
     full_name = EXCLUDED.full_name,
     role = EXCLUDED.role,
     status = EXCLUDED.status,

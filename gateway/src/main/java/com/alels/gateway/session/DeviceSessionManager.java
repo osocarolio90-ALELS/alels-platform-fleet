@@ -74,18 +74,10 @@ public class DeviceSessionManager {
     }
 
     public static void printSessions() {
-        System.out.println("========== ACTIVE SESSIONS ==========");
-        if (sessions.isEmpty()) {
-            System.out.println("No active sessions");
-        }
+        System.out.println("[SESSION] activeCount=" + sessions.size());
+    }
 
-        sessions.forEach((imei, session) -> {
-            System.out.println("IMEI=" + imei
-                    + " channel=" + session.getChannelType()
-                    + " protocol=" + session.getProtocolType()
-                    + " lastSeenMs=" + session.getLastSeenMillis());
-        });
-
-        System.out.println("=====================================");
+    public static void remove(String imei) {
+        if (imei != null) sessions.remove(imei);
     }
 }

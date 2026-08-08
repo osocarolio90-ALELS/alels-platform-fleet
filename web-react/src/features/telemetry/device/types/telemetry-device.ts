@@ -8,4 +8,7 @@ export type TelemetryDeviceRow = {
   company:string; lastUpdated?:string|null;
 };
 export type TelemetryDeviceGroup = { id:number; name:string; deviceCount:number; deleted:boolean };
-export type TelemetryDeviceOverview = { groups:TelemetryDeviceGroup[]; wastedGroups:TelemetryDeviceGroup[]; devices:TelemetryDeviceRow[] };
+export type TelemetryDeviceOverview = {
+  groups:TelemetryDeviceGroup[]; wastedGroups:TelemetryDeviceGroup[]; devices:TelemetryDeviceRow[];
+  totalDevices:number; filteredDevices:number; ungroupedDevices:number; nextCursor?:number|null; hasMore:boolean;
+};

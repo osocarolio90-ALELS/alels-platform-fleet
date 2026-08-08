@@ -42,19 +42,14 @@ public class DeviceSessionRegistry {
                     System.currentTimeMillis()
             );
 
-            System.out.println("[NETTY SESSION] imei=" + imei
-                    + " channel=" + channel
-                    + " protocol=" + protocol
-                    + " active=" + state.getActiveNetwork()
-                    + " remote=" + remoteAddress);
-
             return state;
         });
     }
 
     public static void markChannelClosed(
             String imei,
-            ChannelType channel
+            ChannelType channel,
+            NettyCommandWriter writer
     ) {
         if (imei == null || imei.isBlank() || channel == null) {
             return;
@@ -67,11 +62,12 @@ public class DeviceSessionRegistry {
             return;
         }
 
-        state.markClosed(channel);
+        state.markClosed(channel, writer);
 
-        System.out.println("[NETTY SESSION] channel closed imei=" + imei
-                + " channel=" + channel
-                + " active=" + state.getActiveNetwork());
+        if (state.getActiveNetwork() == ChannelType.UNKNOWN) {
+            sessions.remove(imei, state);
+        }
+
     }
 
     public static DeviceSessionState getSession(String imei) {
@@ -171,13 +167,18 @@ public class DeviceSessionRegistry {
             selectActiveNetwork();
         }
 
-        private synchronized void markClosed(ChannelType channel) {
+        private synchronized void markClosed(ChannelType channel, NettyCommandWriter writer) {
             ChannelSession target =
                     channel == ChannelType.GSM
                             ? gsm
                             : wifi;
 
+            if (target.writer != writer) {
+                return;
+            }
+
             target.connected = false;
+            target.writer = null;
 
             selectActiveNetwork();
         }

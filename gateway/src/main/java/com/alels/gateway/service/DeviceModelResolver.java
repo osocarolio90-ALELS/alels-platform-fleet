@@ -109,4 +109,10 @@ public class DeviceModelResolver {
                 "[DEVICE MODEL RESOLVER] cache cleared"
         );
     }
+
+    public static void invalidate(String imei) {
+        if (imei != null) {
+            cache.remove(imei.trim());
+        }
+    }
 }

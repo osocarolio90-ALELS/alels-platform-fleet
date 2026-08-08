@@ -16,6 +16,8 @@ const tones = {
 export function Badge({ className, tone = "default", ...props }: BadgeProps) {
   return (
     <span
+      data-ui-badge
+      data-tone={tone}
       className={cn(
         "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium",
         tones[tone],

@@ -5,6 +5,13 @@ import { Table, Td, Th } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
+import { cn } from "@/lib/utils";
+import {
+  DATA_TABLE_UI_STANDARD,
+  stickyColumnClassName,
+  stickyColumnStyle,
+  stickySelectionStyle
+} from "./data-table-ui-standard";
 import {
   DataTableBulkAction,
   DataTableColumn,
@@ -23,6 +30,15 @@ type DataTableProps<T> = {
   rowClassName?: (row: T) => string | undefined;
   emptyMessage?: string;
   searchPlaceholder?: string;
+  remote?: {
+    page: number;
+    pageSize: number;
+    totalRows: number;
+    search: string;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (pageSize: number) => void;
+    onSearchChange: (search: string) => void;
+  };
 };
 
 export function DataTable<T>({
@@ -35,7 +51,8 @@ export function DataTable<T>({
   isRowSelectable,
   rowClassName,
   emptyMessage = "No data found.",
-  searchPlaceholder
+  searchPlaceholder,
+  remote
 }: DataTableProps<T>) {
   const selectionEnabled = selectable === true || bulkActions.length > 0;
   const [search, setSearch] = useState("");
@@ -49,6 +66,9 @@ export function DataTable<T>({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
+  const effectiveSearch = remote?.search ?? search;
+  const effectivePage = remote?.page ?? page;
+  const effectivePageSize = remote?.pageSize ?? pageSize;
 
   const activeColumns = useMemo(
     () => columns.filter((column) => visibleColumns[column.key] !== false),
@@ -56,7 +76,7 @@ export function DataTable<T>({
   );
 
   const filteredData = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
+    const keyword = remote ? "" : search.trim().toLowerCase();
 
     return data.filter((row) => {
       const searchableText = columns
@@ -77,12 +97,13 @@ export function DataTable<T>({
 
       return matchSearch && matchFilters;
     });
-  }, [data, columns, search, filters]);
+  }, [data, columns, search, filters, remote]);
 
   const pagedData = useMemo(() => {
+    if (remote) return filteredData;
     const start = (page - 1) * pageSize;
     return filteredData.slice(start, start + pageSize);
-  }, [filteredData, page, pageSize]);
+  }, [filteredData, page, pageSize, remote]);
 
   const selectablePagedRows = useMemo(
     () => pagedData.filter((row) => isSelectable(row, isRowSelectable)),
@@ -118,7 +139,8 @@ export function DataTable<T>({
   }
 
   function clearFilters() {
-    setSearch("");
+    if (remote) remote.onSearchChange("");
+    else setSearch("");
     setFilters({});
     setPage(1);
   }
@@ -202,9 +224,9 @@ export function DataTable<T>({
       ) : null}
 
       <DataTableToolbar
-        search={search}
+        search={effectiveSearch}
         searchPlaceholder={searchPlaceholder}
-        onSearchChange={setSearch}
+        onSearchChange={remote?.onSearchChange ?? setSearch}
         showFilters={showFilters}
         onToggleFilters={() => setShowFilters((value) => !value)}
         showColumns={showColumns}
@@ -212,8 +234,8 @@ export function DataTable<T>({
         columns={columns}
         visibleColumns={visibleColumns}
         onVisibleColumnsChange={setVisibleColumns}
-        pageSize={pageSize}
-        onPageSizeChange={setPageSize}
+        pageSize={effectivePageSize}
+        onPageSizeChange={remote?.onPageSizeChange ?? setPageSize}
         onClearFilters={clearFilters}
       />
 
@@ -221,7 +243,10 @@ export function DataTable<T>({
         <thead>
           <tr>
             {selectionEnabled ? (
-              <Th className="w-10">
+              <Th
+                style={stickySelectionStyle()}
+                className={DATA_TABLE_UI_STANDARD.stickySelectionHeaderClassName}
+              >
                 <input
                   type="checkbox"
                   aria-label="Select all rows on this page"
@@ -234,8 +259,12 @@ export function DataTable<T>({
                 />
               </Th>
             ) : null}
-            {activeColumns.map((column) => (
-              <Th key={column.key} className={column.headerClassName}>
+            {activeColumns.map((column, columnIndex) => (
+              <Th
+                key={column.key}
+                style={stickyColumnStyle(columnIndex, selectionEnabled)}
+                className={cn(stickyColumnClassName(columnIndex, "header"), column.headerClassName)}
+              >
                 {column.label}
               </Th>
             ))}
@@ -244,9 +273,18 @@ export function DataTable<T>({
 
           {showFilters ? (
             <tr>
-              {selectionEnabled ? <Th /> : null}
-              {activeColumns.map((column) => (
-                <Th key={column.key}>
+              {selectionEnabled ? (
+                <Th
+                  style={stickySelectionStyle()}
+                  className={DATA_TABLE_UI_STANDARD.stickySelectionHeaderClassName}
+                />
+              ) : null}
+              {activeColumns.map((column, columnIndex) => (
+                <Th
+                  key={column.key}
+                  style={stickyColumnStyle(columnIndex, selectionEnabled)}
+                  className={cn(stickyColumnClassName(columnIndex, "header"))}
+                >
                   {column.filterable === false ? null : (
                     <input
                       value={filters[column.key] || ""}
@@ -276,9 +314,12 @@ export function DataTable<T>({
               const key = toKey(rowKey(row));
               const rowSelectable = isSelectable(row, isRowSelectable);
               return (
-                <tr key={key} className={rowClassName?.(row)}>
+                <tr key={key} className={cn("group", rowClassName?.(row))}>
                   {selectionEnabled ? (
-                    <Td>
+                    <Td
+                      style={stickySelectionStyle()}
+                      className={DATA_TABLE_UI_STANDARD.stickySelectionCellClassName}
+                    >
                       <input
                         type="checkbox"
                         aria-label="Select row"
@@ -288,8 +329,12 @@ export function DataTable<T>({
                       />
                     </Td>
                   ) : null}
-                  {activeColumns.map((column) => (
-                    <Td key={column.key} className={column.className}>
+                  {activeColumns.map((column, columnIndex) => (
+                    <Td
+                      key={column.key}
+                      style={stickyColumnStyle(columnIndex, selectionEnabled)}
+                      className={cn(stickyColumnClassName(columnIndex, "body"), column.className)}
+                    >
                       {column.render ? column.render(row) : getColumnValue(row, column)}
                     </Td>
                   ))}
@@ -302,11 +347,11 @@ export function DataTable<T>({
       </Table>
 
       <DataTablePagination
-        page={page}
-        pageSize={pageSize}
-        totalRows={data.length}
-        filteredRows={filteredData.length}
-        onPageChange={setPage}
+        page={effectivePage}
+        pageSize={effectivePageSize}
+        totalRows={remote?.totalRows ?? data.length}
+        filteredRows={remote?.totalRows ?? filteredData.length}
+        onPageChange={remote?.onPageChange ?? setPage}
       />
     </div>
   );

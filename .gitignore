@@ -19,6 +19,7 @@ logs/**/*.log
 # Environment
 .env
 application-prod.properties
+LOCAL_CREDENTIALS.md
 
 # OS
 .DS_Store

@@ -3,6 +3,7 @@ package com.alels.backend.serverops.auth.service;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.alels.backend.serverops.auth.dto.LoginRequest;
@@ -24,6 +25,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    @Transactional
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
         String email = request.email() == null ? "" : request.email().trim().toLowerCase();
         String password = request.password() == null ? "" : request.password();
@@ -45,17 +47,33 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
         }
 
+        long sessionVersion=authRepository.claimSingleSession(user.id()).orElseThrow(()->{
+            authRepository.insertLoginEvent(user.id(),user.companyId(),email,false,ipAddress,userAgent,"SESSION_ALREADY_ACTIVE");
+            return new ResponseStatusException(HttpStatus.CONFLICT,"User sedang aktif di browser atau perangkat lain. Logout atau tutup browser aktif, lalu tunggu 5 detik.");
+        });
         authRepository.updateLastLoginAt(user.id());
         authRepository.activateProvisionCompanyOnFirstLogin(user.companyId());
         authRepository.insertLoginEvent(user.id(), user.companyId(), email, true, ipAddress, userAgent, null);
 
-        String token = jwtService.generateToken(user.id(), user.companyId(), user.role(), user.email(), user.username(), user.fullName());
+        String token = jwtService.generateToken(user.id(), user.companyId(), user.role(), user.email(), user.username(), user.fullName(), sessionVersion);
         return new LoginResponse(
                 true,
                 user.mustChangePassword() ? "Login success. Password change is required." : "Login success",
                 token,
                 new UserSession(user.id(), user.companyId(), user.companyName(), user.username(), user.fullName(), user.email(), user.role(), user.status(), user.profilePhotoUrl())
         );
+    }
+
+    public void logout(Long userId, Long companyId, String email, String ipAddress, String userAgent) {
+        if (userId == null) return;
+        authRepository.revokeSessions(userId);
+        authRepository.insertLogoutEvent(userId, companyId, email, ipAddress, userAgent);
+    }
+
+    public void heartbeat(Long userId,long sessionVersion) {
+        if (userId==null||!authRepository.touchSession(userId,sessionVersion)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"Session is no longer active");
+        }
     }
 
     private boolean isPasswordValid(String rawPassword, String storedHash) {

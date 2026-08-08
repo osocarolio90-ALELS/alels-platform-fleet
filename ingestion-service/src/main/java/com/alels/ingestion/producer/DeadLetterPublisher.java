@@ -51,9 +51,9 @@ public class DeadLetterPublisher implements AutoCloseable {
             dlq.put("payload", payload);
             dlq.put("createdAt", java.time.Instant.now().toString());
 
-            producer.send(new ProducerRecord<>(topic, key, mapper.writeValueAsString(dlq)));
+            producer.send(new ProducerRecord<>(topic, key, mapper.writeValueAsString(dlq))).get();
         } catch (Exception e) {
-            System.err.println("[DLQ PUBLISH ERROR] topic=" + topic + " error=" + e.getMessage());
+            throw new IllegalStateException("DLQ durable publish failed for topic=" + topic, e);
         }
     }
 

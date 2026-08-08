@@ -62,6 +62,18 @@ public class IngestionConfig {
         return Integer.parseInt(get("ingestion.max.retries", "INGESTION_MAX_RETRIES", "3"));
     }
 
+    public long retryBackoffMillis() {
+        return Long.parseLong(get("ingestion.retry.backoff.ms", "INGESTION_RETRY_BACKOFF_MS", "250"));
+    }
+
+    public long lagSnapshotIntervalMillis() {
+        return Long.parseLong(get(
+                "ingestion.lag.snapshot.interval.ms",
+                "INGESTION_LAG_SNAPSHOT_INTERVAL_MS",
+                "30000"
+        ));
+    }
+
     public int dlqReplayMaxRecords() {
         return Integer.parseInt(get("ingestion.dlq.replay.max.records", "INGESTION_DLQ_REPLAY_MAX_RECORDS", "1000"));
     }
@@ -71,15 +83,15 @@ public class IngestionConfig {
     }
 
     public String databaseUrl() {
-        return get("database.url", "DATABASE_URL", "jdbc:postgresql://localhost:5432/alels_db");
+        return requiredEnvironment("ALELS_DB_URL");
     }
 
     public String databaseUser() {
-        return get("database.user", "DATABASE_USER", "alels");
+        return requiredEnvironment("ALELS_DB_USER");
     }
 
     public String databasePassword() {
-        return get("database.password", "DATABASE_PASSWORD", "change_me");
+        return requiredEnvironment("ALELS_DB_PASSWORD");
     }
 
     public int databaseMaximumPoolSize() {
@@ -106,5 +118,13 @@ public class IngestionConfig {
         }
 
         return defaultValue;
+    }
+
+    private String requiredEnvironment(String key) {
+        String value = System.getenv(key);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(key + " must be configured");
+        }
+        return value.trim();
     }
 }

@@ -79,6 +79,23 @@ foreach ($document in $requiredDocuments) {
 Test-RequiredPath '.gitignore' 'file'
 Test-RequiredPath '.env.example' 'file'
 
+$seedPath = Join-Path $root 'database/seed.sql'
+if (Test-Path -LiteralPath $seedPath -PathType Leaf) {
+    $seed = Get-Content -LiteralPath $seedPath -Raw
+    if ($seed -match '(?is)ON\s+CONFLICT.*DO\s+UPDATE\s+SET.*password_hash\s*=\s*EXCLUDED\.password_hash') {
+        Write-Result FAIL 'database/seed.sql may overwrite an existing password hash.'
+    } else {
+        Write-Result PASS 'Seed does not overwrite existing password hashes.'
+    }
+}
+
+$trackedText = @(& git -C $root grep -n -I -E 'Alels2026!|Alels@2026!|alels1234567' -- ':!docs/AUDIT_ALELS_PLATFORM_1M_2026-08-08.md' ':!tools/maintenance/validate-repository.ps1' 2>$null)
+if ($trackedText.Count -gt 0) {
+    foreach ($match in $trackedText) { Write-Result FAIL ("Known password found in tracked source: {0}" -f $match) }
+} else {
+    Write-Result PASS 'No known historical passwords found in tracked source.'
+}
+
 $migrationRoot = Join-Path $root 'database/migrations'
 $migrationFiles = @(Get-ChildItem -LiteralPath $migrationRoot -File -Filter '*.sql' -ErrorAction SilentlyContinue)
 $validMigrations = @()

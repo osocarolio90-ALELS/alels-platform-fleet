@@ -16,8 +16,8 @@ export function LoginPage() {
   const setSession = useAuthStore((state) => state.setSession);
   const theme = useThemeStore((state) => state.theme);
   const toggleTheme = useThemeStore((state) => state.toggleTheme);
-  const [email, setEmail] = useState("osocarolio90@gmail.com");
-  const [password, setPassword] = useState("Alels@2026!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(storedRememberMe);
 

@@ -4,8 +4,6 @@ import com.alels.ingestion.config.IngestionConfig;
 import com.alels.ingestion.consumer.TelemetryConsumerService;
 import com.alels.ingestion.repository.Database;
 import com.alels.ingestion.repository.TelemetryRepository;
-import com.alels.ingestion.service.DuplicateTelemetryDetector;
-import com.alels.ingestion.service.LatestTelemetryStore;
 import com.alels.ingestion.service.TelemetryIngestionService;
 
 public class IngestionServiceApplication {
@@ -21,11 +19,7 @@ public class IngestionServiceApplication {
                 new TelemetryRepository(database);
 
         TelemetryIngestionService ingestionService =
-                new TelemetryIngestionService(
-                        telemetryRepository,
-                        new LatestTelemetryStore(),
-                        new DuplicateTelemetryDetector(telemetryRepository)
-                );
+                new TelemetryIngestionService(telemetryRepository);
 
         Runtime.getRuntime()
                 .addShutdownHook(

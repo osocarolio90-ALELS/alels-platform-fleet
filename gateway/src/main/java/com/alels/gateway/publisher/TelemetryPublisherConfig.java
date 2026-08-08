@@ -18,7 +18,7 @@ public class TelemetryPublisherConfig {
         return get(
                 "telemetry.publisher.mode",
                 "TELEMETRY_PUBLISHER_MODE",
-                "direct"
+                "kafka"
         );
     }
 

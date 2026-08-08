@@ -3,19 +3,26 @@ package com.alels.gateway.publisher;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.alels.gateway.model.TelemetryData;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class KafkaTelemetryPublisher implements TelemetryPublisher {
+    private static final Logger log=LoggerFactory.getLogger(KafkaTelemetryPublisher.class);
 
     private static final ObjectMapper mapper =
             new ObjectMapper();
+    private static final AtomicLong NEXT_ERROR_LOG_MS = new AtomicLong();
 
     private final KafkaProducer<String, String> producer;
     private final String topic;
@@ -43,6 +50,10 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
         props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4");
         props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, "120000");
         props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, "30000");
+        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG,
+                System.getenv().getOrDefault("ALELS_KAFKA_MAX_BLOCK_MS", "0"));
+        props.put(ProducerConfig.BUFFER_MEMORY_CONFIG,
+                System.getenv().getOrDefault("ALELS_KAFKA_BUFFER_MEMORY_BYTES", "67108864"));
 
         this.producer =
                 new KafkaProducer<>(props);
@@ -58,7 +69,7 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
     }
 
     @Override
-    public Long publish(
+    public CompletionStage<Long> publish(
             TelemetryData telemetryData,
             String protocol,
             String channel,
@@ -66,9 +77,10 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
             String logLabel
     ) {
         if (telemetryData == null) {
-            return null;
+            return CompletableFuture.failedFuture(new IllegalArgumentException("telemetryData is required"));
         }
 
+        CompletableFuture<Long> result = new CompletableFuture<>();
         try {
             String payload =
                     mapper.writeValueAsString(
@@ -89,40 +101,29 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
                     ),
                     (metadata, exception) -> {
                         if (exception != null) {
-                            System.err.println(
-                                    "[KAFKA TELEMETRY ERROR] imei="
-                                            + telemetryData.getImei()
-                                            + " topic="
-                                            + topic
-                                            + " error="
-                                            + exception.getMessage()
-                            );
+                            logPublishError(exception);
+                            result.completeExceptionally(exception);
                             return;
                         }
 
-                        System.out.println(
-                                "[KAFKA TELEMETRY] "
-                                        + logLabel
-                                        + " topic="
-                                        + metadata.topic()
-                                        + " partition="
-                                        + metadata.partition()
-                                        + " offset="
-                                        + metadata.offset()
-                        );
+                        result.complete(metadata.offset());
                     }
             );
 
         } catch (Exception e) {
-            System.err.println(
-                    "[KAFKA TELEMETRY ERROR] imei="
-                            + telemetryData.getImei()
-                            + " error="
-                            + e.getMessage()
-            );
+            logPublishError(e);
+            result.completeExceptionally(e);
         }
 
-        return null;
+        return result;
+    }
+
+    private void logPublishError(Throwable error) {
+        long now = System.currentTimeMillis();
+        long next = NEXT_ERROR_LOG_MS.get();
+        if (now >= next && NEXT_ERROR_LOG_MS.compareAndSet(next, now + 10_000L)) {
+            log.error("event=kafka_telemetry_error topic={} error={}",topic,error.getClass().getSimpleName());
+        }
     }
 
     private Map<String, Object> toPayload(
