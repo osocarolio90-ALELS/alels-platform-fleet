@@ -2,6 +2,7 @@ package com.alels.ingestion.config;
 
 import java.io.InputStream;
 import java.util.Properties;
+import com.alels.ingestion.cell.config.IngestionCellConfig;
 
 public class IngestionConfig {
 
@@ -39,15 +40,21 @@ public class IngestionConfig {
     }
 
     public String telemetryRawTopic() {
-        return get("kafka.topic.telemetry.raw", "KAFKA_TOPIC_TELEMETRY_RAW", "telemetry.raw");
+        return IngestionCellConfig.current().topic(
+                get("kafka.topic.telemetry.raw", "KAFKA_TOPIC_TELEMETRY_RAW", "telemetry.raw")
+        );
     }
 
     public String telemetryDlqTopic() {
-        return get("kafka.topic.telemetry.dlq", "KAFKA_TOPIC_TELEMETRY_DLQ", "telemetry.dead-letter");
+        return IngestionCellConfig.current().topic(
+                get("kafka.topic.telemetry.dlq", "KAFKA_TOPIC_TELEMETRY_DLQ", "telemetry.dead-letter")
+        );
     }
 
     public String consumerGroupId() {
-        return get("kafka.consumer.group.id", "KAFKA_CONSUMER_GROUP_ID", "alels-ingestion-service");
+        return IngestionCellConfig.current().consumerGroup(
+                get("kafka.consumer.group.id", "KAFKA_CONSUMER_GROUP_ID", "alels-ingestion-service")
+        );
     }
 
     public long pollMillis() {

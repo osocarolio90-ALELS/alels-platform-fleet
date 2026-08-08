@@ -53,6 +53,9 @@ $requiredFolders = @(
     'tools/capacity/workloads',
     'tools/maintenance',
     'deploy/ha',
+    'deploy/cells',
+    'deploy/archive',
+    'deploy/kubernetes/autoscaling',
     'web-react'
 )
 
@@ -71,7 +74,9 @@ $requiredDocuments = @(
     'docs/API_COMPATIBILITY_RULES.md',
     'docs/TELEMETRY_INTEGRITY_RULES.md',
     'docs/DEFINITION_OF_DONE.md',
-    'docs/P2_HA_CAPACITY_CERTIFICATION.md'
+    'docs/P2_HA_CAPACITY_CERTIFICATION.md',
+    'docs/P3_CELL_ISOLATION_STANDARD.md',
+    'docs/P0_P3_COMPLETION_STATUS.md'
 )
 
 foreach ($folder in $requiredFolders) {
@@ -84,10 +89,42 @@ Test-RequiredPath '.gitignore' 'file'
 Test-RequiredPath '.env.example' 'file'
 Test-RequiredPath 'tools/capacity/GatewayCapacityProbe.java' 'file'
 Test-RequiredPath 'tools/capacity/check-telemetry-reconciliation.sql' 'file'
+Test-RequiredPath 'tools/capacity/initialize-cell-topics.ps1' 'file'
 Test-RequiredPath 'tools/database/check-p2-ha.sql' 'file'
 Test-RequiredPath 'deploy/ha/haproxy.cfg' 'file'
 Test-RequiredPath 'deploy/ha/docker-compose.capacity-lab.yml' 'file'
 Test-RequiredPath 'deploy/ha/prometheus-rules.yml' 'file'
+Test-RequiredPath 'deploy/cells/cell-0.env.example' 'file'
+Test-RequiredPath 'deploy/cells/cell-1.env.example' 'file'
+Test-RequiredPath 'deploy/archive/telemetry-cold-storage-connector.properties.example' 'file'
+Test-RequiredPath 'deploy/kubernetes/autoscaling/gateway-hpa.yaml' 'file'
+Test-RequiredPath 'deploy/kubernetes/autoscaling/ingestion-hpa.yaml' 'file'
+
+$alertFile = Join-Path $root 'deploy/ha/prometheus-rules.yml'
+if (Test-Path -LiteralPath $alertFile -PathType Leaf) {
+    $alertNames = @(Select-String -LiteralPath $alertFile -Pattern '^\s*- alert:\s+([A-Za-z0-9_-]+)\s*$' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value })
+    $duplicateAlerts = @($alertNames | Group-Object | Where-Object Count -gt 1)
+    if ($duplicateAlerts.Count -gt 0) {
+        Write-Result FAIL ("Duplicate Prometheus alerts: {0}" -f (($duplicateAlerts.Name) -join ', '))
+    } else {
+        Write-Result PASS ("Prometheus alert names are unique ({0} alerts)." -f $alertNames.Count)
+    }
+}
+
+$cellExamples = @(Get-ChildItem -LiteralPath (Join-Path $root 'deploy/cells') -File -Filter 'cell-*.env.example')
+foreach ($cellExample in $cellExamples) {
+    $cellText = Get-Content -LiteralPath $cellExample.FullName -Raw
+    $requiredCellKeys = @('ALELS_CELL_ID', 'ALELS_CELL_INDEX', 'ALELS_CELL_COUNT',
+        'ALELS_CELL_ENFORCE=true', 'ALELS_KAFKA_TOPIC_PER_CELL=true',
+        'ALELS_GATEWAY_REPLICA_COUNT=2', 'ALELS_SESSION_OWNER_REDIS_URI=rediss://')
+    $missingCellKeys = @($requiredCellKeys | Where-Object { $cellText -notmatch [regex]::Escape($_) })
+    if ($missingCellKeys.Count -gt 0) {
+        Write-Result FAIL ("Invalid cell environment example: {0}" -f $cellExample.Name)
+    } else {
+        Write-Result PASS ("Cell environment example is valid: {0}" -f $cellExample.Name)
+    }
+}
 
 $workloadFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'tools/capacity/workloads') -File -Filter '*.json')
 foreach ($workloadFile in $workloadFiles) {

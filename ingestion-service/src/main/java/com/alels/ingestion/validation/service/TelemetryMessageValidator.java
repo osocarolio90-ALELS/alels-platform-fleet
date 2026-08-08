@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import com.alels.ingestion.cell.config.IngestionCellConfig;
 
 public final class TelemetryMessageValidator {
 
@@ -21,6 +22,9 @@ public final class TelemetryMessageValidator {
         }
         if (blank(message.protocol)) return "protocol is required";
         if (blank(message.channel)) return "channel is required";
+        if (!IngestionCellConfig.current().accepts(message.cellId)) {
+            return "message cell does not match ingestion cell";
+        }
         if (message.latitude != null && (message.latitude < -90 || message.latitude > 90)) {
             return "latitude is outside -90..90";
         }

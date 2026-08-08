@@ -3,6 +3,7 @@ package com.alels.gateway;
 import com.alels.gateway.admission.service.DeviceAdmissionRegistry;
 import com.alels.gateway.config.DatabaseConfig;
 import com.alels.gateway.netty.NettyTcpServer;
+import com.alels.gateway.netty.NettyDeviceChannelHandler;
 import com.alels.gateway.observability.service.GatewayHealthServer;
 import com.alels.gateway.observability.service.GatewayRuntimeMetrics;
 import com.alels.gateway.poller.PendingCommandPoller;
@@ -25,9 +26,10 @@ public class Main {
         DeviceAdmissionRegistry.start();
         ProtocolRegistryResolver.preload();
 
+        PendingCommandPoller commandPoller = new PendingCommandPoller();
         Thread commandPollerThread =
                 new Thread(
-                        new PendingCommandPoller()
+                        commandPoller
                 );
 
         commandPollerThread.setName(
@@ -37,6 +39,10 @@ public class Main {
         commandPollerThread.setDaemon(true);
 
         commandPollerThread.start();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            commandPoller.stop();
+            NettyDeviceChannelHandler.shutdownSessionOwnership();
+        }, "gateway-services-stop"));
 
         System.out.println(
                 "[STARTUP] PendingCommandPoller started"

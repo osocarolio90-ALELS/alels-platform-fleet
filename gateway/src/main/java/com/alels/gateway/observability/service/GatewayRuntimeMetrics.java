@@ -18,6 +18,8 @@ public final class GatewayRuntimeMetrics {
     private final AtomicLong pendingPublishes = new AtomicLong();
     private final AtomicLong successfulPublishes = new AtomicLong();
     private final AtomicLong failedPublishes = new AtomicLong();
+    private final AtomicLong wrongCellRejections = new AtomicLong();
+    private final AtomicLong sessionOwnershipRejections = new AtomicLong();
 
     private GatewayRuntimeMetrics() {
     }
@@ -69,6 +71,14 @@ public final class GatewayRuntimeMetrics {
         }
     }
 
+    public void wrongCellRejected() {
+        wrongCellRejections.incrementAndGet();
+    }
+
+    public void sessionOwnershipRejected() {
+        sessionOwnershipRejections.incrementAndGet();
+    }
+
     public void markAccepting() {
         accepting.set(true);
     }
@@ -111,12 +121,17 @@ public final class GatewayRuntimeMetrics {
                 alels_gateway_connections_limit %d
                 # TYPE alels_gateway_publishes_pending_limit gauge
                 alels_gateway_publishes_pending_limit %d
+                # TYPE alels_gateway_wrong_cell_rejections_total counter
+                alels_gateway_wrong_cell_rejections_total %d
+                # TYPE alels_gateway_session_ownership_rejections_total counter
+                alels_gateway_session_ownership_rejections_total %d
                 """.formatted(
                 isReady() ? 1 : 0,
                 activeConnections.get(), acceptedConnections.get(), rejectedConnections.get(),
                 receivedFrames.get(), receivedBytes.get(), pendingPublishes.get(),
                 successfulPublishes.get(), failedPublishes.get(),
-                maxConnections, maxPendingPublishes
+                maxConnections, maxPendingPublishes, wrongCellRejections.get(),
+                sessionOwnershipRejections.get()
         );
     }
 

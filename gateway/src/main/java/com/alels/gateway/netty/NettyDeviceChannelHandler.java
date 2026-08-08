@@ -18,6 +18,7 @@ import com.alels.gateway.server.ChannelType;
 import com.alels.gateway.service.ProtocolRegistryResolver;
 import com.alels.gateway.util.HexUtil;
 import com.alels.gateway.observability.service.GatewayRuntimeMetrics;
+import com.alels.gateway.cell.config.CellRoutingConfig;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -28,6 +29,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.UUID;
+import com.alels.gateway.session.ownership.SessionOwnershipConfig;
+import com.alels.gateway.session.ownership.SessionOwnershipService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +50,10 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
     private static final TeltonikaCodec8EParser CODEC8E_PARSER = new TeltonikaCodec8EParser();
     private static final TeltonikaCodec12ResponseParser CODEC12_PARSER =
             new TeltonikaCodec12ResponseParser();
+    private static final SessionOwnershipService SESSION_OWNERSHIP =
+            new SessionOwnershipService(SessionOwnershipConfig.fromEnvironment());
 
+    private final String sessionFencingToken = UUID.randomUUID().toString();
     private String boundImei;
     private String sessionImei;
     private ChannelType sessionChannel;
@@ -79,6 +86,12 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
         DeviceSessionRegistry.markChannelClosed(sessionImei, sessionChannel, sessionWriter);
+        SESSION_OWNERSHIP.release(sessionImei, sessionFencingToken)
+                .exceptionally(error -> {
+                    log.warn("event=session_owner_release_failed imei={} error={}",
+                            sessionImei, error.getClass().getSimpleName());
+                    return false;
+                });
     }
 
     @Override
@@ -98,37 +111,40 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
 
     private void handleAlelsJson(ChannelHandlerContext ctx, byte[] packet) throws Exception {
         ParserResult result = ALELS_PARSER.parse(packet);
-        if (!result.isValid() || !admit(result.getImei())) {
+        if (!result.isValid()) {
             return;
         }
-
-        bindSession(ctx, result.getImei(), ChannelType.WIFI, ProtocolType.ALELS_JSON);
-        String json = new String(packet, StandardCharsets.UTF_8).trim();
-        boolean response = json.contains("\"T\":\"resp\"");
-        boolean control = response || json.contains("\"T\":\"id\"") || isAlelsHeartbeat(packet);
-
-        if (response) {
-            sendAlelsAck(ctx);
-            CommandResponsePersistenceService.persistAlels(packet.clone());
-            return;
-        }
-        if (control) {
-            sendAlelsAck(ctx);
-            return;
-        }
-
-        TelemetryData telemetry = AlelsJsonTelemetryNormalizer.normalize(packet);
-        if (telemetry == null) {
-            return;
-        }
-        publish(telemetry, ProtocolType.ALELS_JSON, ChannelType.WIFI, "ALELS_JSON")
-                .whenComplete((ignored, error) -> {
-                    if (error == null) {
-                        sendAlelsAck(ctx);
-                    } else {
-                        logPublishFailure(result.getImei(), error);
-                    }
-                });
+        withOwnership(ctx, result.getImei(), () -> {
+            bindSession(ctx, result.getImei(), ChannelType.WIFI, ProtocolType.ALELS_JSON);
+            String json = new String(packet, StandardCharsets.UTF_8).trim();
+            boolean response = json.contains("\"T\":\"resp\"");
+            boolean control = response || json.contains("\"T\":\"id\"") || isAlelsHeartbeat(packet);
+            if (response) {
+                sendAlelsAck(ctx);
+                CommandResponsePersistenceService.persistAlels(packet.clone());
+                return;
+            }
+            if (control) {
+                sendAlelsAck(ctx);
+                return;
+            }
+            TelemetryData telemetry;
+            try {
+                telemetry = AlelsJsonTelemetryNormalizer.normalize(packet);
+            } catch (Exception error) {
+                log.warn("event=telemetry_normalization_failed imei={} error={}",
+                        result.getImei(), error.getClass().getSimpleName());
+                return;
+            }
+            if (telemetry == null) {
+                return;
+            }
+            publish(telemetry, ProtocolType.ALELS_JSON, ChannelType.WIFI, "ALELS_JSON")
+                    .whenComplete((ignored, error) -> {
+                        if (error == null) sendAlelsAck(ctx);
+                        else logPublishFailure(result.getImei(), error);
+                    });
+        });
     }
 
     private void handleAlelsHeartbeat(ChannelHandlerContext ctx, byte[] packet) {
@@ -140,23 +156,25 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         if (imei == null) {
             imei = sessionImei;
         }
-        if (!admit(imei)) {
-            return;
-        }
-        bindSession(ctx, imei, ChannelType.WIFI, ProtocolType.ALELS_JSON);
-        sendAlelsAck(ctx);
+        String heartbeatImei = imei;
+        withOwnership(ctx, heartbeatImei, () -> {
+            bindSession(ctx, heartbeatImei, ChannelType.WIFI, ProtocolType.ALELS_JSON);
+            sendAlelsAck(ctx);
+        });
     }
 
     private void handleTeltonikaImei(ChannelHandlerContext ctx, byte[] packet) {
         ParserResult result = IMEI_PARSER.parse(packet);
-        if (!result.isValid() || !admit(result.getImei())) {
+        if (!result.isValid()) {
             ctx.writeAndFlush(Unpooled.wrappedBuffer(new byte[]{0x00}));
             return;
         }
-        boundImei = result.getImei();
-        bindSession(ctx, boundImei, ChannelType.GSM, ProtocolType.TELTONIKA_IMEI);
-        ctx.writeAndFlush(Unpooled.wrappedBuffer(new byte[]{0x01}));
-        lastTeltonikaCommandName = "getinfo";
+        withOwnership(ctx, result.getImei(), () -> {
+            boundImei = result.getImei();
+            bindSession(ctx, boundImei, ChannelType.GSM, ProtocolType.TELTONIKA_IMEI);
+            ctx.writeAndFlush(Unpooled.wrappedBuffer(new byte[]{0x01}));
+            lastTeltonikaCommandName = "getinfo";
+        });
     }
 
     private void handleTeltonikaCodec8(ChannelHandlerContext ctx, byte[] packet) {
@@ -175,27 +193,26 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
             ProtocolType protocol,
             String parserCode
     ) {
-        if (!result.isValid() || !admit(boundImei)) {
+        if (!result.isValid()) {
             sendTeltonikaAck(ctx, 0);
             return;
         }
-
-        bindSession(ctx, boundImei, ChannelType.GSM, protocol);
-        List<CompletableFuture<Long>> futures = new ArrayList<>();
-        for (TelemetryData telemetry : result.getTelemetryList()) {
-            telemetry.setImei(boundImei);
-            futures.add(publish(telemetry, protocol, ChannelType.GSM, parserCode));
-        }
-
-        CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
-                .whenComplete((ignored, error) -> {
-                    if (error == null) {
-                        sendTeltonikaAck(ctx, result.getRecordCount());
-                    } else {
-                        sendTeltonikaAck(ctx, 0);
-                        logPublishFailure(boundImei, error);
-                    }
-                });
+        withOwnership(ctx, boundImei, () -> {
+            bindSession(ctx, boundImei, ChannelType.GSM, protocol);
+            List<CompletableFuture<Long>> futures = new ArrayList<>();
+            for (TelemetryData telemetry : result.getTelemetryList()) {
+                telemetry.setImei(boundImei);
+                futures.add(publish(telemetry, protocol, ChannelType.GSM, parserCode));
+            }
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+                    .whenComplete((ignored, error) -> {
+                        if (error == null) sendTeltonikaAck(ctx, result.getRecordCount());
+                        else {
+                            sendTeltonikaAck(ctx, 0);
+                            logPublishFailure(boundImei, error);
+                        }
+                    });
+        });
     }
 
     private void handleTeltonikaCodec12Response(byte[] packet) {
@@ -233,7 +250,42 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
     }
 
     private boolean admit(String imei) {
+        if (!CellRoutingConfig.current().owns(imei)) {
+            METRICS.wrongCellRejected();
+            return false;
+        }
         return DeviceAdmissionRegistry.isReceiveAllowed(imei);
+    }
+
+    private void withOwnership(ChannelHandlerContext ctx, String imei, Runnable action) {
+        if (!admit(imei)) {
+            ctx.close();
+            return;
+        }
+        ctx.channel().config().setAutoRead(false);
+        SESSION_OWNERSHIP.acquireOrRenew(imei, sessionFencingToken)
+                .whenComplete((owned, error) -> ctx.executor().execute(() -> {
+                    try {
+                        if (error != null || !Boolean.TRUE.equals(owned)) {
+                            METRICS.sessionOwnershipRejected();
+                            log.warn("event=session_owner_rejected imei={} error={}", imei,
+                                    error == null ? "owned_by_other_gateway"
+                                            : error.getClass().getSimpleName());
+                            ctx.close();
+                            return;
+                        }
+                        action.run();
+                    } finally {
+                        if (ctx.channel().isActive()) {
+                            ctx.channel().config().setAutoRead(true);
+                            ctx.read();
+                        }
+                    }
+                }));
+    }
+
+    public static void shutdownSessionOwnership() {
+        SESSION_OWNERSHIP.close();
     }
 
     private void bindSession(

@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import com.alels.gateway.model.TelemetryData;
 import com.alels.gateway.config.KafkaSecurityConfig;
+import com.alels.gateway.cell.config.CellRoutingConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class KafkaTelemetryPublisher implements TelemetryPublisher {
@@ -139,6 +140,8 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
                 new LinkedHashMap<>();
 
         payload.put("label", logLabel);
+        payload.put("cellId", CellRoutingConfig.current().cellId());
+        payload.put("cellIndex", CellRoutingConfig.current().cellIndex());
         payload.put("imei", telemetryData.getImei());
         payload.put("protocol", protocol);
         payload.put("channel", channel);

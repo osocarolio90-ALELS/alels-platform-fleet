@@ -2,6 +2,7 @@ package com.alels.gateway.publisher;
 
 import java.io.InputStream;
 import java.util.Properties;
+import com.alels.gateway.cell.config.CellRoutingConfig;
 
 public class TelemetryPublisherConfig {
 
@@ -31,11 +32,12 @@ public class TelemetryPublisherConfig {
     }
 
     public static String kafkaTelemetryRawTopic() {
-        return get(
+        String baseTopic = get(
                 "kafka.topic.telemetry.raw",
                 "KAFKA_TOPIC_TELEMETRY_RAW",
                 "telemetry.raw"
         );
+        return CellRoutingConfig.current().topic(baseTopic);
     }
 
     private static String get(

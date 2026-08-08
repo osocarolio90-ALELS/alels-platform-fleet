@@ -7,6 +7,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class TelemetryMessage {
     public String label;
+    public String cellId;
+    public Integer cellIndex;
     public String imei;
     public String protocol;
     public String channel;

@@ -33,6 +33,21 @@ groups:
         annotations:
           summary: "ALELS gateway failed to durably publish telemetry"
           runbook: "docs/P2_HA_CAPACITY_CERTIFICATION.md"
+      - alert: AlelsGatewayWrongCellTraffic
+        expr: increase(alels_gateway_wrong_cell_rejections_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Devices are reaching a gateway in the wrong ALELS cell"
+      - alert: AlelsGatewaySessionOwnershipConflict
+        expr: increase(alels_gateway_session_ownership_rejections_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A device session is already fenced by another gateway replica"
+          runbook: "docs/P3_CELL_ISOLATION_STANDARD.md"
       - alert: AlelsIngestionNotReady
         expr: alels_ingestion_ready == 0
         for: 2m
