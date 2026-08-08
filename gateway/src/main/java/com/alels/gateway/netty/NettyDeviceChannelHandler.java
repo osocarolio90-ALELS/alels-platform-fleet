@@ -17,6 +17,7 @@ import com.alels.gateway.publisher.TelemetryPublisherFactory;
 import com.alels.gateway.server.ChannelType;
 import com.alels.gateway.service.ProtocolRegistryResolver;
 import com.alels.gateway.util.HexUtil;
+import com.alels.gateway.observability.service.GatewayRuntimeMetrics;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -38,6 +39,7 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
     private static final Logger log=LoggerFactory.getLogger(NettyDeviceChannelHandler.class);
 
     private static final TelemetryPublisher PUBLISHER = TelemetryPublisherFactory.create();
+    private static final GatewayRuntimeMetrics METRICS = GatewayRuntimeMetrics.instance();
     private static final AlelsJsonParser ALELS_PARSER = new AlelsJsonParser();
     private static final TeltonikaImeiParser IMEI_PARSER = new TeltonikaImeiParser();
     private static final TeltonikaCodec8Parser CODEC8_PARSER = new TeltonikaCodec8Parser();
@@ -53,6 +55,7 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, byte[] packet) throws Exception {
+        METRICS.frameReceived(packet.length);
         ProtocolType type = ProtocolDetector.detect(packet);
         if (type != ProtocolType.UNKNOWN && !ProtocolRegistryResolver.isActive(type)) {
             ctx.close();
@@ -213,13 +216,20 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
             ChannelType channel,
             String parserCode
     ) {
-        return PUBLISHER.publish(
+        if (!METRICS.beginPublish()) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("Gateway publish capacity is saturated")
+            );
+        }
+        CompletableFuture<Long> result = PUBLISHER.publish(
                 telemetry,
                 protocol.name(),
                 channel.name(),
                 DeviceAdmissionRegistry.dictionaryCode(telemetry.getImei()),
                 parserCode
         ).toCompletableFuture();
+        result.whenComplete((ignored, error) -> METRICS.publishCompleted(error == null));
+        return result;
     }
 
     private boolean admit(String imei) {

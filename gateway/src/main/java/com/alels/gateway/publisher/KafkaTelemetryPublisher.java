@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alels.gateway.model.TelemetryData;
+import com.alels.gateway.config.KafkaSecurityConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class KafkaTelemetryPublisher implements TelemetryPublisher {
@@ -54,6 +55,7 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
                 System.getenv().getOrDefault("ALELS_KAFKA_MAX_BLOCK_MS", "0"));
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG,
                 System.getenv().getOrDefault("ALELS_KAFKA_BUFFER_MEMORY_BYTES", "67108864"));
+        KafkaSecurityConfig.apply(props);
 
         this.producer =
                 new KafkaProducer<>(props);

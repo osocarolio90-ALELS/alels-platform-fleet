@@ -6,22 +6,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.alels.ingestion.config.IngestionConfig;
+import com.alels.ingestion.config.KafkaSecurityConfig;
 import com.alels.ingestion.model.IngestionRecord;
 import com.alels.ingestion.outcome.model.IngestionFailure;
 import com.alels.ingestion.producer.DeadLetterPublisher;
 import com.alels.ingestion.repository.BatchIngestionResult;
 import com.alels.ingestion.service.TelemetryIngestionService;
+import com.alels.ingestion.observability.service.IngestionRuntimeMetrics;
 
 public class TelemetryConsumerService {
     private static final Logger log=LoggerFactory.getLogger(TelemetryConsumerService.class);
@@ -30,6 +36,10 @@ public class TelemetryConsumerService {
     private final TelemetryIngestionService ingestionService;
     private long lastLagSnapshotAt;
     private long lastKnownLag;
+    private final AtomicBoolean running = new AtomicBoolean(true);
+    private final CountDownLatch stopped = new CountDownLatch(1);
+    private final IngestionRuntimeMetrics metrics = IngestionRuntimeMetrics.instance();
+    private volatile KafkaConsumer<String, String> activeConsumer;
 
     public TelemetryConsumerService(
             IngestionConfig config,
@@ -50,6 +60,13 @@ public class TelemetryConsumerService {
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, Integer.toString(config.maxPollRecords()));
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
+                "org.apache.kafka.clients.consumer.CooperativeStickyAssignor");
+        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG,
+                System.getenv().getOrDefault("KAFKA_CONSUMER_SESSION_TIMEOUT_MS", "30000"));
+        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG,
+                System.getenv().getOrDefault("KAFKA_CONSUMER_MAX_POLL_INTERVAL_MS", "300000"));
+        KafkaSecurityConfig.apply(props);
 
         if (config.dlqReplayOnStartup()) {
             int replayed = ingestionService.replayOpenDlq(config.dlqReplayMaxRecords());
@@ -60,12 +77,15 @@ public class TelemetryConsumerService {
                 KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
                 DeadLetterPublisher deadLetterPublisher = new DeadLetterPublisher(config)
         ) {
+            activeConsumer = consumer;
             consumer.subscribe(List.of(config.telemetryRawTopic()));
+            metrics.markReady();
 
             log.info("event=ingestion_consumer_start topic={} bootstrap={} group={} max_poll_records={}",
                     config.telemetryRawTopic(),config.kafkaBootstrapServers(),config.consumerGroupId(),config.maxPollRecords());
 
-            while (true) {
+            while (running.get()) {
+                long batchStarted = System.nanoTime();
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(config.pollMillis()));
 
                 BatchIngestionResult result = processBatch(records, deadLetterPublisher);
@@ -76,7 +96,27 @@ public class TelemetryConsumerService {
                 }
 
                 ingestionService.recordConsumerHeartbeat(result.processed, result.failed, lag);
+                metrics.recordBatch(records.count(), result.processed, result.failed, result.duplicate,
+                        lag, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - batchStarted));
             }
+        } catch (WakeupException wakeup) {
+            if (running.get()) throw wakeup;
+        } finally {
+            metrics.markDraining();
+            activeConsumer = null;
+            stopped.countDown();
+        }
+    }
+
+    public void stop() {
+        if (running.compareAndSet(true, false)) {
+            KafkaConsumer<String, String> consumer = activeConsumer;
+            if (consumer != null) consumer.wakeup();
+        }
+        try {
+            stopped.await(30, TimeUnit.SECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 

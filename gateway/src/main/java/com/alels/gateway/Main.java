@@ -3,6 +3,8 @@ package com.alels.gateway;
 import com.alels.gateway.admission.service.DeviceAdmissionRegistry;
 import com.alels.gateway.config.DatabaseConfig;
 import com.alels.gateway.netty.NettyTcpServer;
+import com.alels.gateway.observability.service.GatewayHealthServer;
+import com.alels.gateway.observability.service.GatewayRuntimeMetrics;
 import com.alels.gateway.poller.PendingCommandPoller;
 import com.alels.gateway.service.DictionaryStartupImporter;
 import com.alels.gateway.service.ProtocolRegistryResolver;
@@ -57,7 +59,16 @@ public class Main {
             throw new IllegalStateException("ALELS_TCP_SERVER must be 'netty' in the production gateway");
         }
 
-        System.out.println("[CONFIG] TCP Server = netty");
-        new NettyTcpServer(port).start();
+        int healthPort = Integer.parseInt(
+                System.getenv().getOrDefault("ALELS_GATEWAY_HEALTH_PORT", "9090")
+        );
+        String healthHost = System.getenv().getOrDefault("ALELS_GATEWAY_HEALTH_HOST", "127.0.0.1");
+        GatewayRuntimeMetrics metrics = GatewayRuntimeMetrics.instance();
+        try (GatewayHealthServer healthServer = new GatewayHealthServer(healthHost, healthPort, metrics)) {
+            healthServer.start();
+            System.out.println("[CONFIG] TCP Server = netty");
+            System.out.println("[CONFIG] Health Port = " + healthPort);
+            new NettyTcpServer(port, metrics).start();
+        }
     }
 }

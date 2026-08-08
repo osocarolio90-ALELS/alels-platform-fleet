@@ -1,0 +1,31 @@
+services:
+  redpanda-0:
+    image: redpandadata/redpanda:v24.2.7
+    command: ["redpanda", "start", "--node-id", "0", "--smp", "2", "--memory", "2G", "--reserve-memory", "0M", "--overprovisioned", "--check=false", "--kafka-addr", "internal://0.0.0.0:9092,external://0.0.0.0:19092", "--advertise-kafka-addr", "internal://redpanda-0:9092,external://localhost:19092", "--rpc-addr", "0.0.0.0:33145", "--advertise-rpc-addr", "redpanda-0:33145", "--seeds", "redpanda-0:33145"]
+    ports: ["19092:19092", "19644:9644"]
+    volumes: ["alels_redpanda_0:/var/lib/redpanda/data"]
+  redpanda-1:
+    image: redpandadata/redpanda:v24.2.7
+    command: ["redpanda", "start", "--node-id", "1", "--smp", "2", "--memory", "2G", "--reserve-memory", "0M", "--overprovisioned", "--check=false", "--kafka-addr", "internal://0.0.0.0:9092,external://0.0.0.0:29092", "--advertise-kafka-addr", "internal://redpanda-1:9092,external://localhost:29092", "--rpc-addr", "0.0.0.0:33145", "--advertise-rpc-addr", "redpanda-1:33145", "--seeds", "redpanda-0:33145"]
+    ports: ["29092:29092", "29644:9644"]
+    volumes: ["alels_redpanda_1:/var/lib/redpanda/data"]
+  redpanda-2:
+    image: redpandadata/redpanda:v24.2.7
+    command: ["redpanda", "start", "--node-id", "2", "--smp", "2", "--memory", "2G", "--reserve-memory", "0M", "--overprovisioned", "--check=false", "--kafka-addr", "internal://0.0.0.0:9092,external://0.0.0.0:39092", "--advertise-kafka-addr", "internal://redpanda-2:9092,external://localhost:39092", "--rpc-addr", "0.0.0.0:33145", "--advertise-rpc-addr", "redpanda-2:33145", "--seeds", "redpanda-0:33145"]
+    ports: ["39092:39092", "39644:9644"]
+    volumes: ["alels_redpanda_2:/var/lib/redpanda/data"]
+  topic-init:
+    image: redpandadata/redpanda:v24.2.7
+    depends_on: [redpanda-0, redpanda-1, redpanda-2]
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "until rpk cluster health --brokers redpanda-0:9092 | grep -q 'Healthy:.*true'; do sleep 2; done;
+       rpk topic create telemetry.raw --brokers redpanda-0:9092 --partitions $${TELEMETRY_RAW_PARTITIONS:-96} --replicas 3 || true;
+       rpk topic create telemetry.dead-letter --brokers redpanda-0:9092 --partitions $${TELEMETRY_DLQ_PARTITIONS:-24} --replicas 3 || true;
+       rpk topic alter-config telemetry.raw --brokers redpanda-0:9092 --set min.insync.replicas=2;
+       rpk topic alter-config telemetry.dead-letter --brokers redpanda-0:9092 --set min.insync.replicas=2"
+
+volumes:
+  alels_redpanda_0:
+  alels_redpanda_1:
+  alels_redpanda_2:

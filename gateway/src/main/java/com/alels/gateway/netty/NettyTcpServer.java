@@ -7,13 +7,16 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.buffer.PooledByteBufAllocator;
+import com.alels.gateway.observability.service.GatewayRuntimeMetrics;
 
 public class NettyTcpServer {
 
     private final int port;
+    private final GatewayRuntimeMetrics metrics;
 
-    public NettyTcpServer(int port) {
+    public NettyTcpServer(int port, GatewayRuntimeMetrics metrics) {
         this.port = port;
+        this.metrics = metrics;
     }
 
     public void start() throws Exception {
@@ -40,6 +43,12 @@ public class NettyTcpServer {
             ChannelFuture future =
                     bootstrap.bind(port).sync();
 
+            metrics.markAccepting();
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                metrics.markDraining();
+                future.channel().close().awaitUninterruptibly();
+            }, "gateway-drain-hook"));
+
             System.out.println("[ALELS-GATEWAY] Listening on TCP port " + port);
             System.out.println("[ALELS-GATEWAY] Netty TCP server started");
 
@@ -48,6 +57,7 @@ public class NettyTcpServer {
                     .sync();
 
         } finally {
+            metrics.markDraining();
             workerGroup.shutdownGracefully();
             bossGroup.shutdownGracefully();
         }

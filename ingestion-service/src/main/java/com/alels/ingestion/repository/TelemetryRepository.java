@@ -9,6 +9,8 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 import com.alels.ingestion.model.TelemetryMessage;
@@ -362,6 +364,7 @@ public class TelemetryRepository {
 
         int processed = 0;
         int failed = 0;
+        Map<String, TelemetryMessage> latestByDevice = new LinkedHashMap<>();
 
         try (Connection conn = database.getConnection();
              PreparedStatement rawStmt = conn.prepareStatement(rawSql);
@@ -425,34 +428,7 @@ public class TelemetryRepository {
                     telemetryStmt.setLong(23, record.offset);
                     telemetryStmt.addBatch();
 
-                    deviceStmt.setString(1, message.channel);
-                    deviceStmt.setString(2, message.protocol);
-                    deviceStmt.setString(3, message.imei);
-                    deviceStmt.addBatch();
-
-                    presenceStmt.setString(1, message.imei);
-                    presenceStmt.setString(2, message.channel);
-                    presenceStmt.setString(3, message.protocol);
-                    setDouble(presenceStmt, 4, message.latitude);
-                    setDouble(presenceStmt, 5, message.longitude);
-                    setInteger(presenceStmt, 6, message.speed);
-                    setInteger(presenceStmt, 7, message.angle);
-                    setInteger(presenceStmt, 8, message.satellites);
-                    setTimestamp(presenceStmt, 9, parseTimestamp(message.deviceTime));
-                    presenceStmt.setString(10, "device:presence:" + message.imei);
-                    presenceStmt.addBatch();
-
-                    latestPositionStmt.setString(1, message.imei);
-                    setDouble(latestPositionStmt, 2, message.latitude);
-                    setDouble(latestPositionStmt, 3, message.longitude);
-                    setInteger(latestPositionStmt, 4, message.speed);
-                    setInteger(latestPositionStmt, 5, message.angle);
-                    setInteger(latestPositionStmt, 6, message.altitude);
-                    setInteger(latestPositionStmt, 7, message.satellites);
-                    setDouble(latestPositionStmt, 8, message.hdop);
-                    latestPositionStmt.setString(9, resolveVehicleStatus(message));
-                    setTimestamp(latestPositionStmt, 10, parseTimestamp(message.deviceTime));
-                    latestPositionStmt.addBatch();
+                    latestByDevice.put(message.imei, message);
                     processed++;
                 } catch (Exception itemError) {
                     throw new IllegalArgumentException(
@@ -460,6 +436,37 @@ public class TelemetryRepository {
                             itemError
                     );
                 }
+            }
+
+            for (TelemetryMessage message : latestByDevice.values()) {
+                deviceStmt.setString(1, message.channel);
+                deviceStmt.setString(2, message.protocol);
+                deviceStmt.setString(3, message.imei);
+                deviceStmt.addBatch();
+
+                presenceStmt.setString(1, message.imei);
+                presenceStmt.setString(2, message.channel);
+                presenceStmt.setString(3, message.protocol);
+                setDouble(presenceStmt, 4, message.latitude);
+                setDouble(presenceStmt, 5, message.longitude);
+                setInteger(presenceStmt, 6, message.speed);
+                setInteger(presenceStmt, 7, message.angle);
+                setInteger(presenceStmt, 8, message.satellites);
+                setTimestamp(presenceStmt, 9, parseTimestamp(message.deviceTime));
+                presenceStmt.setString(10, "device:presence:" + message.imei);
+                presenceStmt.addBatch();
+
+                latestPositionStmt.setString(1, message.imei);
+                setDouble(latestPositionStmt, 2, message.latitude);
+                setDouble(latestPositionStmt, 3, message.longitude);
+                setInteger(latestPositionStmt, 4, message.speed);
+                setInteger(latestPositionStmt, 5, message.angle);
+                setInteger(latestPositionStmt, 6, message.altitude);
+                setInteger(latestPositionStmt, 7, message.satellites);
+                setDouble(latestPositionStmt, 8, message.hdop);
+                latestPositionStmt.setString(9, resolveVehicleStatus(message));
+                setTimestamp(latestPositionStmt, 10, parseTimestamp(message.deviceTime));
+                latestPositionStmt.addBatch();
             }
 
             rawStmt.executeBatch();

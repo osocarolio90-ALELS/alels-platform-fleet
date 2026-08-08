@@ -40,11 +40,7 @@ backend/*.log
 web-react/*.log
 gateway/*.log
 ingestion-service/*.log
-
-# Local-only workspace archives
-*.zip
-*.7z
-*.rar
+tools/capacity/evidence/
 
 # Local-only workspace archives
 *.zip

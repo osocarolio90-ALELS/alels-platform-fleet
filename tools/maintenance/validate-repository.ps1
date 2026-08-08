@@ -49,7 +49,10 @@ $requiredFolders = @(
     'gateway',
     'ingestion-service',
     'tools',
+    'tools/capacity',
+    'tools/capacity/workloads',
     'tools/maintenance',
+    'deploy/ha',
     'web-react'
 )
 
@@ -67,7 +70,8 @@ $requiredDocuments = @(
     'docs/RBAC_FREEZE_RULES.md',
     'docs/API_COMPATIBILITY_RULES.md',
     'docs/TELEMETRY_INTEGRITY_RULES.md',
-    'docs/DEFINITION_OF_DONE.md'
+    'docs/DEFINITION_OF_DONE.md',
+    'docs/P2_HA_CAPACITY_CERTIFICATION.md'
 )
 
 foreach ($folder in $requiredFolders) {
@@ -78,6 +82,26 @@ foreach ($document in $requiredDocuments) {
 }
 Test-RequiredPath '.gitignore' 'file'
 Test-RequiredPath '.env.example' 'file'
+Test-RequiredPath 'tools/capacity/GatewayCapacityProbe.java' 'file'
+Test-RequiredPath 'tools/capacity/check-telemetry-reconciliation.sql' 'file'
+Test-RequiredPath 'tools/database/check-p2-ha.sql' 'file'
+Test-RequiredPath 'deploy/ha/haproxy.cfg' 'file'
+Test-RequiredPath 'deploy/ha/docker-compose.capacity-lab.yml' 'file'
+Test-RequiredPath 'deploy/ha/prometheus-rules.yml' 'file'
+
+$workloadFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'tools/capacity/workloads') -File -Filter '*.json')
+foreach ($workloadFile in $workloadFiles) {
+    try {
+        $workload = Get-Content -LiteralPath $workloadFile.FullName -Raw | ConvertFrom-Json
+        if ([int64]$workload.concurrentDevices -le 0 -or [int]$workload.minimumHeadroomPercent -lt 30) {
+            Write-Result FAIL ("Invalid capacity workload: {0}" -f $workloadFile.Name)
+        } else {
+            Write-Result PASS ("Capacity workload is valid: {0}" -f $workloadFile.Name)
+        }
+    } catch {
+        Write-Result FAIL ("Capacity workload JSON is invalid: {0}" -f $workloadFile.Name)
+    }
+}
 
 $seedPath = Join-Path $root 'database/seed.sql'
 if (Test-Path -LiteralPath $seedPath -PathType Leaf) {

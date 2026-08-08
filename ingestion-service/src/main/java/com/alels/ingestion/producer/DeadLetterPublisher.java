@@ -10,6 +10,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 
 import com.alels.ingestion.config.IngestionConfig;
+import com.alels.ingestion.config.KafkaSecurityConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class DeadLetterPublisher implements AutoCloseable {
@@ -30,6 +31,7 @@ public class DeadLetterPublisher implements AutoCloseable {
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
         props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4");
         props.put(ProducerConfig.LINGER_MS_CONFIG, "20");
+        KafkaSecurityConfig.apply(props);
 
         this.producer = new KafkaProducer<>(props);
     }

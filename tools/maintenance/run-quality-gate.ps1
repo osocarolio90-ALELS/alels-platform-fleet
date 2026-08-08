@@ -16,6 +16,10 @@ foreach ($module in $modules) {
     }
 }
 
+$capacityOutput = Join-Path $repositoryRoot "gateway/target/capacity-probe-check"
+& javac -d $capacityOutput (Join-Path $repositoryRoot "tools/capacity/GatewayCapacityProbe.java")
+if ($LASTEXITCODE -ne 0) { throw "capacity probe compilation failed" }
+
 Push-Location (Join-Path $repositoryRoot "web-react")
 try {
     & npm.cmd run typecheck

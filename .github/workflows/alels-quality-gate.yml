@@ -3,7 +3,7 @@ name: ALELS Quality Gate
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, fleet-alels-ai]
 
 permissions:
   contents: read
@@ -35,6 +35,18 @@ jobs:
       - name: Test and package
         working-directory: ${{ matrix.module }}
         run: mvn --batch-mode --no-transfer-progress clean verify
+
+  capacity-tooling:
+    name: Capacity tooling compilation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Compile gateway capacity probe
+        run: javac -d gateway/target/capacity-probe-check tools/capacity/GatewayCapacityProbe.java
 
   frontend:
     name: React typecheck and production build

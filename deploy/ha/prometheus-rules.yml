@@ -1,0 +1,59 @@
+groups:
+  - name: alels-p2-capacity
+    rules:
+      - alert: AlelsGatewayNotReady
+        expr: alels_gateway_ready == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ALELS gateway is not accepting new connections"
+          runbook: "docs/P2_HA_CAPACITY_CERTIFICATION.md"
+      - alert: AlelsGatewayConnectionHeadroomLow
+        expr: alels_gateway_connections_active / alels_gateway_connections_limit > 0.70
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ALELS gateway has less than 30 percent connection headroom"
+          runbook: "docs/P2_HA_CAPACITY_CERTIFICATION.md"
+      - alert: AlelsGatewayPublishQueueHeadroomLow
+        expr: alels_gateway_publishes_pending / alels_gateway_publishes_pending_limit > 0.70
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ALELS gateway pending-publish headroom is below 30 percent"
+          runbook: "docs/P2_HA_CAPACITY_CERTIFICATION.md"
+      - alert: AlelsGatewayPublishFailures
+        expr: increase(alels_gateway_publishes_failed_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ALELS gateway failed to durably publish telemetry"
+          runbook: "docs/P2_HA_CAPACITY_CERTIFICATION.md"
+      - alert: AlelsIngestionNotReady
+        expr: alels_ingestion_ready == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ALELS ingestion worker is not ready"
+          runbook: "docs/P2_HA_CAPACITY_CERTIFICATION.md"
+      - alert: AlelsIngestionLagGrowing
+        expr: deriv(alels_ingestion_consumer_lag[10m]) > 0
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ALELS ingestion lag is growing continuously"
+          runbook: "docs/P2_HA_CAPACITY_CERTIFICATION.md"
+      - alert: AlelsTelemetryIngestionFailures
+        expr: increase(alels_ingestion_records_failed_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ALELS ingestion produced failed/DLQ outcomes"
+          runbook: "docs/P2_HA_CAPACITY_CERTIFICATION.md"

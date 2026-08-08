@@ -57,6 +57,9 @@ public class DatabaseConfig {
         config.setMaximumPoolSize(Integer.parseInt(System.getenv().getOrDefault("ALELS_GATEWAY_DB_POOL_MAX", "20")));
         config.setMinimumIdle(Integer.parseInt(System.getenv().getOrDefault("ALELS_GATEWAY_DB_POOL_MIN_IDLE", "2")));
         config.setConnectionTimeout(5_000);
+        config.setValidationTimeout(3_000);
+        config.setKeepaliveTime(30_000);
+        config.setMaxLifetime(300_000);
         config.setPoolName("alels-gateway-pool");
         return new HikariDataSource(config);
     }

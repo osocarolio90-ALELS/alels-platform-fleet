@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "name": "telemetry-1m-target",
+  "concurrentDevices": 1000000,
+  "sendIntervalSeconds": 30,
+  "recordsPerPacket": 1,
+  "burstFactor": 1.5,
+  "expectedAverageEventsPerSecond": 33333.34,
+  "expectedBurstEventsPerSecond": 50000.0,
+  "minimumHeadroomPercent": 30,
+  "minimumDurationSeconds": 604800,
+  "requiredAckReconciliationDelta": 0,
+  "protocol": "ALELS_JSON",
+  "notes": "Requires distributed load generators and P3 cell isolation; never run from one laptop."
+}

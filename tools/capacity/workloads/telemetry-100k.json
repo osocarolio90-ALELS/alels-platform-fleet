@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "name": "telemetry-100k",
+  "concurrentDevices": 100000,
+  "sendIntervalSeconds": 30,
+  "recordsPerPacket": 1,
+  "burstFactor": 1.5,
+  "expectedAverageEventsPerSecond": 3333.34,
+  "expectedBurstEventsPerSecond": 5000.0,
+  "minimumHeadroomPercent": 30,
+  "minimumDurationSeconds": 259200,
+  "requiredAckReconciliationDelta": 0,
+  "protocol": "ALELS_JSON"
+}

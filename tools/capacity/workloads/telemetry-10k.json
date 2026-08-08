@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "name": "telemetry-10k-baseline",
+  "concurrentDevices": 10000,
+  "sendIntervalSeconds": 30,
+  "recordsPerPacket": 1,
+  "burstFactor": 1.5,
+  "expectedAverageEventsPerSecond": 333.34,
+  "expectedBurstEventsPerSecond": 500.0,
+  "minimumHeadroomPercent": 30,
+  "minimumDurationSeconds": 300,
+  "requiredAckReconciliationDelta": 0,
+  "protocol": "ALELS_JSON",
+  "notes": "Baseline gate only. Run 50k, 100k and target tiers sequentially on representative Linux multi-node infrastructure."
+}
