@@ -143,24 +143,24 @@
  * that still have old hardcoded Tailwind text utilities remain readable.
  */
 .theme-dark .legacy-content,
-.theme-dark .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option) {
+.theme-dark .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option):not([data-preserve-tone]) {
   color: #ffffff !important;
 }
 
 .theme-light .legacy-content,
-.theme-light .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option) {
+.theme-light .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option):not([data-preserve-tone]):not([data-ui-button]) {
   color: #000000 !important;
 }
 
-.theme-dark .legacy-content :where(svg,[data-lucide]),
-.theme-dark .legacy-content :where(svg,[data-lucide]) * {
+.theme-dark .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *),
+.theme-dark .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *) * {
   color: #ffffff !important;
   fill: none !important;
   stroke: #ffffff !important;
 }
 
-.theme-light .legacy-content :where(svg,[data-lucide]),
-.theme-light .legacy-content :where(svg,[data-lucide]) * {
+.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *),
+.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *) * {
   color: hsl(var(--primary)) !important;
   fill: none !important;
   stroke: hsl(var(--primary)) !important;
@@ -206,34 +206,46 @@
   color: #ffffff !important;
 }
 
-.theme-light .legacy-content :where(.badge,[class*="badge"],[class*="Badge"],button) {
+.theme-light .legacy-content :where(.badge,[class*="badge"],[class*="Badge"],button):not([data-ui-button]) {
   color: #000000 !important;
 }
 
 /* Global badge contrast for the application's theme-dark/theme-light system. */
 .theme-dark [data-ui-badge][data-tone="default"] {
   background-color: hsl(217 55% 22%) !important;
+  border-color: hsl(217 78% 45%) !important;
+  color: hsl(210 100% 78%) !important;
 }
 
 .theme-dark [data-ui-badge][data-tone="success"] {
   background-color: hsl(158 64% 18%) !important;
+  border-color: hsl(158 64% 34%) !important;
+  color: hsl(151 72% 72%) !important;
 }
 
 .theme-dark [data-ui-badge][data-tone="warning"] {
   background-color: hsl(32 70% 22%) !important;
+  border-color: hsl(38 82% 40%) !important;
+  color: hsl(43 96% 70%) !important;
 }
 
 .theme-dark [data-ui-badge][data-tone="danger"] {
   background-color: hsl(0 60% 24%) !important;
+  border-color: hsl(0 72% 44%) !important;
+  color: hsl(0 100% 80%) !important;
 }
 
 .theme-dark [data-ui-badge][data-tone="muted"] {
   background-color: hsl(215 28% 17%) !important;
+  border-color: hsl(215 22% 34%) !important;
+  color: hsl(215 20% 76%) !important;
 }
 
-.theme-dark [data-ui-badge] {
-  color: #ffffff !important;
-}
+.theme-light [data-ui-badge][data-tone="default"] { background-color:hsl(214 100% 96%) !important;border-color:hsl(217 91% 82%) !important;color:hsl(221 83% 43%) !important; }
+.theme-light [data-ui-badge][data-tone="success"] { background-color:hsl(149 80% 94%) !important;border-color:hsl(151 55% 72%) !important;color:hsl(158 72% 27%) !important; }
+.theme-light [data-ui-badge][data-tone="warning"] { background-color:hsl(48 100% 92%) !important;border-color:hsl(43 92% 70%) !important;color:hsl(32 90% 31%) !important; }
+.theme-light [data-ui-badge][data-tone="danger"] { background-color:hsl(0 86% 96%) !important;border-color:hsl(0 84% 80%) !important;color:hsl(0 72% 42%) !important; }
+.theme-light [data-ui-badge][data-tone="muted"] { background-color:hsl(214 30% 94%) !important;border-color:hsl(214 24% 82%) !important;color:hsl(215 25% 36%) !important; }
 
 .theme-light .legacy-content :where(.bg-primary,.bg-destructive,.bg-red-500,.bg-red-600,.bg-sky-500,.bg-sky-600),
 .theme-light .legacy-content :where(.bg-primary,.bg-destructive,.bg-red-500,.bg-red-600,.bg-sky-500,.bg-sky-600) *,
@@ -243,6 +255,7 @@
   stroke: #ffffff !important;
   fill: none !important;
 }
+
 /* Raster logos use the dedicated light/dark assets selected by AppLayout. */
 
 /* ==========================================================

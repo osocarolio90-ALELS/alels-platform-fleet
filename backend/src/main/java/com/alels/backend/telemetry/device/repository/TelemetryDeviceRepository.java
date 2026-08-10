@@ -123,13 +123,17 @@ public class TelemetryDeviceRepository {
     }
 
     public Optional<String> imeiById(Long id,Long companyId,String role) {
+        return accessById(id,companyId,role).map(DeviceAccess::imei);
+    }
+
+    public Optional<DeviceAccess> accessById(Long id,Long companyId,String role) {
         String scope = scope(role, "d");
         String sql = """
             WITH RECURSIVE visible_companies AS (
               SELECT id FROM companies WHERE id=?
               UNION ALL SELECT child.id FROM companies child JOIN visible_companies parent ON child.parent_company_id=parent.id WHERE child.deleted_at IS NULL
             )
-            SELECT d.imei
+            SELECT d.id,d.imei,d.company_id
             FROM devices d
             WHERE d.id=? AND d.deleted_at IS NULL %s
             LIMIT 1
@@ -138,7 +142,9 @@ public class TelemetryDeviceRepository {
         parameters.add(companyId);
         parameters.add(id);
         if (usesDirectCompanyScope(role)) parameters.add(companyId);
-        return jdbc.query(sql, (rs, rowNum) -> rs.getString("imei"), parameters.toArray()).stream().findFirst();
+        return jdbc.query(sql, (rs, rowNum) -> new DeviceAccess(
+                rs.getLong("id"),rs.getString("imei"),rs.getLong("company_id")
+        ), parameters.toArray()).stream().findFirst();
     }
     public void setTcp(Long id,boolean enabled) {
         jdbc.update("UPDATE devices SET tcp_enabled=?,updated_at=NOW() WHERE id=? AND deleted_at IS NULL",enabled,id);
@@ -160,6 +166,8 @@ public class TelemetryDeviceRepository {
         String normalized=role==null?"":role.replaceAll("[\\s_-]+","").toUpperCase();
         return "CLIENTUSER".equals(normalized)||"TECHUSER".equals(normalized);
     }
+
+    public record DeviceAccess(Long id,String imei,Long companyId) {}
 
     private String deviceFilter(String search,String folder) {
         StringBuilder filter=new StringBuilder();

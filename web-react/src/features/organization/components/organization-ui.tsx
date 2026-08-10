@@ -28,10 +28,10 @@ export function OrganizationTableCard({ children, title, description }: { childr
 
 export function statusTone(status?: string | null): "default" | "success" | "warning" | "danger" | "muted" {
   const normalized = (status || "").toUpperCase();
-  if (["ACTIVE", "PROVISION", "ALELS"].includes(normalized)) return "default";
-  if (["APPROVED", "INTERNAL", "ROOT", "ENTERPRISE"].includes(normalized)) return "success";
+  if (["ACTIVE", "PROVISION", "ALELS", "INFO", "FIXED", "CONNECTED"].includes(normalized)) return "default";
+  if (["APPROVED", "INTERNAL", "ROOT", "ENTERPRISE", "ONLINE", "LIVE", "ON_DUTY", "ON DUTY", "OPERATIONAL", "VALID", "RESOLVED"].includes(normalized)) return "success";
   if (["PENDING", "TRIAL", "SAMPLE", "BASIC", "ADVANCED", "WARNING"].includes(normalized)) return "warning";
-  if (["SUSPENDED", "REJECTED", "DELETED", "EXPIRED", "INACTIVE"].includes(normalized)) return "danger";
+  if (["SUSPENDED", "REJECTED", "DELETED", "EXPIRED", "INACTIVE", "OFFLINE", "ERROR", "CRITICAL", "DANGER"].includes(normalized)) return "danger";
   return "muted";
 }
 

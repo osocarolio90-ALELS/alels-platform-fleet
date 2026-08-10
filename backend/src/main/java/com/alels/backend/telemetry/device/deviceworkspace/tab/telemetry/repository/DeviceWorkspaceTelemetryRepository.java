@@ -1,0 +1,236 @@
+package com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.DataParameter;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.DeviceInfo;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.DriverInfo;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.RecentEvent;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.VehicleInfo;
+
+@Repository
+public class DeviceWorkspaceTelemetryRepository {
+    private final JdbcTemplate jdbc;
+
+    public DeviceWorkspaceTelemetryRepository(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    public Optional<ScopedDevice> device(Long deviceId, String imei, Long companyId) {
+        return jdbc.query("""
+                SELECT d.id, d.company_id, d.imei,
+                       COALESCE(db.brand_name, '-') AS brand,
+                       COALESCE(dm.model_name, d.device_model, '-') AS model,
+                       c.company_name,
+                       (COALESCE(d.online, FALSE)
+                         OR UPPER(COALESCE(d.presence_status, '')) = 'ONLINE'
+                         OR COALESCE(d.gsm_connected, FALSE)
+                         OR COALESCE(d.wifi_connected, FALSE)) AS online,
+                       COALESCE(d.tcp_enabled, TRUE) AS tcp_enabled,
+                       d.last_seen
+                FROM devices d
+                JOIN companies c ON c.id = d.company_id AND c.deleted_at IS NULL
+                LEFT JOIN device_brands db ON db.id = d.device_brand_id AND db.deleted_at IS NULL
+                LEFT JOIN device_models dm ON dm.id = d.device_model_id AND dm.deleted_at IS NULL
+                WHERE d.id = ? AND d.imei = ? AND d.company_id = ? AND d.deleted_at IS NULL
+                LIMIT 1
+                """, (rs, rowNum) -> new ScopedDevice(
+                    new DeviceInfo(
+                            rs.getLong("id"), rs.getString("imei"), rs.getString("brand"),
+                            rs.getString("model"), rs.getString("company_name"), rs.getBoolean("online"),
+                            rs.getBoolean("tcp_enabled"), rs.getString("last_seen")
+                    ),
+                    rs.getLong("company_id")
+                ), deviceId, imei, companyId).stream().findFirst();
+    }
+
+    public Optional<VehicleResult> vehicle(Long deviceId, Long companyId) {
+        return jdbc.query("""
+                SELECT v.id,
+                       COALESCE(NULLIF(v.vehicle_name, ''), NULLIF(v.vehicle_code, ''), NULLIF(v.vehicle_number, ''), '-') AS vehicle_name,
+                       COALESCE(NULLIF(v.vehicle_code, ''), NULLIF(v.vehicle_number, ''), '-') AS vehicle_code,
+                       COALESCE(v.plate_number, '-') AS plate_number,
+                       COALESCE(vt.type_name, '-') AS vehicle_type,
+                       COALESCE(vb.brand_name, '-') AS brand,
+                       COALESCE(vm.model_name, '-') AS model,
+                       v.year_manufacture,
+                       COALESCE(et.energy_name, v.energy_code, '-') AS energy,
+                       COALESCE(vot.ownership_name, '-') AS ownership,
+                       CASE WHEN v.capacity_value IS NULL THEN '-'
+                            ELSE v.capacity_value::text ||
+                                 CASE WHEN vcu.unit_name IS NULL THEN '' ELSE ' ' || vcu.unit_name END END AS capacity,
+                       COALESCE(country.country_name, v.country_code, '-') AS country,
+                       COALESCE(v.operational_status, 'UNKNOWN') AS operational_status
+                FROM vehicle_device_assignments assignment
+                JOIN vehicles v ON v.id = assignment.vehicle_id AND v.deleted_at IS NULL
+                LEFT JOIN vehicle_types vt ON vt.id = v.vehicle_type_id AND vt.deleted_at IS NULL
+                LEFT JOIN vehicle_brands vb ON vb.id = v.brand_id AND vb.deleted_at IS NULL
+                LEFT JOIN vehicle_models vm ON vm.id = v.model_id AND vm.deleted_at IS NULL
+                LEFT JOIN energy_types et ON et.energy_code = v.energy_code
+                LEFT JOIN vehicle_ownership_types vot ON vot.id = v.ownership_type_id AND vot.deleted_at IS NULL
+                LEFT JOIN vehicle_capacity_units vcu ON vcu.id = v.capacity_unit_id AND vcu.deleted_at IS NULL
+                LEFT JOIN energy_reference_countries country ON country.country_code = v.country_code
+                WHERE assignment.device_id = ?
+                  AND assignment.company_id = ?
+                  AND v.company_id = ?
+                  AND assignment.assignment_status = 'ACTIVE'
+                  AND assignment.deleted_at IS NULL
+                ORDER BY assignment.assigned_at DESC
+                LIMIT 1
+                """, (rs, rowNum) -> new VehicleResult(
+                    rs.getLong("id"),
+                    new VehicleInfo(
+                            true, rs.getString("vehicle_name"), rs.getString("vehicle_code"),
+                            rs.getString("plate_number"), rs.getString("vehicle_type"), rs.getString("brand"),
+                            rs.getString("model"), rs.getObject("year_manufacture", Integer.class),
+                            rs.getString("energy"), rs.getString("ownership"), rs.getString("capacity"),
+                            rs.getString("country"), rs.getString("operational_status")
+                    )
+                ), deviceId, companyId, companyId).stream().findFirst();
+    }
+
+    public Optional<DriverInfo> driver(Long deviceId, Long companyId) {
+        return jdbc.query("""
+                SELECT COALESCE(driver.driver_name, driver.full_name, driver.driver_code, '-') AS driver_name,
+                       driver.driver_code, driver.employee_id,
+                       driver.license_number, license.name AS license_type,
+                       COALESCE(country.country_name, driver.country_code, '-') AS country,
+                       driver.phone_number, driver.rfid_ibutton,
+                       CASE WHEN NULLIF(driver.metadata ->> 'photo_filename', '') IS NULL THEN NULL
+                            ELSE '/api/asset-register/drivers/photo/' || (driver.metadata ->> 'photo_filename') END AS photo_url,
+                       COALESCE(driver.status, 'ACTIVE') AS status
+                FROM (
+                    SELECT active.driver_id, active.event_time
+                    FROM (
+                        SELECT manual.driver_id, manual.assigned_at AS event_time
+                        FROM driver_manual_assignments manual
+                        WHERE manual.device_id = ? AND manual.company_id = ? AND manual.assignment_status = 'ACTIVE' AND manual.deleted_at IS NULL
+                        UNION ALL
+                        SELECT auto_session.driver_id, auto_session.last_seen_at
+                        FROM driver_auto_sessions auto_session
+                        WHERE auto_session.device_id = ? AND auto_session.company_id = ? AND auto_session.session_status = 'ACTIVE'
+                    ) active
+                    ORDER BY active.event_time DESC
+                    LIMIT 1
+                ) selected
+                JOIN asset_drivers driver ON driver.id = selected.driver_id AND driver.company_id = ? AND driver.deleted_at IS NULL
+                LEFT JOIN license_master license ON license.id = driver.license_master_id AND license.deleted_at IS NULL
+                LEFT JOIN energy_reference_countries country ON country.country_code = driver.country_code
+                """, (rs, rowNum) -> new DriverInfo(
+                    true,
+                    valueOrDash(rs.getString("driver_name")), valueOrDash(rs.getString("driver_code")),
+                    valueOrDash(rs.getString("employee_id")), valueOrDash(rs.getString("license_number")),
+                    valueOrDash(rs.getString("license_type")), valueOrDash(rs.getString("country")),
+                    valueOrDash(rs.getString("phone_number")), valueOrDash(rs.getString("rfid_ibutton")),
+                    rs.getString("photo_url"), valueOrDash(rs.getString("status"))
+                ), deviceId, companyId, deviceId, companyId, companyId).stream().findFirst();
+    }
+
+    public Optional<LatestPacket> latestPacket(String imei) {
+        return jdbc.query("""
+                SELECT id, packet_sequence, server_time, device_time,
+                       latitude, longitude, speed, angle, altitude, satellites, hdop,
+                       priority, event_io_id, io_data::text AS io_data
+                FROM telemetry
+                WHERE imei = ?
+                ORDER BY server_time DESC, id DESC
+                LIMIT 1
+                """, (rs, rowNum) -> new LatestPacket(
+                    rs.getLong("id"), rs.getObject("packet_sequence", Long.class),
+                    rs.getString("server_time"), rs.getString("device_time"),
+                    rs.getObject("latitude", Double.class), rs.getObject("longitude", Double.class),
+                    rs.getObject("speed", Double.class), rs.getObject("angle", Integer.class),
+                    rs.getObject("altitude", Integer.class), rs.getObject("satellites", Integer.class),
+                    rs.getObject("hdop", Double.class), rs.getObject("priority", Integer.class),
+                    rs.getObject("event_io_id", Integer.class), rs.getString("io_data")
+                ), imei).stream().findFirst();
+    }
+
+    public List<DataParameter> normalizedParameters(Long telemetryId, String imei) {
+        return jdbc.query("""
+                SELECT field_code, COALESCE(NULLIF(field_name, ''), field_code) AS label,
+                       COALESCE(text_value, raw_value, numeric_value::text, CASE WHEN boolean_value IS NULL THEN NULL ELSE boolean_value::text END, '-') AS display_value,
+                       numeric_value, boolean_value, unit, source_io_id,
+                       COALESCE(NULLIF(category, ''), 'OTHER') AS category
+                FROM telemetry_normalized
+                WHERE telemetry_id = ? AND imei = ?
+                ORDER BY id
+                """, (rs, rowNum) -> new DataParameter(
+                    rs.getString("field_code"), rs.getString("label"), rs.getString("display_value"),
+                    rs.getObject("numeric_value", Double.class), rs.getObject("boolean_value", Boolean.class),
+                    rs.getString("unit"), rs.getString("source_io_id"), rs.getString("category")
+                ), telemetryId, imei);
+    }
+
+    public List<DataParameter> ioParameters(Long telemetryId, String imei) {
+        return jdbc.query("""
+                SELECT COALESCE(NULLIF(io_name, ''), 'IO ' || io_id) AS label,
+                       COALESCE(real_value::text, numeric_value::text, raw_value, '-') AS display_value,
+                       COALESCE(real_value, numeric_value) AS numeric_value,
+                       unit, io_id, COALESCE(NULLIF(io_category, ''), 'OTHER') AS category
+                FROM telemetry_io
+                WHERE telemetry_id = ? AND imei = ?
+                ORDER BY id
+                """, (rs, rowNum) -> new DataParameter(
+                    "io." + rs.getString("io_id"), rs.getString("label"), rs.getString("display_value"),
+                    rs.getObject("numeric_value", Double.class), null, rs.getString("unit"),
+                    rs.getString("io_id"), rs.getString("category")
+                ), telemetryId, imei);
+    }
+
+    public List<RecentEvent> events(String imei, Long beforeId, int limit) {
+        String cursor = beforeId == null ? "" : " AND id < ?";
+        String sql = """
+                SELECT id, COALESCE(NULLIF(title, ''), rule_code, 'Telemetry event') AS title,
+                       COALESCE(message, '') AS message, COALESCE(severity, 'INFO') AS severity,
+                       created_at
+                FROM telemetry_alerts
+                WHERE imei = ? %s
+                ORDER BY id DESC
+                LIMIT ?
+                """.formatted(cursor);
+        Object[] parameters = beforeId == null
+                ? new Object[]{imei, limit}
+                : new Object[]{imei, beforeId, limit};
+        return jdbc.query(sql, (rs, rowNum) -> new RecentEvent(
+                rs.getLong("id"), rs.getString("title"), rs.getString("message"),
+                rs.getString("severity"), rs.getString("created_at")
+        ), parameters);
+    }
+
+    public Optional<String> configuration(Long deviceId, Long userId) {
+        return jdbc.query("""
+                SELECT configuration::text
+                FROM telemetry_device_workspace_configs
+                WHERE device_id = ? AND user_id = ?
+                """, (rs, rowNum) -> rs.getString(1), deviceId, userId).stream().findFirst();
+    }
+
+    public void saveConfiguration(Long deviceId, Long companyId, Long userId, String configurationJson) {
+        jdbc.update("""
+                INSERT INTO telemetry_device_workspace_configs(device_id, company_id, user_id, configuration)
+                VALUES (?, ?, ?, CAST(? AS jsonb))
+                ON CONFLICT (device_id, user_id) DO UPDATE
+                SET company_id = EXCLUDED.company_id,
+                    configuration = EXCLUDED.configuration,
+                    updated_at = NOW()
+                """, deviceId, companyId, userId, configurationJson);
+    }
+
+    private static String valueOrDash(String value) {
+        return value == null || value.isBlank() ? "-" : value;
+    }
+
+    public record ScopedDevice(DeviceInfo info, Long companyId) {}
+    public record VehicleResult(Long id, VehicleInfo info) {}
+    public record LatestPacket(
+            Long id, Long sequence, String serverTime, String deviceTime,
+            Double latitude, Double longitude, Double speed, Integer angle,
+            Integer altitude, Integer satellites, Double hdop, Integer priority,
+            Integer eventIoId, String ioDataJson
+    ) {}
+}

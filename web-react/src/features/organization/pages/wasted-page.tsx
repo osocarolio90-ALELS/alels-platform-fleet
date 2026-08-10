@@ -26,7 +26,7 @@ export function WastedPage() {
 
   const bulkActions = useMemo<DataTableBulkAction<OrganizationWastedItem>[]>(() => [
     { key: "restore", label: "Restore", icon: <RotateCcw className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Restore ${rows.length} wasted item(s)?`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ item: row, action: "restore" })) },
-    { key: "permanent-delete", label: "Permanent Delete", icon: <Trash2 className="h-4 w-4" />, variant: "outline", hidden: () => !canPermanentDelete, confirmMessage: (rows) => `Permanent delete ${rows.length} item(s)? This cannot be undone.`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ item: row, action: "permanent-delete" })) }
+    { key: "permanent-delete", label: "Permanent Delete", icon: <Trash2 className="h-4 w-4" />, variant: "destructive", hidden: () => !canPermanentDelete, confirmMessage: (rows) => `Permanent delete ${rows.length} item(s)? This cannot be undone.`, onClick: (rows) => rows.forEach((row) => actionMutation.mutate({ item: row, action: "permanent-delete" })) }
   ], [actionMutation, canPermanentDelete]);
 
   const companyItems = useMemo(() => data.filter((item) => item.itemType === "COMPANY"), [data]);
@@ -68,7 +68,7 @@ export function WastedPage() {
           rowKey={(row) => `${row.itemType}-${row.id}`}
           emptyMessage={isLoading ? "Loading wasted data..." : activeTab === "COMPANY" ? "No company wasted item found." : "No user wasted item found."}
           bulkActions={bulkActions}
-          actions={(row) => <div className="flex items-center gap-2"><Button type="button" size="sm" variant="outline" title="Restore" onClick={() => actionMutation.mutate({ item: row, action: "restore" })}><RotateCcw className="h-4 w-4" /> Restore</Button>{canPermanentDelete ? <Button type="button" size="sm" variant="outline" title="Permanent delete" onClick={() => confirm("Permanent delete this item? This cannot be undone.") && actionMutation.mutate({ item: row, action: "permanent-delete" })}><Trash2 className="h-4 w-4" /> Permanent Delete</Button> : null}</div>}
+          actions={(row) => <div className="flex items-center gap-2"><Button type="button" size="sm" variant="outline" title="Restore" onClick={() => actionMutation.mutate({ item: row, action: "restore" })}><RotateCcw className="h-4 w-4" /> Restore</Button>{canPermanentDelete ? <Button type="button" size="sm" variant="destructive" title="Permanent delete" onClick={() => confirm("Permanent delete this item? This cannot be undone.") && actionMutation.mutate({ item: row, action: "permanent-delete" })}><Trash2 className="h-4 w-4" /> Permanent Delete</Button> : null}</div>}
         />
       </OrganizationTableCard>
     </section>

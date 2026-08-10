@@ -28,6 +28,7 @@ type DataTableProps<T> = {
   selectable?: boolean;
   isRowSelectable?: (row: T) => boolean;
   rowClassName?: (row: T) => string | undefined;
+  onRowDoubleClick?: (row: T) => void;
   emptyMessage?: string;
   searchPlaceholder?: string;
   remote?: {
@@ -50,6 +51,7 @@ export function DataTable<T>({
   selectable,
   isRowSelectable,
   rowClassName,
+  onRowDoubleClick,
   emptyMessage = "No data found.",
   searchPlaceholder,
   remote
@@ -188,21 +190,21 @@ export function DataTable<T>({
   return (
     <div className="space-y-3">
       {bulkActions.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="relative">
+        <div className="relative z-[100] flex flex-wrap items-center justify-between gap-3">
+          <div className="relative z-[100]">
             <Button
               type="button"
-              variant={selectedRows.length > 0 ? "default" : "outline"}
+              variant="default"
               size="sm"
               disabled={selectedRows.length === 0}
               onClick={() => setBulkMenuOpen((value) => !value)}
-              className={selectedRows.length > 0 ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               Actions{selectedRows.length > 0 ? ` (${selectedRows.length} selected)` : ""}
               <ChevronDown className="h-4 w-4" />
             </Button>
             {bulkMenuOpen && selectedRows.length > 0 ? (
-              <div data-bulk-actions-menu className="data-table-bulk-actions-menu absolute left-0 z-30 mt-2 min-w-56 rounded-md border border-primary bg-primary p-1 shadow-xl">
+              <div data-bulk-actions-menu className="data-table-bulk-actions-menu absolute left-0 z-[110] mt-2 min-w-56 rounded-md border border-primary bg-primary p-1 shadow-2xl">
                 {visibleBulkActions.length > 0 ? visibleBulkActions.map((action) => (
                   <button
                     key={action.key}
@@ -314,7 +316,15 @@ export function DataTable<T>({
               const key = toKey(rowKey(row));
               const rowSelectable = isSelectable(row, isRowSelectable);
               return (
-                <tr key={key} className={cn("group", rowClassName?.(row))}>
+                <tr
+                  key={key}
+                  onDoubleClick={(event) => {
+                    const target = event.target as HTMLElement;
+                    if (target.closest("button, input, a, select, textarea, [role='button']")) return;
+                    onRowDoubleClick?.(row);
+                  }}
+                  className={cn("group", onRowDoubleClick && "cursor-pointer", rowClassName?.(row))}
+                >
                   {selectionEnabled ? (
                     <Td
                       style={stickySelectionStyle()}

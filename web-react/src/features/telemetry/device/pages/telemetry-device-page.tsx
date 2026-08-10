@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Power, RadioTower } from "lucide-react";
+import { Eye, Power, RadioTower } from "lucide-react";
 
 import { DataTable, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { getTelemetryDevices,setTelemetryDeviceTcp } from "../api/telemetry-device-api";
 import { DeviceFolderTree,type DeviceFolder } from "../components/device-folder-tree";
 import type { TelemetryDeviceRow } from "../types/telemetry-device";
+import { openDeviceWorkspace } from "../device-workspace/session/services/device-workspace-session-handoff";
 
 export function TelemetryDevicePage(){
  const client=useQueryClient(),user=useAuthStore(state=>state.user),language=useLanguageStore(state=>state.language),viewOnly=normalizeRole(user?.role)==="TECHUSER";
@@ -39,7 +40,12 @@ export function TelemetryDevicePage(){
   if(nextPage===page+1&&query.data?.hasMore&&query.data.nextCursor){setCursors(current=>{const next=[...current];next[page]=query.data!.nextCursor!;return next;});setPage(nextPage);}
   else if(nextPage<page&&nextPage>=1)setPage(nextPage);
  }
- return <section className="space-y-5 text-foreground"><PageHeader icon={<RadioTower className="h-5 w-5"/>} title={t(language,"telemetryDevice")}/>{notice?<div className="rounded-lg border border-border bg-muted p-3 text-sm">{notice}</div>:null}<div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]"><DeviceFolderTree groups={query.data?.groups||[]} wasted={query.data?.wastedGroups||[]} total={query.data?.totalDevices||0} ungroup={query.data?.ungroupedDevices||0} value={folder} onChange={setFolder}/><OrganizationTableCard><DataTable data={rows} columns={columns} rowKey={row=>row.id} rowClassName={row=>row.connected?"bg-primary/15 text-foreground":undefined} searchPlaceholder="Search IMEI, vehicle, driver..." emptyMessage={query.isLoading?t(language,"loading"):"No device found."} remote={{page,pageSize,totalRows:query.data?.filteredDevices||0,search,onPageChange:changePage,onPageSizeChange:setPageSize,onSearchChange:setSearch}}/></OrganizationTableCard></div></section>;
+ function openWorkspace(row:TelemetryDeviceRow){
+  const session=useAuthStore.getState();
+  if(!session.token||!session.user){setNotice("Your session is no longer active. Please sign in again.");return;}
+  if(!openDeviceWorkspace(row.id,row.imei,{token:session.token,user:session.user,rememberMe:session.rememberMe}))setNotice("The browser blocked the new workspace tab. Allow pop-ups for this site and retry.");
+ }
+ return <section className="space-y-5 text-foreground"><PageHeader icon={<RadioTower className="h-5 w-5"/>} title={t(language,"telemetryDevice")}/>{notice?<div className="rounded-lg border border-border bg-muted p-3 text-sm">{notice}</div>:null}<div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]"><DeviceFolderTree groups={query.data?.groups||[]} wasted={query.data?.wastedGroups||[]} total={query.data?.totalDevices||0} ungroup={query.data?.ungroupedDevices||0} value={folder} onChange={setFolder}/><OrganizationTableCard><DataTable data={rows} columns={columns} rowKey={row=>row.id} rowClassName={row=>row.connected?"bg-primary/15 text-foreground":undefined} onRowDoubleClick={openWorkspace} actions={row=><Button type="button" size="sm" variant="outline" onClick={event=>{event.stopPropagation();openWorkspace(row);}} onDoubleClick={event=>event.stopPropagation()} title={`Open workspace ${row.imei}`}><Eye className="h-4 w-4"/>Details</Button>} searchPlaceholder="Search IMEI, vehicle, driver..." emptyMessage={query.isLoading?t(language,"loading"):"No device found."} remote={{page,pageSize,totalRows:query.data?.filteredDevices||0,search,onPageChange:changePage,onPageSizeChange:setPageSize,onSearchChange:setSearch}}/></OrganizationTableCard></div></section>;
 }
 function Cell({lines,strong=false}:{lines:(string|number|null|undefined)[];strong?:boolean}){return <div className="space-y-1">{lines.map((line,index)=><div key={index} className={cn("whitespace-nowrap text-xs",strong&&index===0&&"font-bold")}>{line||"-"}</div>)}</div>;}
 function MovementStatus({status}:{status:string}){const normalized=status.toUpperCase();return <span className={cn("inline-flex items-center gap-2 text-sm font-semibold",normalized==="MOVING"?"text-primary":normalized==="IDLE"?"text-amber-500":"text-destructive")}><span className="h-2 w-2 rounded-full bg-current"/>{normalized==="MOVING"?"Moving":normalized==="IDLE"?"Idle":"Stop"}</span>;}

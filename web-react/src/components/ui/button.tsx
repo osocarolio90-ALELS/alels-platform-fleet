@@ -31,9 +31,12 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
   VariantProps<typeof buttonVariants>;
 
 export function Button({ className, variant, size, ...props }: ButtonProps) {
+  const resolvedVariant = variant ?? "default";
   return (
     <button
-      className={cn(buttonVariants({ variant, size, className }))}
+      data-ui-button
+      data-variant={resolvedVariant}
+      className={cn(buttonVariants({ variant: resolvedVariant, size, className }))}
       {...props}
     />
   );

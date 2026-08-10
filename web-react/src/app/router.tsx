@@ -81,8 +81,12 @@ const TelemetryGroupPage = lazy(() =>
 const TelemetryDevicePage = lazy(() =>
   import("@/features/telemetry/device/pages/telemetry-device-page").then((module) => ({ default: module.TelemetryDevicePage }))
 );
-
-
+const DeviceWorkspacePage = lazy(() =>
+  import("@/features/telemetry/device/device-workspace/pages/device-workspace-page").then((module) => ({ default: module.DeviceWorkspacePage }))
+);
+const DeviceWorkspaceLaunchPage = lazy(() =>
+  import("@/features/telemetry/device/device-workspace/session/pages/device-workspace-launch-page").then((module) => ({ default: module.DeviceWorkspaceLaunchPage }))
+);
 function PageLoader() {
   return (
     <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm text-slate-300">
@@ -97,9 +101,11 @@ function withSuspense(element: JSX.Element) {
 
 export const router = createBrowserRouter([
   { path: "/login", element: withSuspense(<LoginPage />) },
+  { path: "/telemetry/device/workspace-launch/:deviceId/:imei", element: withSuspense(<DeviceWorkspaceLaunchPage />) },
   {
     element: <ProtectedRoute allowedRoles={ALL_ROLES} />,
     children: [
+      { path: "/telemetry/device/:deviceId/:imei/workspace", element: withSuspense(<DeviceWorkspacePage />) },
       {
         element: <AppLayout />,
         children: [

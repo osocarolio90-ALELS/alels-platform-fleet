@@ -60,7 +60,7 @@ export function AssetWastedPage() {
 
   const bulkActions = useMemo<DataTableBulkAction<AssetWastedRow>[]>(() => [
     { key: "restore", label: "Restore", icon: <RotateCcw className="h-4 w-4" />, variant: "outline", confirmMessage: (rows) => `Restore ${rows.length} ${activeTab.toLowerCase()} item(s)?`, onClick: (rows) => rows.forEach((row) => restoreMutation.mutate({ type: activeTab, id: row.id })) },
-    { key: "permanent-delete", label: "Permanent Delete", icon: <Trash2 className="h-4 w-4" />, variant: "outline", hidden: () => !canPermanentDelete, confirmMessage: (rows) => `Permanent delete ${rows.length} ${activeTab.toLowerCase()} item(s)? This cannot be undone.`, onClick: (rows) => rows.forEach((row) => permanentDeleteMutation.mutate({ type: activeTab, id: row.id })) }
+    { key: "permanent-delete", label: "Permanent Delete", icon: <Trash2 className="h-4 w-4" />, variant: "destructive", hidden: () => !canPermanentDelete, confirmMessage: (rows) => `Permanent delete ${rows.length} ${activeTab.toLowerCase()} item(s)? This cannot be undone.`, onClick: (rows) => rows.forEach((row) => permanentDeleteMutation.mutate({ type: activeTab, id: row.id })) }
   ], [activeTab, canPermanentDelete, permanentDeleteMutation, restoreMutation]);
 
   const columns = useMemo<DataTableColumn<AssetWastedRow>[]>(() => [
@@ -106,7 +106,7 @@ export function AssetWastedPage() {
                   <RotateCcw className="h-4 w-4" /> Restore
                 </Button>
                 {canPermanentDelete ? (
-                  <Button type="button" size="sm" variant="outline" title="Permanent delete" onClick={() => confirm(`Permanent delete this ${activeTab.toLowerCase()}? This cannot be undone.`) && permanentDeleteMutation.mutate({ type: activeTab, id: row.id })}>
+                  <Button type="button" size="sm" variant="destructive" title="Permanent delete" onClick={() => confirm(`Permanent delete this ${activeTab.toLowerCase()}? This cannot be undone.`) && permanentDeleteMutation.mutate({ type: activeTab, id: row.id })}>
                     <Trash2 className="h-4 w-4" /> Permanent Delete
                   </Button>
                 ) : null}
