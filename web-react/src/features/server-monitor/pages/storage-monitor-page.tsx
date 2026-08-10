@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getStorageMonitorOverview, type StorageDistribution, type StorageMetric, type StorageMonitorInsight } from "@/lib/api";
 import {
@@ -330,7 +331,7 @@ export function StorageMonitorPage() {
       { key: "title", label: "Problem", value: (row: StorageMonitorInsight) => row.title, render: (row: StorageMonitorInsight) => <span className="font-extrabold text-card-foreground">{row.title}</span> },
       { key: "impact", label: "Impact", value: (row: StorageMonitorInsight) => row.impact || "-" },
       { key: "action", label: "Action", value: (row: StorageMonitorInsight) => row.action },
-      { key: "status", label: "Status", value: (row: StorageMonitorInsight) => row.status, render: (row: StorageMonitorInsight) => <Badge tone="muted">{row.status}</Badge> }
+      { key: "status", label: "Status", value: (row: StorageMonitorInsight) => row.status, render: (row: StorageMonitorInsight) => <StatusIndicator status={row.status} /> }
     ],
     []
   );

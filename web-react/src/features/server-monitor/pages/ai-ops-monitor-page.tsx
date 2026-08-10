@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getAiOpsOverview, type AiOpsFinding, type AiOpsMetric } from "@/lib/api";
 import {
@@ -266,7 +267,7 @@ export function AiOpsMonitorPage() {
         key: "status",
         label: "Status",
         value: (row: AiOpsFinding) => row.status,
-        render: (row: AiOpsFinding) => <Badge tone="muted">{row.status}</Badge>
+        render: (row: AiOpsFinding) => <StatusIndicator status={row.status} />
       }
     ],
     []

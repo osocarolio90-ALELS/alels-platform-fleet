@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getDatabaseMonitorOverview, type DatabaseMetric, type DatabaseMonitorInsight } from "@/lib/api";
 import {
   MonitorAssessmentCard,
@@ -226,7 +227,7 @@ export function DatabaseMonitorPage() {
       { key: "title", label: "Problem", value: (row: DatabaseMonitorInsight) => row.title, render: (row: DatabaseMonitorInsight) => <span className="font-extrabold text-card-foreground">{row.title}</span> },
       { key: "impact", label: "Impact", value: (row: DatabaseMonitorInsight) => row.impact || "-" },
       { key: "action", label: "Action", value: (row: DatabaseMonitorInsight) => row.action },
-      { key: "status", label: "Status", value: (row: DatabaseMonitorInsight) => row.status, render: (row: DatabaseMonitorInsight) => <Badge tone="muted">{row.status}</Badge> }
+      { key: "status", label: "Status", value: (row: DatabaseMonitorInsight) => row.status, render: (row: DatabaseMonitorInsight) => <StatusIndicator status={row.status} /> }
     ],
     []
   );

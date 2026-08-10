@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { StatusDot } from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/language-store";
 import { localizeMonitorTerm, severityLabel, visualFor } from "./monitor-utils";
@@ -66,7 +67,7 @@ export function MonitorKpiCard({
           <p className="mt-2 text-xs font-semibold leading-5 text-card-foreground">{note}</p>
         </div>
         <div className="server-monitor-icon grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-primary/10">{icon}</div>
-        <span className={cn("server-monitor-status-dot h-2.5 w-2.5 shrink-0 rounded-full", visual.dot)} aria-label={severity} />
+        <StatusDot status={severity} className="server-monitor-status-dot" />
       </CardContent>
     </Card>
   );
@@ -92,7 +93,7 @@ export function MonitorDomainCard({
             <p className="mt-1 text-xs font-extrabold text-muted-foreground">{severityLabel(language, severity)}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className={cn("server-monitor-status-dot h-2.5 w-2.5 rounded-full", visual.dot)} aria-label={severity} />
+            <StatusDot status={severity} className="server-monitor-status-dot" />
             <div className="server-monitor-icon grid h-12 w-12 place-items-center rounded-xl bg-primary/10">{icon}</div>
           </div>
         </div>

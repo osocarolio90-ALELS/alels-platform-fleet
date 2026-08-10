@@ -21,10 +21,9 @@ export const severityTone: Record<string, "success" | "warning" | "danger" | "mu
 
 export const severityVisual: Record<
   string,
-  { dot: string; border: string; bg: string; softBg: string; text: string; label: string; ring: string }
+  { border: string; bg: string; softBg: string; text: string; label: string; ring: string }
 > = {
   NORMAL: {
-    dot: "bg-blue-500",
     border: "border-border",
     bg: "bg-card",
     softBg: "bg-muted",
@@ -33,7 +32,6 @@ export const severityVisual: Record<
     ring: "ring-border"
   },
   WARNING: {
-    dot: "bg-amber-500",
     border: "border-border",
     bg: "bg-card",
     softBg: "bg-muted",
@@ -43,7 +41,6 @@ export const severityVisual: Record<
   },
 
   ATTENTION: {
-    dot: "bg-amber-500",
     border: "border-border",
     bg: "bg-card",
     softBg: "bg-muted",
@@ -52,7 +49,6 @@ export const severityVisual: Record<
     ring: "ring-border"
   },
   CRITICAL: {
-    dot: "bg-red-500",
     border: "border-border",
     bg: "bg-card",
     softBg: "bg-muted",
@@ -61,7 +57,6 @@ export const severityVisual: Record<
     ring: "ring-border"
   },
   EMERGENCY: {
-    dot: "bg-red-500",
     border: "border-border",
     bg: "bg-card",
     softBg: "bg-muted",
@@ -70,7 +65,6 @@ export const severityVisual: Record<
     ring: "ring-border"
   },
   UNKNOWN: {
-    dot: "bg-slate-400",
     border: "border-border",
     bg: "bg-card",
     softBg: "bg-muted",
@@ -79,7 +73,6 @@ export const severityVisual: Record<
     ring: "ring-border"
   },
   OFFLINE: {
-    dot: "bg-slate-400",
     border: "border-border",
     bg: "bg-card",
     softBg: "bg-muted",

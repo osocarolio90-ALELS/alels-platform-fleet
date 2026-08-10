@@ -5,12 +5,13 @@ import { Eye, Power, RadioTower } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { OrganizationTableCard } from "@/features/organization/components/organization-ui";
 import { t } from "@/lib/i18n";
 import { normalizeRole } from "@/lib/role-access";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLanguageStore } from "@/stores/language-store";
-import { cn } from "@/lib/utils";
 import { getTelemetryDevices,setTelemetryDeviceTcp } from "../api/telemetry-device-api";
 import { DeviceFolderTree,type DeviceFolder } from "../components/device-folder-tree";
 import type { TelemetryDeviceRow } from "../types/telemetry-device";
@@ -48,6 +49,6 @@ export function TelemetryDevicePage(){
  return <section className="space-y-5 text-foreground"><PageHeader icon={<RadioTower className="h-5 w-5"/>} title={t(language,"telemetryDevice")}/>{notice?<div className="rounded-lg border border-border bg-muted p-3 text-sm">{notice}</div>:null}<div className="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]"><DeviceFolderTree groups={query.data?.groups||[]} wasted={query.data?.wastedGroups||[]} total={query.data?.totalDevices||0} ungroup={query.data?.ungroupedDevices||0} value={folder} onChange={setFolder}/><OrganizationTableCard><DataTable data={rows} columns={columns} rowKey={row=>row.id} rowClassName={row=>row.connected?"bg-primary/15 text-foreground":undefined} onRowDoubleClick={openWorkspace} actions={row=><Button type="button" size="sm" variant="outline" onClick={event=>{event.stopPropagation();openWorkspace(row);}} onDoubleClick={event=>event.stopPropagation()} title={`Open workspace ${row.imei}`}><Eye className="h-4 w-4"/>Details</Button>} searchPlaceholder="Search IMEI, vehicle, driver..." emptyMessage={query.isLoading?t(language,"loading"):"No device found."} remote={{page,pageSize,totalRows:query.data?.filteredDevices||0,search,onPageChange:changePage,onPageSizeChange:setPageSize,onSearchChange:setSearch}}/></OrganizationTableCard></div></section>;
 }
 function Cell({lines,strong=false}:{lines:(string|number|null|undefined)[];strong?:boolean}){return <div className="space-y-1">{lines.map((line,index)=><div key={index} className={cn("whitespace-nowrap text-xs",strong&&index===0&&"font-bold")}>{line||"-"}</div>)}</div>;}
-function MovementStatus({status}:{status:string}){const normalized=status.toUpperCase();return <span className={cn("inline-flex items-center gap-2 text-sm font-semibold",normalized==="MOVING"?"text-primary":normalized==="IDLE"?"text-amber-500":"text-destructive")}><span className="h-2 w-2 rounded-full bg-current"/>{normalized==="MOVING"?"Moving":normalized==="IDLE"?"Idle":"Stop"}</span>;}
+function MovementStatus({status}:{status:string}){const normalized=status.toUpperCase();return <StatusIndicator status={normalized} label={normalized==="MOVING"?"Moving":normalized==="IDLE"?"Idle":"Stop"}/>;}
 function formatCurrency(value:number){return new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(value||0);}
 function relativeTime(value?:string|null){if(!value)return"-";const delta=Math.max(0,Date.now()-new Date(value).getTime()),seconds=Math.floor(delta/1000);if(seconds<60)return`${seconds} seconds ago`;const minutes=Math.floor(seconds/60);if(minutes<60)return`${minutes} minutes ago`;const hours=Math.floor(minutes/60);return`${hours} hours ago`;}

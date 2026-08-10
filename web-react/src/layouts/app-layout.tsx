@@ -255,7 +255,7 @@ export function AppLayout() {
       </aside>
 
       <div className={cn("legacy-content", sidebarIsCompact ? "lg:pl-[76px]" : "lg:pl-[250px]")}> 
-        <header className="legacy-topbar sticky top-0 z-10 flex h-[60px] items-center justify-between px-[22px]">
+        <header data-ui-topbar className="legacy-topbar sticky top-0 z-10 flex h-[60px] items-center justify-between px-[22px]">
           <div className="alels-topbar-company-badge inline-flex h-9 min-w-[210px] items-center gap-2 rounded-lg border px-3">
             <ServerCog className="alels-topbar-company-icon h-4 w-4" />
             <strong className="alels-topbar-company-name max-w-[280px] truncate text-sm font-extrabold tracking-wide">{currentCompanyName}</strong>

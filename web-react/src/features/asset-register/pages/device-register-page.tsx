@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getDeviceEndpoint } from "@/lib/api";
 import { OrganizationTableCard, formatDateTime, formatCompanyName } from "@/features/organization/components/organization-ui";
 import { moveAssets } from "@/features/asset-register/api/asset-move-api";
@@ -183,6 +184,6 @@ function emptyToNull(value: string) { const cleaned = value.trim(); return clean
 function formatDevice(row: DeviceRegisterRow) { return [row.deviceBrand, row.deviceModel].filter(Boolean).join(" ") || "-"; }
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) { return <label className="grid gap-2 text-xs font-bold text-white"><span>{label}{required ? <span className="ml-1 text-red-400">*</span> : null}</span>{children}</label>; }
 function TcpField({ label, value, type = "text", placeholder, onChange, onCheck }: { label: string; value: string; type?: string; placeholder?: string; onChange: (value: string) => void; onCheck: () => void }) { return <Field label={label}><div className="flex gap-2"><Input type={type} min={type === "number" ? 1 : undefined} max={type === "number" ? 65535 : undefined} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /><Button type="button" size="icon" variant="outline" onClick={onCheck} title={`Check ${label}`}><CheckCircle2 className="h-4 w-4" /></Button></div></Field>; }
-function StatusCell({ status }: { status?: string | null }) { const online = (status || "").toUpperCase() === "ONLINE"; return <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-extrabold text-white"><span className={online ? "h-2.5 w-2.5 rounded-full bg-emerald-400" : "h-2.5 w-2.5 rounded-full bg-red-500"} />{online ? "ONLINE" : "OFFLINE"}</span>; }
+function StatusCell({ status }: { status?: string | null }) { const normalized = (status || "OFFLINE").toUpperCase(); return <StatusIndicator status={normalized} />; }
 function pickEndpointHost(endpoint: unknown) { const data = endpoint as Record<string, unknown>; const host = data?.host ?? data?.tcpHost ?? data?.ip ?? data?.url ?? data?.hostname; return typeof host === "string" ? host.trim() : host == null ? "" : String(host); }
 function pickEndpointPort(endpoint: unknown) { const data = endpoint as Record<string, unknown>; const port = data?.port ?? data?.tcpPort ?? data?.gatewayPort; return typeof port === "string" ? port.trim() : port == null ? "" : String(port); }

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getSecurityMonitorOverview, type SecurityMetric, type SecurityMonitorInsight } from "@/lib/api";
 import {
   MonitorAssessmentCard,
@@ -177,7 +178,7 @@ export function SecurityMonitorPage() {
       { key: "title", label: "Problem", value: (row: SecurityMonitorInsight) => row.title, render: (row: SecurityMonitorInsight) => <span className="font-extrabold text-foreground">{row.title}</span> },
       { key: "impact", label: "Impact", value: (row: SecurityMonitorInsight) => row.impact || "-" },
       { key: "action", label: "Action", value: (row: SecurityMonitorInsight) => row.action },
-      { key: "status", label: "Status", value: (row: SecurityMonitorInsight) => row.status, render: (row: SecurityMonitorInsight) => <Badge tone="muted">{row.status}</Badge> }
+      { key: "status", label: "Status", value: (row: SecurityMonitorInsight) => row.status, render: (row: SecurityMonitorInsight) => <StatusIndicator status={row.status} /> }
     ],
     []
   );

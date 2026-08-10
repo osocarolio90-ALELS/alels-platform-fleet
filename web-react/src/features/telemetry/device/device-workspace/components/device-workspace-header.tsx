@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 
 type DeviceWorkspaceHeaderProps = {
   imei?: string;
@@ -21,7 +21,7 @@ export function DeviceWorkspaceHeader({ imei, model, online, vehiclePlate, locat
         <div className="dw-workspace-identity">
           <div className="dw-workspace-title-row">
             <h1>{imei ? `IMEI ${imei}` : "IMEI Workspace"}</h1>
-            <Badge tone={online ? "success" : "muted"}>{online ? "ONLINE" : "OFFLINE"}</Badge>
+            <StatusIndicator status={online ? "ONLINE" : "OFFLINE"} />
           </div>
           <p data-preserve-tone>{model || "Device model unavailable"}</p>
         </div>

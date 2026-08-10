@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTrafficMonitorOverview, type TrafficMetric, type TrafficMonitorInsight } from "@/lib/api";
 import {
   MonitorAssessmentCard,
@@ -205,7 +206,7 @@ export function TrafficMonitorPage() {
       { key: "title", label: "Problem", value: (row: TrafficMonitorInsight) => row.title, render: (row: TrafficMonitorInsight) => <span className="font-extrabold text-card-foreground">{row.title}</span> },
       { key: "impact", label: "Impact", value: (row: TrafficMonitorInsight) => row.impact || "-" },
       { key: "action", label: "Action", value: (row: TrafficMonitorInsight) => row.action },
-      { key: "status", label: "Status", value: (row: TrafficMonitorInsight) => row.status, render: (row: TrafficMonitorInsight) => <Badge tone="muted">{row.status}</Badge> }
+      { key: "status", label: "Status", value: (row: TrafficMonitorInsight) => row.status, render: (row: TrafficMonitorInsight) => <StatusIndicator status={row.status} /> }
     ],
     []
   );

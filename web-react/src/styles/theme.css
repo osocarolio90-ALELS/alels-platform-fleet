@@ -68,7 +68,7 @@
   border-color: #d8e0ec !important;
 }
 
-.theme-light .legacy-content h1.text-white,
+.theme-light .legacy-content h1.text-white:not([data-ui-page-header] *),
 .theme-light .legacy-content h2.text-white,
 .theme-light .legacy-content h3.text-white,
 .theme-light .legacy-content label.text-white,
@@ -148,7 +148,7 @@
 }
 
 .theme-light .legacy-content,
-.theme-light .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option):not([data-preserve-tone]):not([data-ui-button]) {
+.theme-light .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option):not([data-preserve-tone]):not([data-ui-button]):not([data-ui-page-header] *):not([data-ui-topbar] *) {
   color: #000000 !important;
 }
 
@@ -159,8 +159,8 @@
   stroke: #ffffff !important;
 }
 
-.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *),
-.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *) * {
+.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *):not([data-ui-page-header] *):not([data-ui-topbar] *),
+.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *):not([data-ui-page-header] *):not([data-ui-topbar] *) * {
   color: hsl(var(--primary)) !important;
   fill: none !important;
   stroke: hsl(var(--primary)) !important;
@@ -211,6 +211,18 @@
 }
 
 /* Global badge contrast for the application's theme-dark/theme-light system. */
+.theme-light [data-ui-status-indicator] {
+  background-color: hsl(var(--background));
+  border-color: hsl(var(--border));
+  color: #000000;
+}
+
+.theme-dark [data-ui-status-indicator] {
+  background-color: hsl(var(--background));
+  border-color: hsl(var(--border));
+  color: #ffffff;
+}
+
 .theme-dark [data-ui-badge][data-tone="default"] {
   background-color: hsl(217 55% 22%) !important;
   border-color: hsl(217 78% 45%) !important;

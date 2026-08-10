@@ -145,8 +145,7 @@ export function VehicleRegisterPage() {
 
 function VehicleStatus({ status }: { status?: string | null }) {
   const normalized = (status || "UNKNOWN").toUpperCase();
-  const className = normalized === "MOVING" ? "bg-emerald-500" : normalized === "IDLE" ? "bg-yellow-400" : normalized === "STOP" ? "bg-red-500" : normalized === "MAINTENANCE" ? "bg-sky-500" : "bg-white";
-  return <span className="inline-flex items-center gap-2"><span className={`h-3 w-3 rounded-full ${className}`} /><StatusBadge status={normalized} /></span>;
+  return <StatusBadge status={normalized} />;
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-1 text-xs font-bold text-slate-300"><span>{label}</span>{children}</label>; }
 function SelectField({ label, value, onChange, options, hideLabel = false, disabled = false }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string; extra?: string | null }[]; hideLabel?: boolean; disabled?: boolean }) { return hideLabel ? <SearchableSelect label="Unit" value={value} onChange={onChange} options={options} placeholder="Unit" /> : <SearchableSelect label={label} value={value} onChange={onChange} options={options} disabled={disabled} />; }

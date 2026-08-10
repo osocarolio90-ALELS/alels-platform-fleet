@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getGatewayMonitorOverview, type GatewayMonitorInsight, type GatewayMetric } from "@/lib/api";
 import {
   MonitorAssessmentCard,
@@ -206,7 +207,7 @@ export function GatewayMonitorPage() {
       { key: "title", label: "Problem", value: (row: GatewayMonitorInsight) => row.title, render: (row: GatewayMonitorInsight) => <span className="font-extrabold text-card-foreground">{row.title}</span> },
       { key: "impact", label: "Impact", value: (row: GatewayMonitorInsight) => row.impact || "-" },
       { key: "action", label: "Action", value: (row: GatewayMonitorInsight) => row.action },
-      { key: "status", label: "Status", value: (row: GatewayMonitorInsight) => row.status, render: (row: GatewayMonitorInsight) => <Badge tone="muted">{row.status}</Badge> }
+      { key: "status", label: "Status", value: (row: GatewayMonitorInsight) => row.status, render: (row: GatewayMonitorInsight) => <StatusIndicator status={row.status} /> }
     ],
     []
   );

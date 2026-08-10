@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
-import { Badge } from "@/components/ui/badge";
+import { StatusDot, StatusIndicator } from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/language-store";
-import { formatMonitorTimestamp, localizeMonitorTerm, monitorLabel, severityLabel, toneFor, visualFor } from "./monitor-utils";
+import { formatMonitorTimestamp, localizeMonitorTerm, monitorLabel, severityLabel, visualFor } from "./monitor-utils";
 
 type MonitorHeroAttention = {
   status: string;
@@ -61,13 +61,11 @@ export function MonitorHero({
           <div className={cn("server-monitor-card flex min-h-[180px] flex-col rounded-lg border bg-card p-4 shadow-sm", visual.border)}>
             <div className="mb-3 flex items-center justify-between">
               <span className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">{localizeMonitorTerm(language, statusLabel)}</span>
-              <span className={cn("server-monitor-status-dot h-3 w-3 rounded-full", visual.dot)} />
+              <StatusDot status={status} className="server-monitor-status-dot h-3 w-3" />
             </div>
             <div className="flex items-end justify-between gap-4">
               <div>
-                <Badge tone={toneFor(status)} className="px-3 py-1 text-sm font-extrabold">
-                  {severityLabel(language, status)}
-                </Badge>
+                <StatusIndicator status={status} label={severityLabel(language, status)} className="text-sm" />
                 <p className={cn("mt-2 text-sm font-extrabold", visual.text)}>{severityLabel(language, status)}</p>
                 <p className="mt-1 text-xs font-bold text-muted-foreground">{monitorLabel(language, "trend")}: {trendLabel}</p>
               </div>
@@ -88,11 +86,9 @@ export function MonitorHero({
             <div className={cn("server-monitor-card flex min-h-[180px] flex-col rounded-lg border bg-card p-4 shadow-sm", attentionVisual.border)}>
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">{monitorLabel(language, "attentionSummary")}</span>
-                <span className={cn("server-monitor-status-dot h-3 w-3 rounded-full", attentionVisual.dot)} />
+                <StatusDot status={attention.status} className="server-monitor-status-dot h-3 w-3" />
               </div>
-              <Badge tone={toneFor(attention.status)} className="px-3 py-1 text-sm font-extrabold">
-                {localizeMonitorTerm(language, attention.label)}
-              </Badge>
+              <StatusIndicator status={attention.status} label={localizeMonitorTerm(language, attention.label)} className="text-sm" />
               <p className={cn("mt-3 text-sm font-extrabold", attentionVisual.text)}>{attention.title}</p>
               <div className="mt-2 flex-1 text-xs font-bold leading-5 text-slate-800 dark:text-slate-100">{attention.summary}</div>
               {attention.action ? (

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import {
   getOverviewMonitorOverview,
   type OverviewMetric,
@@ -157,7 +158,7 @@ export function OverviewMonitorPage() {
       { key: "title", label: "Problem", value: (row: OverviewMonitorInsight) => row.title, render: (row: OverviewMonitorInsight) => <span className="font-extrabold text-foreground">{row.title}</span> },
       { key: "impact", label: "Impact", value: (row: OverviewMonitorInsight) => row.impact || "-" },
       { key: "action", label: "Action", value: (row: OverviewMonitorInsight) => row.action },
-      { key: "status", label: "Status", value: (row: OverviewMonitorInsight) => row.status, render: (row: OverviewMonitorInsight) => <Badge tone="muted">{row.status}</Badge> }
+      { key: "status", label: "Status", value: (row: OverviewMonitorInsight) => row.status, render: (row: OverviewMonitorInsight) => <StatusIndicator status={row.status} /> }
     ],
     []
   );

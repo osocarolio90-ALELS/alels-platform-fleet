@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { cn } from "@/lib/utils";
 import {
   AssetAssignmentInput,
@@ -309,7 +310,7 @@ export function AssignmentPage() {
 
 function StatusBadge({ value }: { value?: string | null }) {
   const normalized = (value || "-").toUpperCase();
-  return <span className={cn("inline-flex rounded-md px-2 py-1 text-xs font-extrabold", normalized === "ACTIVE" ? "bg-sky-500/15 text-sky-300" : "bg-slate-500/15 text-slate-300")}>{normalized}</span>;
+  return <StatusIndicator status={normalized} />;
 }
 
 function Alert({ tone, message }: { tone: "success" | "error"; message: string }) {

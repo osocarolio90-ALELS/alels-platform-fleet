@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator, statusIndicatorTone } from "@/components/ui/status-indicator";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { translateUiLabel } from "@/lib/i18n";
@@ -26,17 +27,10 @@ export function OrganizationTableCard({ children, title, description }: { childr
   );
 }
 
-export function statusTone(status?: string | null): "default" | "success" | "warning" | "danger" | "muted" {
-  const normalized = (status || "").toUpperCase();
-  if (["ACTIVE", "PROVISION", "ALELS", "INFO", "FIXED", "CONNECTED"].includes(normalized)) return "default";
-  if (["APPROVED", "INTERNAL", "ROOT", "ENTERPRISE", "ONLINE", "LIVE", "ON_DUTY", "ON DUTY", "OPERATIONAL", "VALID", "RESOLVED"].includes(normalized)) return "success";
-  if (["PENDING", "TRIAL", "SAMPLE", "BASIC", "ADVANCED", "WARNING"].includes(normalized)) return "warning";
-  if (["SUSPENDED", "REJECTED", "DELETED", "EXPIRED", "INACTIVE", "OFFLINE", "ERROR", "CRITICAL", "DANGER"].includes(normalized)) return "danger";
-  return "muted";
-}
-
 export function StatusBadge({ status }: { status?: string | null }) {
-  return <Badge tone={statusTone(status)} className="px-3 py-1 font-extrabold">{status || "-"}</Badge>;
+  return statusIndicatorTone(status) === "neutral"
+    ? <Badge tone="muted" className="px-3 py-1 font-extrabold">{status || "-"}</Badge>
+    : <StatusIndicator status={status} />;
 }
 
 export function formatDate(value?: string | null) {
