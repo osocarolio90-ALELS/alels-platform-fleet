@@ -27,15 +27,21 @@ public final class DeviceWorkspaceTelemetryDtos {
             Integer satellites, Double hdop, String deviceTime, String serverTime
     ) {}
 
+    public record TrackPoint(
+            Double latitude, Double longitude, Integer angle, Double speed, String occurredAt
+    ) {}
+
     public record ConnectionInfo(
-            Integer signalStrength, Integer satellitesUsed, String gnssStatus, String tcpStatus
+            Integer signalStrength, Integer satellitesUsed, String gnssStatus, String tcpStatus,
+            String protocol, String channel
     ) {}
 
     public record PacketInfo(Long id, Long sequence, String receivedAt) {}
 
     public record DataParameter(
             String fieldCode, String label, String value, Double numericValue,
-            Boolean booleanValue, String unit, String parameterId, String category
+            Boolean booleanValue, String unit, String parameterId, String category,
+            String sourceProtocol, String dictionaryCode, Long deviceModelId
     ) {}
 
     public record RecentEvent(
@@ -56,7 +62,7 @@ public final class DeviceWorkspaceTelemetryDtos {
     public record WorkspaceTelemetryResponse(
             DeviceInfo device, DriverInfo driver, VehicleInfo vehicle, PositionInfo position,
             ConnectionInfo connection, PacketInfo packet, List<DataParameter> dataReceived,
-            WorkspaceConfiguration configuration
+            WorkspaceConfiguration configuration, List<TrackPoint> track
     ) {}
 
     public record EventPage(List<RecentEvent> events, Long nextBeforeId, boolean hasMore) {}

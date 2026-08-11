@@ -26,12 +26,11 @@ import io.netty.handler.timeout.IdleStateEvent;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
 import com.alels.gateway.session.ownership.SessionOwnershipConfig;
 import com.alels.gateway.session.ownership.SessionOwnershipService;
+import com.alels.gateway.service.TelemetryBatchPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +51,8 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
             new TeltonikaCodec12ResponseParser();
     private static final SessionOwnershipService SESSION_OWNERSHIP =
             new SessionOwnershipService(SessionOwnershipConfig.fromEnvironment());
+    private static final TelemetryBatchPublisher BATCH =
+            new TelemetryBatchPublisher(PUBLISHER, METRICS);
 
     private final String sessionFencingToken = UUID.randomUUID().toString();
     private String boundImei;
@@ -199,14 +200,15 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         }
         withOwnership(ctx, boundImei, () -> {
             bindSession(ctx, boundImei, ChannelType.GSM, protocol);
-            List<CompletableFuture<Long>> futures = new ArrayList<>();
-            for (TelemetryData telemetry : result.getTelemetryList()) {
-                telemetry.setImei(boundImei);
-                futures.add(publish(telemetry, protocol, ChannelType.GSM, parserCode));
-            }
-            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
-                    .whenComplete((ignored, error) -> {
-                        if (error == null) sendTeltonikaAck(ctx, result.getRecordCount());
+            BATCH.publish(
+                    result,
+                    boundImei,
+                    protocol,
+                    ChannelType.GSM,
+                    DeviceAdmissionRegistry.dictionaryCode(boundImei),
+                    parserCode
+            ).whenComplete((accepted, error) -> {
+                        if (error == null) sendTeltonikaAck(ctx, accepted);
                         else {
                             sendTeltonikaAck(ctx, 0);
                             logPublishFailure(boundImei, error);

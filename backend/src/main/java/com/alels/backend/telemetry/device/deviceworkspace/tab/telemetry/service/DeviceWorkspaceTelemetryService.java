@@ -35,7 +35,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class DeviceWorkspaceTelemetryService {
     private static final int BOTTOM_ITEM_COUNT = 7;
+    private static final Set<String> REQUIRED_INSTRUMENT_SLOTS = Set.of("RPM", "SPEED");
     private static final int MAX_EVENT_PAGE_SIZE = 100;
+    private static final int MAX_TRACK_POINTS = 500;
 
     private final TelemetryDeviceRepository deviceRepository;
     private final DeviceWorkspaceTelemetryRepository workspaceRepository;
@@ -66,12 +68,16 @@ public class DeviceWorkspaceTelemetryService {
         Integer signal = findSignalStrength(parameters);
         String gnssStatus = packet != null && packet.latitude() != null && packet.longitude() != null ? "FIXED" : "NO FIX";
         String tcpStatus = !device.info().tcpEnabled() ? "DISABLED" : device.info().online() ? "CONNECTED" : "DISCONNECTED";
-        ConnectionInfo connection = new ConnectionInfo(signal, packet == null ? null : packet.satellites(), gnssStatus, tcpStatus);
+        ConnectionInfo connection = new ConnectionInfo(
+                signal, packet == null ? null : packet.satellites(), gnssStatus, tcpStatus,
+                packet == null ? null : packet.protocol(), packet == null ? null : packet.channel()
+        );
         PacketInfo packetInfo = packet == null ? null : new PacketInfo(packet.id(), packet.sequence(), packet.serverTime());
 
         return new WorkspaceTelemetryResponse(
                 device.info(), driver, vehicle, position, connection, packetInfo, parameters,
-                readConfiguration(deviceId, user.userId())
+                readConfiguration(deviceId, user.userId()),
+                workspaceRepository.recentTrack(device.info().imei(), MAX_TRACK_POINTS)
         );
     }
 
@@ -135,17 +141,32 @@ public class DeviceWorkspaceTelemetryService {
         if (uniqueBottomSlots != normalized.bottomItems().size()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bottom data slots must be unique.");
         }
+        Set<String> instrumentSlots = normalized.instruments().stream()
+                .map(InstrumentMapping::slot).collect(java.util.stream.Collectors.toSet());
+        if (!instrumentSlots.equals(REQUIRED_INSTRUMENT_SLOTS)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Main instrument slots must contain RPM and SPEED.");
+        }
         return normalized;
     }
 
     private WorkspaceConfiguration normalizeConfiguration(WorkspaceConfiguration input) {
         if (input == null) return defaultConfiguration();
+        List<InstrumentMapping> instruments = input.instruments() == null ? defaultConfiguration().instruments() : input.instruments().stream()
+                .filter(item -> item != null && item.slot() != null)
+                .map(DeviceWorkspaceTelemetryService::cleanMapping)
+                .filter(item -> REQUIRED_INSTRUMENT_SLOTS.contains(item.slot()))
+                .toList();
+        Set<String> normalizedInstrumentSlots = instruments.stream()
+                .map(InstrumentMapping::slot).collect(java.util.stream.Collectors.toSet());
+        if (!normalizedInstrumentSlots.equals(REQUIRED_INSTRUMENT_SLOTS)) {
+            instruments = defaultConfiguration().instruments();
+        }
         List<InstrumentMapping> bottom = input.bottomItems() == null ? List.of() : input.bottomItems().stream()
                 .filter(item -> item != null && item.slot() != null)
                 .map(DeviceWorkspaceTelemetryService::cleanMapping)
                 .limit(BOTTOM_ITEM_COUNT + 1L)
                 .toList();
-        return new WorkspaceConfiguration(defaultConfiguration().instruments(), bottom);
+        return new WorkspaceConfiguration(instruments, bottom);
     }
 
     private static InstrumentMapping cleanMapping(InstrumentMapping item) {
@@ -192,7 +213,8 @@ public class DeviceWorkspaceTelemetryService {
             Double numeric = asDouble(rawValue);
             Boolean bool = rawValue instanceof Boolean booleanValue ? booleanValue : null;
             DataParameter parameter = new DataParameter(
-                    "io." + id, "IO " + id, String.valueOf(rawValue), numeric, bool, null, id, "OTHER"
+                    "io." + id, "IO " + id, String.valueOf(rawValue), numeric, bool, null, id, "OTHER",
+                    packet.protocol(), null, null
             );
             values.put(parameterKey(parameter.fieldCode(), parameter.parameterId()), parameter);
         });
@@ -219,7 +241,9 @@ public class DeviceWorkspaceTelemetryService {
         if (numeric == null && booleanValue == null) return;
         Double number = numeric == null ? null : numeric.doubleValue();
         String display = booleanValue != null ? String.valueOf(booleanValue) : formatNumber(number);
-        DataParameter parameter = new DataParameter(code, label, display, number, booleanValue, unit, parameterId, category);
+        DataParameter parameter = new DataParameter(
+                code, label, display, number, booleanValue, unit, parameterId, category, null, null, null
+        );
         values.put(parameterKey(code, parameterId), parameter);
     }
 

@@ -1,13 +1,13 @@
 import { FormEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Database, Pencil, Plus, PowerOff, Save, Trash2, X } from "lucide-react";
+import { Database, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 
 import { DataTable, type DataTableBulkAction, type DataTableColumn } from "@/components/data-table";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { OrganizationTableCard, StatusBadge, formatDateTime } from "@/features/organization/components/organization-ui";
+import { OrganizationTableCard, formatDateTime } from "@/features/organization/components/organization-ui";
 import { useAuthStore } from "@/stores/auth-store";
 import { hasRole, MASTER_DATA_EDIT_ROLES } from "@/lib/role-access";
 import {
@@ -49,41 +49,15 @@ export function DeviceMasterPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["device-master"] })
   });
 
-  const statusMutation = useMutation({
-    mutationFn: ({ row, active }: { row: DeviceModelRow; active: boolean }) => updateDeviceModel(row.id, rowToInput(row, active)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["device-master"] })
-  });
-
   const columns = useMemo<DataTableColumn<DeviceModelRow>[]>(() => [
     { key: "code", label: "Code", value: (row) => row.modelCode || "-", render: (row) => <span className="font-bold text-foreground">{row.modelCode || "-"}</span> },
     { key: "brandName", label: "Device Brand", value: (row) => row.brandName || "-", render: (row) => <span className="font-bold text-foreground">{row.brandName || "-"}</span> },
     { key: "modelName", label: "Device Model", value: (row) => row.modelName || "-", render: (row) => <span className="font-bold text-foreground">{row.modelName || "-"}</span> },
     { key: "createdAt", label: "Created at", value: (row) => row.createdAt || "", render: (row) => formatDateTime(row.createdAt) },
-    { key: "createdBy", label: "Created By", value: (row) => row.createdBy || "-" },
-    { key: "status", label: "Status", value: (row) => row.active ? "ACTIVE" : "INACTIVE", render: (row) => <StatusBadge status={row.active ? "ACTIVE" : "INACTIVE"} /> }
+    { key: "createdBy", label: "Created By", value: (row) => row.createdBy || "-" }
   ], []);
 
   const bulkActions = useMemo<DataTableBulkAction<DeviceModelRow>[]>(() => canEdit ? [
-    {
-      key: "set-active",
-      label: "Set Active",
-      icon: <CheckCircle2 className="h-4 w-4" />,
-      confirmMessage: (selected) => `Activate ${selected.length} selected device master item(s)?`,
-      onClick: async (selected) => {
-        for (const row of selected) await updateDeviceModel(row.id, rowToInput(row, true));
-        queryClient.invalidateQueries({ queryKey: ["device-master"] });
-      }
-    },
-    {
-      key: "set-inactive",
-      label: "Set Inactive",
-      icon: <PowerOff className="h-4 w-4" />,
-      confirmMessage: (selected) => `Inactive ${selected.length} selected device master item(s)?`,
-      onClick: async (selected) => {
-        for (const row of selected) await updateDeviceModel(row.id, rowToInput(row, false));
-        queryClient.invalidateQueries({ queryKey: ["device-master"] });
-      }
-    },
     {
       key: "delete",
       label: "Delete",
@@ -110,7 +84,7 @@ export function DeviceMasterPage() {
       modelCode: row.modelCode || "",
       brandId: row.brandId ? String(row.brandId) : "",
       modelName: row.modelName || "",
-      active: row.active ? "ACTIVE" : "INACTIVE"
+      active: true
     });
     setFormOpen(true);
   }
@@ -145,12 +119,6 @@ export function DeviceMasterPage() {
             <Field label="Device Model">
               <Input value={form.modelName} onChange={(event) => setForm((current) => ({ ...current, modelName: event.target.value }))} required />
             </Field>
-            <Field label="Status">
-              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground" value={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.value }))}>
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="INACTIVE">INACTIVE</option>
-              </select>
-            </Field>
             <div className="md:col-span-3 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={closeForm}><X className="h-4 w-4" /> Cancel</Button>
               <Button type="submit" disabled={saveMutation.isPending}><Save className="h-4 w-4" /> Save</Button>
@@ -179,11 +147,6 @@ export function DeviceMasterPage() {
             <div className="flex items-center gap-2">
               <Button type="button" size="icon" variant="outline" onClick={() => startEdit(row)} title="Edit"><Pencil className="h-4 w-4" /></Button>
               <Button type="button" size="icon" variant="destructive" onClick={() => deleteMutation.mutate(row)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
-              {row.active ? (
-                <Button type="button" size="icon" variant="outline" onClick={() => statusMutation.mutate({ row, active: false })} title="Inactive"><PowerOff className="h-4 w-4" /></Button>
-              ) : (
-                <Button type="button" size="icon" variant="outline" onClick={() => statusMutation.mutate({ row, active: true })} title="Active"><CheckCircle2 className="h-4 w-4" /></Button>
-              )}
             </div>
           ) : <span className="text-xs text-slate-400">Read only</span>}
         />
@@ -192,10 +155,10 @@ export function DeviceMasterPage() {
   );
 }
 
-type FormState = { modelCode: string; brandId: string; modelName: string; active: string };
+type FormState = { modelCode: string; brandId: string; modelName: string; active: boolean };
 
 function emptyForm(): FormState {
-  return { modelCode: "", brandId: "", modelName: "", active: "ACTIVE" };
+  return { modelCode: "", brandId: "", modelName: "", active: true };
 }
 
 function toInput(form: FormState): DeviceMasterInput {
@@ -203,22 +166,7 @@ function toInput(form: FormState): DeviceMasterInput {
     brandId: form.brandId ? Number(form.brandId) : null,
     modelCode: form.modelCode || null,
     modelName: form.modelName || null,
-    active: form.active === "ACTIVE"
-  };
-}
-
-function rowToInput(row: DeviceModelRow, active: boolean): DeviceMasterInput {
-  return {
-    brandId: null,
-    brandName: row.brandName || null,
-    modelCode: row.modelCode || null,
-    modelName: row.modelName || null,
-    protocolCode: row.protocolCode || null,
-    parserCode: row.parserCode || null,
-    dictionaryCode: row.dictionaryCode || null,
-    description: row.description || null,
-    active,
-    sortOrder: row.sortOrder || null
+    active: true
   };
 }
 

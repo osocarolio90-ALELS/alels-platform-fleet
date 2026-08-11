@@ -143,24 +143,24 @@
  * that still have old hardcoded Tailwind text utilities remain readable.
  */
 .theme-dark .legacy-content,
-.theme-dark .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option):not([data-preserve-tone]) {
+.theme-dark .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option):not([data-preserve-tone]):not(.dw-cluster *) {
   color: #ffffff !important;
 }
 
 .theme-light .legacy-content,
-.theme-light .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option):not([data-preserve-tone]):not([data-ui-button]):not([data-ui-page-header] *):not([data-ui-topbar] *) {
+.theme-light .legacy-content :where(h1,h2,h3,h4,h5,h6,p,span,label,small,strong,em,div,td,th,a,button,input,textarea,select,option):not([data-preserve-tone]):not([data-ui-button]):not([data-ui-page-header] *):not([data-ui-topbar] *):not(.dw-cluster *) {
   color: #000000 !important;
 }
 
-.theme-dark .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *),
-.theme-dark .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *) * {
+.theme-dark .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *):not(.dw-cluster *),
+.theme-dark .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *):not(.dw-cluster *) * {
   color: #ffffff !important;
   fill: none !important;
   stroke: #ffffff !important;
 }
 
-.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *):not([data-ui-page-header] *):not([data-ui-topbar] *),
-.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *):not([data-ui-page-header] *):not([data-ui-topbar] *) * {
+.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *):not([data-ui-page-header] *):not([data-ui-topbar] *):not(.dw-cluster *),
+.theme-light .legacy-content :where(svg,[data-lucide]):not([data-preserve-tone]):not([data-ui-button] *):not([data-ui-page-header] *):not([data-ui-topbar] *):not(.dw-cluster *) * {
   color: hsl(var(--primary)) !important;
   fill: none !important;
   stroke: hsl(var(--primary)) !important;

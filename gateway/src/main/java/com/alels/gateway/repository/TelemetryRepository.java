@@ -4,20 +4,25 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 
 import com.alels.gateway.config.DatabaseConfig;
 import com.alels.gateway.model.DriverInfo;
 import com.alels.gateway.model.TelemetryData;
 import com.alels.gateway.service.DriverResolver;
 import com.alels.gateway.service.VehicleStatusResolver;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class TelemetryRepository {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static Long insert(
             Long rawPacketId,
             TelemetryData data,
             String protocol,
-            String channel
+            String channel,
+            String dictionaryCode
     ) {
         if (data == null) {
             return null;
@@ -45,6 +50,8 @@ public class TelemetryRepository {
                     imei,
                     protocol,
                     channel,
+                    dictionary_code,
+                    source_protocol,
                     device_time,
                     packet_sequence,
                     latitude,
@@ -60,12 +67,13 @@ public class TelemetryRepository {
                     driver_name,
                     driver_rfid,
                     vehicle_status,
+                    io_data,
+                    io,
                     parse_status
                 )
                 VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?,
-                    ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, CAST(? AS jsonb), CAST(? AS jsonb), ?
                 )
                 RETURNING id
                 """;
@@ -83,6 +91,8 @@ public class TelemetryRepository {
             stmt.setString(2, data.getImei());
             stmt.setString(3, protocol);
             stmt.setString(4, channel);
+            stmt.setString(5, dictionaryCode);
+            stmt.setString(6, protocol);
 
             Timestamp deviceTimestamp =
                     parseTimestamp(
@@ -90,48 +100,51 @@ public class TelemetryRepository {
                     );
 
             if (deviceTimestamp == null) {
-                stmt.setNull(5, java.sql.Types.TIMESTAMP);
+                stmt.setNull(7, java.sql.Types.TIMESTAMP);
             } else {
-                stmt.setTimestamp(5, deviceTimestamp);
+                stmt.setTimestamp(7, deviceTimestamp);
             }
 
-            stmt.setLong(6, data.getPacketSequence());
-            stmt.setDouble(7, data.getLatitude());
-            stmt.setDouble(8, data.getLongitude());
-            stmt.setInt(9, data.getAltitude());
-            stmt.setInt(10, data.getAngle());
-            stmt.setInt(11, data.getSatellites());
-            stmt.setInt(12, data.getSpeed());
-            stmt.setDouble(13, data.getHdop());
-            stmt.setInt(14, data.getPriority());
-            stmt.setInt(15, data.getEventIoId());
+            stmt.setLong(8, data.getPacketSequence());
+            stmt.setDouble(9, data.getLatitude());
+            stmt.setDouble(10, data.getLongitude());
+            stmt.setInt(11, data.getAltitude());
+            stmt.setInt(12, data.getAngle());
+            stmt.setInt(13, data.getSatellites());
+            stmt.setInt(14, data.getSpeed());
+            stmt.setDouble(15, data.getHdop());
+            stmt.setInt(16, data.getPriority());
+            stmt.setInt(17, data.getEventIoId());
 
             if (driver == null) {
 
-                stmt.setNull(16, java.sql.Types.BIGINT);
-                stmt.setNull(17, java.sql.Types.VARCHAR);
-                stmt.setNull(18, java.sql.Types.VARCHAR);
+                stmt.setNull(18, java.sql.Types.BIGINT);
+                stmt.setNull(19, java.sql.Types.VARCHAR);
+                stmt.setNull(20, java.sql.Types.VARCHAR);
 
             } else {
 
                 stmt.setLong(
-                        16,
+                        18,
                         driver.getDriverId()
                 );
 
                 stmt.setString(
-                        17,
+                        19,
                         driver.getDriverName()
                 );
 
                 stmt.setString(
-                        18,
+                        20,
                         driver.getDriverRfid()
                 );
             }
 
-            stmt.setString(19, vehicleStatus);
-            stmt.setString(20, "VALID");
+            stmt.setString(21, vehicleStatus);
+            String ioJson = MAPPER.writeValueAsString(data.getIoData());
+            stmt.setString(22, ioJson);
+            stmt.setString(23, ioJson);
+            stmt.setString(24, "VALID");
 
             try (ResultSet rs = stmt.executeQuery()) {
 
@@ -144,6 +157,8 @@ public class TelemetryRepository {
                             "[DB TELEMETRY] inserted id="
                                     + id
                                     + " imei=" + data.getImei()
+                                    + " protocol=" + protocol
+                                    + " dictionary=" + dictionaryCode
                                     + " vehicleStatus=" + vehicleStatus
                                     + " driver="
                                     + (
@@ -181,6 +196,16 @@ public class TelemetryRepository {
         }
 
         try {
+
+            try {
+                return Timestamp.from(Instant.parse(value.trim()));
+            } catch (Exception ignored) {
+                try {
+                    return Timestamp.from(OffsetDateTime.parse(value.trim()).toInstant());
+                } catch (Exception ignoredOffset) {
+                    // Fall through to the legacy local timestamp format below.
+                }
+            }
 
             String normalized =
                     value.trim().replace("T", " ");

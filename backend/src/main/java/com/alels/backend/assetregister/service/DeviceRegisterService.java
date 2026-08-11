@@ -11,12 +11,18 @@ import com.alels.backend.assetregister.dto.DeviceRegisterDtos.DeviceRegisterRequ
 import com.alels.backend.assetregister.dto.DeviceRegisterDtos.DeviceRegisterRow;
 import com.alels.backend.assetregister.repository.DeviceRegisterRepository;
 import com.alels.backend.serverops.shared.security.JwtUserContext;
+import com.alels.backend.serverops.shared.config.GatewayPublicEndpoint;
+import com.alels.backend.serverops.shared.config.GatewayPublicEndpoint.Endpoint;
 
 @Service
 public class DeviceRegisterService {
     private final DeviceRegisterRepository repository;
+    private final GatewayPublicEndpoint gatewayEndpoint;
 
-    public DeviceRegisterService(DeviceRegisterRepository repository) { this.repository = repository; }
+    public DeviceRegisterService(DeviceRegisterRepository repository, GatewayPublicEndpoint gatewayEndpoint) {
+        this.repository = repository;
+        this.gatewayEndpoint = gatewayEndpoint;
+    }
 
     public List<DeviceRegisterRow> list(JwtUserContext user) { return repository.list(user.companyId(), user.normalizedRole()); }
     public List<DeviceLookupOption> companyOptions(JwtUserContext user) { return repository.companyOptions(user.companyId(), user.normalizedRole()); }
@@ -24,10 +30,11 @@ public class DeviceRegisterService {
     public List<DeviceLookupOption> modelOptions(Long brandId) { return repository.modelOptions(brandId); }
 
     public Long create(JwtUserContext user, DeviceRegisterRequest request) {
-        validate(request, null);
+        if (request == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request device wajib diisi.");
         Long targetCompanyId = request.companyId() == null ? user.companyId() : request.companyId();
         assertCompanyAccess(user, targetCompanyId);
-        DeviceRegisterRequest normalized = new DeviceRegisterRequest(targetCompanyId, request.deviceBrandId(), request.deviceModelId(), request.imei(), request.gsmNumber(), request.tcpHost(), request.tcpPort(), request.registerStatus(), request.notes());
+        DeviceRegisterRequest normalized = withGatewayEndpoint(request, targetCompanyId);
+        validate(normalized, null);
         Long id = repository.create(normalized, user.userId());
         repository.log(user.userId(), user.companyId(), id, "DEVICE_CREATE");
         return id;
@@ -36,8 +43,9 @@ public class DeviceRegisterService {
     public void update(JwtUserContext user, Long id, DeviceRegisterRequest request) {
         Long currentCompanyId = repository.companyIdByDevice(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found."));
         assertCompanyAccess(user, currentCompanyId);
-        validate(request, id);
-        repository.update(id, new DeviceRegisterRequest(currentCompanyId, request.deviceBrandId(), request.deviceModelId(), request.imei(), request.gsmNumber(), request.tcpHost(), request.tcpPort(), request.registerStatus(), request.notes()), user.userId());
+        DeviceRegisterRequest normalized = withGatewayEndpoint(request, currentCompanyId);
+        validate(normalized, id);
+        repository.update(id, normalized, user.userId());
         repository.log(user.userId(), user.companyId(), id, "DEVICE_UPDATE");
     }
 
@@ -61,6 +69,18 @@ public class DeviceRegisterService {
     private void assertDeviceAccess(JwtUserContext user, Long id) {
         Long companyId = repository.companyIdByDevice(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found."));
         assertCompanyAccess(user, companyId);
+    }
+
+    private DeviceRegisterRequest withGatewayEndpoint(DeviceRegisterRequest request, Long companyId) {
+        if (request == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request device wajib diisi.");
+        Endpoint endpoint = gatewayEndpoint.configured().orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Public gateway host/port belum dikonfigurasi."
+        ));
+        return new DeviceRegisterRequest(
+                companyId, request.deviceBrandId(), request.deviceModelId(), request.imei(),
+                request.gsmNumber(), endpoint.host(), endpoint.port(), request.registerStatus(), request.notes()
+        );
     }
     private void assertCompanyAccess(JwtUserContext user, Long companyId) {
         if (!repository.canAccessCompany(companyId, user.companyId(), user.normalizedRole())) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Anda tidak memiliki akses ke company device tersebut.");

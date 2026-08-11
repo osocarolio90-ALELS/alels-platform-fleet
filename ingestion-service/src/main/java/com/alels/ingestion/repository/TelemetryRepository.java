@@ -321,7 +321,7 @@ public class TelemetryRepository {
                     offline_after, latitude, longitude, speed, angle, satellites,
                     device_time, server_time, redis_key, redis_ttl_seconds, updated_at
                 ) VALUES (
-                    ?, 'ONLINE', ?, ?, NOW(), NOW() + interval '420 seconds', ?, ?, ?, ?, ?, ?, NOW(), ?, 420, NOW()
+                    ?, 'ONLINE', ?, ?, NOW(), NOW() + interval '1800 seconds', ?, ?, ?, ?, ?, ?, NOW(), ?, 1800, NOW()
                 )
                 ON CONFLICT (imei)
                 DO UPDATE SET

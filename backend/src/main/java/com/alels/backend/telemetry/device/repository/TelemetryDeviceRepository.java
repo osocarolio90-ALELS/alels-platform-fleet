@@ -29,14 +29,13 @@ public class TelemetryDeviceRepository {
                    COALESCE(driver.driver_name,'-') driver_name,COALESCE(driver.phone_number,'-') driver_phone,
                    COALESCE(NULLIF(TRIM(CONCAT_WS(' / ',driver.license_type,driver.license_number)),''),'-') driver_license,
                    CASE
-                     WHEN latest.server_time IS NULL OR latest.server_time < NOW()-(COALESCE(d.presence_timeout_seconds,420)||' seconds')::interval THEN 'STOP'
+                     WHEN latest.server_time IS NULL OR latest.server_time < NOW()-interval '30 minutes' THEN 'STOP'
                      WHEN UPPER(COALESCE(latest.vehicle_status,'')) IN ('MOVING','IDLE','STOP') THEN UPPER(latest.vehicle_status)
                      WHEN COALESCE(latest.speed,0)>0 THEN 'MOVING'
                      ELSE 'STOP'
                    END movement_status,
                    COALESCE(d.tcp_enabled,TRUE) tcp_enabled,
-                   (COALESCE(d.online,FALSE) OR UPPER(COALESCE(d.presence_status,''))='ONLINE'
-                    OR COALESCE(d.gsm_connected,FALSE) OR COALESCE(d.wifi_connected,FALSE)) connected,
+                   (d.last_seen IS NOT NULL AND d.last_seen >= NOW()-interval '30 minutes') connected,
                    g.id group_id,g.group_name,(g.deleted_at IS NOT NULL) group_deleted,
                    c.company_name,latest.server_time last_updated
             FROM devices d

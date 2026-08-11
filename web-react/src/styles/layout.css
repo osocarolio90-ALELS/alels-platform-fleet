@@ -252,9 +252,9 @@
   color: var(--alels-ocean-text) !important;
 }
 
-.theme-light main svg,
-.theme-light section svg,
-.theme-light article svg {
+.theme-light main svg:not(.dw-cluster svg),
+.theme-light section svg:not(.dw-cluster svg),
+.theme-light article svg:not(.dw-cluster svg) {
   color: hsl(var(--primary)) !important;
   fill: none !important;
   stroke: hsl(var(--primary)) !important;

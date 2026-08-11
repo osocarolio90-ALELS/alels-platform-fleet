@@ -25,6 +25,7 @@ public class DictionaryImportHistoryRepository {
                 WHERE dictionary_code = ?
                 AND file_checksum = ?
                 AND import_status = 'SUCCESS'
+                AND imported_mapping_count > 0
                 LIMIT 1
                 """;
 

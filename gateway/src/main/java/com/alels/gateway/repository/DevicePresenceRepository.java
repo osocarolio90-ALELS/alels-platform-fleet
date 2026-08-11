@@ -6,6 +6,7 @@ import java.sql.PreparedStatement;
 import com.alels.gateway.config.DatabaseConfig;
 
 public class DevicePresenceRepository {
+    private static final int DEFAULT_PRESENCE_TIMEOUT_SECONDS = 1800;
 
     public static void markPresentOnData(String imei) {
         if (imei == null || imei.isBlank()) {
@@ -44,13 +45,14 @@ public class DevicePresenceRepository {
                     status_updated_at = NOW()
                 WHERE presence_status = 'ONLINE'
                   AND (last_seen IS NULL
-                       OR last_seen < NOW() - (presence_timeout_seconds * interval '1 second'))
+                       OR last_seen < NOW() - (? * interval '1 second'))
                 """;
 
         try (
                 Connection conn = DatabaseConfig.getConnection();
                 PreparedStatement stmt = conn.prepareStatement(sql)
         ) {
+            stmt.setInt(1, DEFAULT_PRESENCE_TIMEOUT_SECONDS);
             int updated = stmt.executeUpdate();
 
             System.out.println("[DB PRESENCE] refreshed devices=" + updated);

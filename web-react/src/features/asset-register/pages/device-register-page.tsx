@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, CheckCircle2, Cpu, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 
@@ -38,6 +38,13 @@ export function DeviceRegisterPage() {
   const { data: rows = [], isLoading } = useQuery({ queryKey: ["asset-register", "devices"], queryFn: getDevices });
   const { data: companies = [] } = useQuery({ queryKey: ["asset-register", "devices", "companies"], queryFn: getDeviceCompanyOptions });
   const { data: deviceOptions = [] } = useQuery({ queryKey: ["asset-register", "devices", "device-options"], queryFn: () => getDeviceModelOptions() });
+  const endpointQuery = useQuery({ queryKey: ["system", "device-endpoint"], queryFn: getDeviceEndpoint, staleTime: 300_000, retry: false });
+
+  useEffect(() => {
+    if (!formOpen || !endpointQuery.data) return;
+    const host = pickEndpointHost(endpointQuery.data), port = pickEndpointPort(endpointQuery.data);
+    setForm((current) => ({ ...current, tcpHost: host, tcpPort: port }));
+  }, [formOpen, endpointQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: () => editing ? updateDevice(editing.id, toInput(form)) : createDevice(toInput(form)),
@@ -97,7 +104,8 @@ export function DeviceRegisterPage() {
   function openCreate() {
     setNotice(null);
     setEditing(null);
-    setForm(emptyForm(companies[0]?.id));
+    setForm({ ...emptyForm(companies[0]?.id), ...endpointValues(endpointQuery.data) });
+    if (endpointQuery.isError) setNotice("Public gateway host/port belum dikonfigurasi pada backend.");
     setFormOpen(true);
   }
 
@@ -109,8 +117,8 @@ export function DeviceRegisterPage() {
       deviceModelId: String(row.deviceModelId || ""),
       imei: row.imei || "",
       gsmNumber: row.gsmNumber || "",
-      tcpHost: row.tcpHost || "",
-      tcpPort: String(row.tcpPort || ""),
+      tcpHost: pickEndpointHost(endpointQuery.data) || row.tcpHost || "",
+      tcpPort: pickEndpointPort(endpointQuery.data) || String(row.tcpPort || ""),
       notes: ""
     });
     setFormOpen(true);
@@ -130,18 +138,13 @@ export function DeviceRegisterPage() {
       const host = pickEndpointHost(endpoint);
       const port = pickEndpointPort(endpoint);
       if (!host && !port) {
-        setNotice("TCP endpoint belum tersedia dari server. Save tetap bisa dilakukan tanpa TCP IP/URL dan TCP Port.");
+        setNotice("Public gateway host/port belum dikonfigurasi pada backend.");
         return;
       }
-      setForm((current) => ({ ...current, tcpHost: host || current.tcpHost, tcpPort: port || current.tcpPort }));
+      setForm((current) => ({ ...current, tcpHost: host, tcpPort: port }));
+      setNotice("TCP endpoint menggunakan public gateway yang dikonfigurasi server.");
     } catch {
-      const fallbackHost = typeof window !== "undefined" ? window.location.hostname : "";
-      if (fallbackHost) {
-        setForm((current) => ({ ...current, tcpHost: current.tcpHost || fallbackHost }));
-        setNotice("TCP endpoint server belum lengkap. TCP IP/URL memakai host aplikasi; TCP Port bisa dikosongkan atau diisi manual.");
-      } else {
-        setNotice("TCP endpoint belum tersedia dari server. Save tetap bisa dilakukan tanpa TCP IP/URL dan TCP Port.");
-      }
+      setNotice("Public gateway host/port belum dikonfigurasi pada backend.");
     }
   }
 
@@ -164,8 +167,8 @@ export function DeviceRegisterPage() {
           <SearchableSelect label="Device" value={form.deviceModelId} onChange={(value) => setForm((current) => ({ ...current, deviceModelId: value }))} options={deviceOptions.map((device) => ({ value: String(device.id), label: device.extra ? `${device.extra} ${device.label}` : device.label, extra: device.code }))} required />
           <Field label="Device IMEI" required><Input value={form.imei} onChange={(event) => setForm((current) => ({ ...current, imei: event.target.value }))} /></Field>
           <Field label="GSM Number"><Input value={form.gsmNumber} onChange={(event) => setForm((current) => ({ ...current, gsmNumber: event.target.value }))} /></Field>
-          <TcpField label="TCP IP/URL" value={form.tcpHost} onChange={(value) => setForm((current) => ({ ...current, tcpHost: value }))} onCheck={checkTcpEndpoint} placeholder="Click check" />
-          <TcpField label="TCP Port" type="number" value={form.tcpPort} onChange={(value) => setForm((current) => ({ ...current, tcpPort: value }))} onCheck={checkTcpEndpoint} placeholder="Click check" />
+          <TcpField label="TCP IP/URL" value={form.tcpHost} onChange={(value) => setForm((current) => ({ ...current, tcpHost: value }))} onCheck={checkTcpEndpoint} placeholder="Click check" readOnly />
+          <TcpField label="TCP Port" type="number" value={form.tcpPort} onChange={(value) => setForm((current) => ({ ...current, tcpPort: value }))} onCheck={checkTcpEndpoint} placeholder="Click check" readOnly />
           <div className="md:col-span-3"><Field label="Notes"><Input value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} /></Field></div>
           <div className="md:col-span-3 flex justify-end gap-2"><Button type="button" variant="outline" onClick={closeForm}><X className="h-4 w-4" /> Cancel</Button><Button type="submit" disabled={saveMutation.isPending}><Save className="h-4 w-4" /> Save</Button></div>
         </form>
@@ -183,7 +186,8 @@ function toNumber(value: string) { const parsed = Number(value); return Number.i
 function emptyToNull(value: string) { const cleaned = value.trim(); return cleaned ? cleaned : null; }
 function formatDevice(row: DeviceRegisterRow) { return [row.deviceBrand, row.deviceModel].filter(Boolean).join(" ") || "-"; }
 function Field({ label, required, children }: { label: string; required?: boolean; children: ReactNode }) { return <label className="grid gap-2 text-xs font-bold text-white"><span>{label}{required ? <span className="ml-1 text-red-400">*</span> : null}</span>{children}</label>; }
-function TcpField({ label, value, type = "text", placeholder, onChange, onCheck }: { label: string; value: string; type?: string; placeholder?: string; onChange: (value: string) => void; onCheck: () => void }) { return <Field label={label}><div className="flex gap-2"><Input type={type} min={type === "number" ? 1 : undefined} max={type === "number" ? 65535 : undefined} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /><Button type="button" size="icon" variant="outline" onClick={onCheck} title={`Check ${label}`}><CheckCircle2 className="h-4 w-4" /></Button></div></Field>; }
+function TcpField({ label, value, type = "text", placeholder, onChange, onCheck, readOnly }: { label: string; value: string; type?: string; placeholder?: string; onChange: (value: string) => void; onCheck: () => void; readOnly?: boolean }) { return <Field label={label}><div className="flex gap-2"><Input type={type} min={type === "number" ? 1 : undefined} max={type === "number" ? 65535 : undefined} value={value} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} /><Button type="button" size="icon" variant="outline" onClick={onCheck} title={`Check ${label}`}><CheckCircle2 className="h-4 w-4" /></Button></div></Field>; }
 function StatusCell({ status }: { status?: string | null }) { const normalized = (status || "OFFLINE").toUpperCase(); return <StatusIndicator status={normalized} />; }
 function pickEndpointHost(endpoint: unknown) { const data = endpoint as Record<string, unknown>; const host = data?.host ?? data?.tcpHost ?? data?.ip ?? data?.url ?? data?.hostname; return typeof host === "string" ? host.trim() : host == null ? "" : String(host); }
 function pickEndpointPort(endpoint: unknown) { const data = endpoint as Record<string, unknown>; const port = data?.port ?? data?.tcpPort ?? data?.gatewayPort; return typeof port === "string" ? port.trim() : port == null ? "" : String(port); }
+function endpointValues(endpoint: unknown) { return { tcpHost: pickEndpointHost(endpoint), tcpPort: pickEndpointPort(endpoint) }; }

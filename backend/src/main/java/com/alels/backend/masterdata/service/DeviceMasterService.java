@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.alels.backend.masterdata.dto.DeviceMasterDtos.DeviceBrandRow;
@@ -32,11 +33,22 @@ public class DeviceMasterService {
     public void deleteBrand(JwtUserContext user, Long id) {
         assertCanEdit(user); repository.softDeleteBrand(id, user.userId()); repository.log(user.userId(), user.companyId(), "DEVICE_BRAND", id, "DEVICE_BRAND_DELETE");
     }
+    @Transactional
     public Long createModel(JwtUserContext user, DeviceMasterRequest request) {
-        assertCanEdit(user); validateModel(request); Long id = repository.createModel(request, user.userId()); repository.log(user.userId(), user.companyId(), "DEVICE_MODEL", id, "DEVICE_MODEL_CREATE"); return id;
+        assertCanEdit(user);
+        validateModel(request);
+        Long id = repository.createModel(request, user.userId());
+        assertHasActiveDictionary(id);
+        repository.log(user.userId(), user.companyId(), "DEVICE_MODEL", id, "DEVICE_MODEL_CREATE");
+        return id;
     }
+    @Transactional
     public void updateModel(JwtUserContext user, Long id, DeviceMasterRequest request) {
-        assertCanEdit(user); validateModel(request); repository.updateModel(id, request, user.userId()); repository.log(user.userId(), user.companyId(), "DEVICE_MODEL", id, "DEVICE_MODEL_UPDATE");
+        assertCanEdit(user);
+        validateModel(request);
+        repository.updateModel(id, request, user.userId());
+        assertHasActiveDictionary(id);
+        repository.log(user.userId(), user.companyId(), "DEVICE_MODEL", id, "DEVICE_MODEL_UPDATE");
     }
     public void deleteModel(JwtUserContext user, Long id) {
         assertCanEdit(user); repository.softDeleteModel(id, user.userId()); repository.log(user.userId(), user.companyId(), "DEVICE_MODEL", id, "DEVICE_MODEL_DELETE");
@@ -58,5 +70,11 @@ public class DeviceMasterService {
     private void validateModel(DeviceMasterRequest request) {
         if (request == null || request.brandId() == null || !repository.brandExists(request.brandId())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Device Brand tidak valid.");
         if (request.modelName() == null || request.modelName().isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Device Model wajib diisi.");
+    }
+    private void assertHasActiveDictionary(Long deviceModelId) {
+        if (!repository.hasActiveDictionary(deviceModelId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Device Model belum memiliki dictionary aktif. Tambahkan dictionary yang didukung sebelum menyimpan Device Master.");
+        }
     }
 }

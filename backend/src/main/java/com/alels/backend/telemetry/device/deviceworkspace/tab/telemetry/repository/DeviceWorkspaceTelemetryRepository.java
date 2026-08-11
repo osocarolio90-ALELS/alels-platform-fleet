@@ -10,6 +10,7 @@ import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.Devi
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.DeviceInfo;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.DriverInfo;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.RecentEvent;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.TrackPoint;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.VehicleInfo;
 
 @Repository
@@ -26,10 +27,7 @@ public class DeviceWorkspaceTelemetryRepository {
                        COALESCE(db.brand_name, '-') AS brand,
                        COALESCE(dm.model_name, d.device_model, '-') AS model,
                        c.company_name,
-                       (COALESCE(d.online, FALSE)
-                         OR UPPER(COALESCE(d.presence_status, '')) = 'ONLINE'
-                         OR COALESCE(d.gsm_connected, FALSE)
-                         OR COALESCE(d.wifi_connected, FALSE)) AS online,
+                       (d.last_seen IS NOT NULL AND d.last_seen >= NOW() - interval '30 minutes') AS online,
                        COALESCE(d.tcp_enabled, TRUE) AS tcp_enabled,
                        d.last_seen
                 FROM devices d
@@ -132,7 +130,7 @@ public class DeviceWorkspaceTelemetryRepository {
 
     public Optional<LatestPacket> latestPacket(String imei) {
         return jdbc.query("""
-                SELECT id, packet_sequence, server_time, device_time,
+                SELECT id, packet_sequence, server_time, device_time, protocol, channel,
                        latitude, longitude, speed, angle, altitude, satellites, hdop,
                        priority, event_io_id, io_data::text AS io_data
                 FROM telemetry
@@ -142,6 +140,7 @@ public class DeviceWorkspaceTelemetryRepository {
                 """, (rs, rowNum) -> new LatestPacket(
                     rs.getLong("id"), rs.getObject("packet_sequence", Long.class),
                     rs.getString("server_time"), rs.getString("device_time"),
+                    rs.getString("protocol"), rs.getString("channel"),
                     rs.getObject("latitude", Double.class), rs.getObject("longitude", Double.class),
                     rs.getObject("speed", Double.class), rs.getObject("angle", Integer.class),
                     rs.getObject("altitude", Integer.class), rs.getObject("satellites", Integer.class),
@@ -150,19 +149,44 @@ public class DeviceWorkspaceTelemetryRepository {
                 ), imei).stream().findFirst();
     }
 
+    public List<TrackPoint> recentTrack(String imei, int limit) {
+        return jdbc.query("""
+                SELECT latitude, longitude, angle, speed, occurred_at
+                FROM (
+                    SELECT id, latitude, longitude, angle, speed,
+                           COALESCE(device_time, server_time) AS occurred_at
+                    FROM telemetry
+                    WHERE imei = ?
+                      AND latitude BETWEEN -90 AND 90
+                      AND longitude BETWEEN -180 AND 180
+                      AND NOT (latitude = 0 AND longitude = 0)
+                    ORDER BY server_time DESC, id DESC
+                    LIMIT ?
+                ) recent
+                ORDER BY occurred_at
+                """, (rs, rowNum) -> new TrackPoint(
+                    rs.getObject("latitude", Double.class), rs.getObject("longitude", Double.class),
+                    rs.getObject("angle", Integer.class), rs.getObject("speed", Double.class),
+                    rs.getString("occurred_at")
+                ), imei, limit);
+    }
+
     public List<DataParameter> normalizedParameters(Long telemetryId, String imei) {
         return jdbc.query("""
                 SELECT field_code, COALESCE(NULLIF(field_name, ''), field_code) AS label,
                        COALESCE(text_value, raw_value, numeric_value::text, CASE WHEN boolean_value IS NULL THEN NULL ELSE boolean_value::text END, '-') AS display_value,
                        numeric_value, boolean_value, unit, source_io_id,
-                       COALESCE(NULLIF(category, ''), 'OTHER') AS category
+                       COALESCE(NULLIF(category, ''), 'OTHER') AS category,
+                       source_protocol, dictionary_code, device_model_id
                 FROM telemetry_normalized
                 WHERE telemetry_id = ? AND imei = ?
                 ORDER BY id
                 """, (rs, rowNum) -> new DataParameter(
                     rs.getString("field_code"), rs.getString("label"), rs.getString("display_value"),
                     rs.getObject("numeric_value", Double.class), rs.getObject("boolean_value", Boolean.class),
-                    rs.getString("unit"), rs.getString("source_io_id"), rs.getString("category")
+                    rs.getString("unit"), rs.getString("source_io_id"), rs.getString("category"),
+                    rs.getString("source_protocol"), rs.getString("dictionary_code"),
+                    rs.getObject("device_model_id", Long.class)
                 ), telemetryId, imei);
     }
 
@@ -171,14 +195,14 @@ public class DeviceWorkspaceTelemetryRepository {
                 SELECT COALESCE(NULLIF(io_name, ''), 'IO ' || io_id) AS label,
                        COALESCE(real_value::text, numeric_value::text, raw_value, '-') AS display_value,
                        COALESCE(real_value, numeric_value) AS numeric_value,
-                       unit, io_id, COALESCE(NULLIF(io_category, ''), 'OTHER') AS category
+                       unit, io_id, COALESCE(NULLIF(io_category, ''), 'OTHER') AS category, protocol
                 FROM telemetry_io
                 WHERE telemetry_id = ? AND imei = ?
                 ORDER BY id
                 """, (rs, rowNum) -> new DataParameter(
                     "io." + rs.getString("io_id"), rs.getString("label"), rs.getString("display_value"),
                     rs.getObject("numeric_value", Double.class), null, rs.getString("unit"),
-                    rs.getString("io_id"), rs.getString("category")
+                    rs.getString("io_id"), rs.getString("category"), rs.getString("protocol"), null, null
                 ), telemetryId, imei);
     }
 
@@ -228,7 +252,7 @@ public class DeviceWorkspaceTelemetryRepository {
     public record ScopedDevice(DeviceInfo info, Long companyId) {}
     public record VehicleResult(Long id, VehicleInfo info) {}
     public record LatestPacket(
-            Long id, Long sequence, String serverTime, String deviceTime,
+            Long id, Long sequence, String serverTime, String deviceTime, String protocol, String channel,
             Double latitude, Double longitude, Double speed, Integer angle,
             Integer altitude, Integer satellites, Double hdop, Integer priority,
             Integer eventIoId, String ioDataJson

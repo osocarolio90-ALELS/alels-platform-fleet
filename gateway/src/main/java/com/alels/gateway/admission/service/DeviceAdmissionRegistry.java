@@ -11,7 +11,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class DeviceAdmissionRegistry {
 
-    private static final String FALLBACK_DICTIONARY = "fmc650";
     private static final DeviceAdmissionRepository REPOSITORY = new DeviceAdmissionRepository();
     private static final AtomicReference<Map<String, DeviceAdmission>> SNAPSHOT =
             new AtomicReference<>(Map.of());
@@ -46,14 +45,17 @@ public final class DeviceAdmissionRegistry {
             return false;
         }
         DeviceAdmission admission = SNAPSHOT.get().get(imei);
-        return admission != null ? admission.receiveAllowed() : ALLOW_UNKNOWN;
+        return admission != null
+                ? admission.receiveAllowed() && admission.dictionaryCode() != null
+                    && !admission.dictionaryCode().isBlank()
+                : ALLOW_UNKNOWN;
     }
 
     public static String dictionaryCode(String imei) {
         DeviceAdmission admission = imei == null ? null : SNAPSHOT.get().get(imei);
         if (admission == null || admission.dictionaryCode() == null
                 || admission.dictionaryCode().isBlank()) {
-            return FALLBACK_DICTIONARY;
+            return null;
         }
         return admission.dictionaryCode();
     }

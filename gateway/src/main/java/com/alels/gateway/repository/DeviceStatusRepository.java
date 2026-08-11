@@ -80,11 +80,8 @@ public class DeviceStatusRepository {
                         WHEN ? = 'WIFI' THEN FALSE
                         ELSE wifi_connected
                     END,
-                    online = CASE
-                        WHEN ? = 'GSM' THEN wifi_connected
-                        WHEN ? = 'WIFI' THEN gsm_connected
-                        ELSE online
-                    END,
+                    online = last_seen IS NOT NULL
+                        AND last_seen >= NOW() - interval '30 minutes',
                     last_disconnect = NOW(),
                     status_updated_at = NOW()
                 WHERE imei = ?
@@ -96,9 +93,7 @@ public class DeviceStatusRepository {
         ) {
             stmt.setString(1, channel);
             stmt.setString(2, channel);
-            stmt.setString(3, channel);
-            stmt.setString(4, channel);
-            stmt.setString(5, imei);
+            stmt.setString(3, imei);
 
             stmt.executeUpdate();
 

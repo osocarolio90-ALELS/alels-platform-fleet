@@ -26,8 +26,8 @@ VALUES
     ('retention.telemetry_months', '12', 'Default hot telemetry retention in PostgreSQL before archive/drop.'),
     ('retention.raw_packets_months', '3', 'Default raw packet retention in PostgreSQL.'),
     ('retention.tcp_logs_months', '3', 'Default TCP log retention in PostgreSQL.'),
-    ('presence.timeout_seconds', '420', 'Device offline threshold. 420 seconds = 7 minutes.'),
-    ('redis.presence.ttl_seconds', '420', 'Redis key TTL for device presence/latest position cache.'),
+    ('presence.timeout_seconds', '1800', 'Device offline threshold. 1800 seconds = 30 minutes.'),
+    ('redis.presence.ttl_seconds', '1800', 'Redis key TTL for device presence/latest position cache.'),
     ('kafka.telemetry.raw.partitions.target_1m', '384', 'Recommended starting target for telemetry.raw at 1M active devices; tune after benchmark.'),
     ('kafka.telemetry.parsed.partitions.target_1m', '384', 'Recommended starting target for telemetry.parsed at 1M active devices; tune after benchmark.'),
     ('kafka.telemetry.dlq.partitions.target_1m', '48', 'Recommended target for DLQ topic partitions at scale.')
@@ -363,7 +363,7 @@ BEGIN
         updated_at = now_value
     WHERE online = TRUE
       AND last_seen IS NOT NULL
-      AND last_seen < now_value - (COALESCE(presence_timeout_seconds, alels_setting_int('presence.timeout_seconds', 420)) || ' second')::interval;
+      AND last_seen < now_value - (alels_setting_int('presence.timeout_seconds', 1800) || ' second')::interval;
 
     GET DIAGNOSTICS changed = ROW_COUNT;
 
@@ -481,4 +481,3 @@ SELECT
     MAX(updated_at) AS latest_update_at
 FROM device_presence_cache_shadow
 GROUP BY presence_status;
-

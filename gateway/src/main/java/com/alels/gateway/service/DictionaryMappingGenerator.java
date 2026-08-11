@@ -63,6 +63,7 @@ public class DictionaryMappingGenerator {
                     source_protocol,
                     source_io_id,
                     normalized_field_id,
+                    field_code,
                     source_name,
                     source_unit,
                     target_unit,
@@ -78,6 +79,7 @@ public class DictionaryMappingGenerator {
                     ?,
                     ?,
                     nf.id,
+                    nf.field_code,
                     ?,
                     ?,
                     nf.unit,
@@ -133,7 +135,9 @@ public class DictionaryMappingGenerator {
                             + " error="
                             + e.getMessage()
             );
-            return false;
+            throw new IllegalStateException(
+                    "Failed to persist dictionary mapping " + dictionaryCode + "/" + avl.getAvlId(), e
+            );
         }
     }
 

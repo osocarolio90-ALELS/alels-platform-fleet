@@ -151,6 +151,23 @@ public class DeviceMasterRepository {
         return count != null && count > 0;
     }
 
+    public boolean hasActiveDictionary(Long deviceModelId) {
+        if (deviceModelId == null) return false;
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM device_models model
+                JOIN dictionary_registry dictionary
+                  ON dictionary.device_model_id = model.id
+                 AND dictionary.status = 'ACTIVE'
+                 AND LOWER(dictionary.dictionary_code) = LOWER(model.dictionary_code)
+                 AND NULLIF(TRIM(dictionary.dictionary_file), '') IS NOT NULL
+                WHERE model.id = ?
+                  AND model.deleted_at IS NULL
+                  AND model.is_active = TRUE
+                """, Integer.class, deviceModelId);
+        return count != null && count > 0;
+    }
+
     public void log(Long actorUserId, Long actorCompanyId, String targetType, Long targetId, String action) {
         try {
             jdbcTemplate.update("""
@@ -166,9 +183,19 @@ public class DeviceMasterRepository {
                        m.protocol_code, m.parser_code, m.dictionary_code, m.description, m.is_active, m.is_system, m.sort_order,
                        m.created_at, COALESCE(u.email, '-') AS created_by, m.updated_at
                 FROM device_models m
-                LEFT JOIN device_brands b ON b.id = m.brand_id
+                JOIN device_brands b ON b.id = m.brand_id AND b.deleted_at IS NULL
                 LEFT JOIN users u ON u.id = m.created_by
                 WHERE m.deleted_at IS NULL
+                  AND m.is_active = TRUE
+                  AND NULLIF(TRIM(m.dictionary_code), '') IS NOT NULL
+                  AND EXISTS (
+                      SELECT 1
+                      FROM dictionary_registry dictionary
+                      WHERE dictionary.device_model_id = m.id
+                        AND dictionary.status = 'ACTIVE'
+                        AND NULLIF(TRIM(dictionary.dictionary_file), '') IS NOT NULL
+                        AND LOWER(dictionary.dictionary_code) = LOWER(m.dictionary_code)
+                  )
                 """;
     }
 

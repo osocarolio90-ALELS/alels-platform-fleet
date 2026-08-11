@@ -15,9 +15,9 @@ public final class DeviceAdmissionRepository {
             SELECT d.imei,
                    COALESCE(d.tcp_enabled, TRUE)
                        AND UPPER(COALESCE(s.receive_status, 'ACTIVE')) <> 'SUSPENDED'
+                       AND NULLIF(TRIM(dm.dictionary_code), '') IS NOT NULL
                        AS receive_allowed,
-                   COALESCE(NULLIF(TRIM(dm.dictionary_code), ''), 'fmc650')
-                       AS dictionary_code
+                   NULLIF(TRIM(dm.dictionary_code), '') AS dictionary_code
             FROM devices d
             LEFT JOIN device_receive_status s ON s.imei = d.imei
             LEFT JOIN device_models dm

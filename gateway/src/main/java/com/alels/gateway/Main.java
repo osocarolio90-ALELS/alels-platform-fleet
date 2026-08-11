@@ -3,11 +3,13 @@ package com.alels.gateway;
 import com.alels.gateway.admission.service.DeviceAdmissionRegistry;
 import com.alels.gateway.config.DatabaseConfig;
 import com.alels.gateway.netty.NettyTcpServer;
+import com.alels.gateway.netty.NettyUdpServer;
 import com.alels.gateway.netty.NettyDeviceChannelHandler;
 import com.alels.gateway.observability.service.GatewayHealthServer;
 import com.alels.gateway.observability.service.GatewayRuntimeMetrics;
 import com.alels.gateway.poller.PendingCommandPoller;
 import com.alels.gateway.service.DictionaryStartupImporter;
+import com.alels.gateway.service.DevicePresenceScheduler;
 import com.alels.gateway.service.ProtocolRegistryResolver;
 
 public class Main {
@@ -25,6 +27,7 @@ public class Main {
         DictionaryStartupImporter.runStartupCheck();
         DeviceAdmissionRegistry.start();
         ProtocolRegistryResolver.preload();
+        DevicePresenceScheduler.start();
 
         PendingCommandPoller commandPoller = new PendingCommandPoller();
         Thread commandPollerThread =
@@ -41,6 +44,7 @@ public class Main {
         commandPollerThread.start();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             commandPoller.stop();
+            DevicePresenceScheduler.stop();
             NettyDeviceChannelHandler.shutdownSessionOwnership();
         }, "gateway-services-stop"));
 
@@ -70,9 +74,15 @@ public class Main {
         );
         String healthHost = System.getenv().getOrDefault("ALELS_GATEWAY_HEALTH_HOST", "127.0.0.1");
         GatewayRuntimeMetrics metrics = GatewayRuntimeMetrics.instance();
-        try (GatewayHealthServer healthServer = new GatewayHealthServer(healthHost, healthPort, metrics)) {
+        int udpPort = Integer.parseInt(
+                System.getenv().getOrDefault("ALELS_GATEWAY_UDP_PORT", String.valueOf(port))
+        );
+        try (GatewayHealthServer healthServer = new GatewayHealthServer(healthHost, healthPort, metrics);
+             NettyUdpServer udpServer = new NettyUdpServer(udpPort)) {
             healthServer.start();
+            udpServer.start();
             System.out.println("[CONFIG] TCP Server = netty");
+            System.out.println("[CONFIG] UDP Port = " + udpPort);
             System.out.println("[CONFIG] Health Port = " + healthPort);
             new NettyTcpServer(port, metrics).start();
         }
