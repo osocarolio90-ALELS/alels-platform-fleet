@@ -8,6 +8,12 @@ param(
     [ValidatePattern('^\d{15}$')]
     [string]$Imei = "123456789876543",
 
+    [ValidateRange(0, 19)]
+    [int]$StartPoint = 0,
+
+    [ValidateRange(1, 20)]
+    [int]$PointCount = 20,
+
     [ValidateRange(0, 3600)]
     [int]$IntervalSeconds = 5,
 
@@ -135,6 +141,9 @@ function New-Codec8EFrame([double]$Latitude, [double]$Longitude, [int]$Speed, [i
 }
 
 try {
+    if (($StartPoint + $PointCount) -gt $route.Count) {
+        throw "StartPoint + PointCount must not exceed $($route.Count)."
+    }
     $client = New-Object System.Net.Sockets.TcpClient
     $client.NoDelay = $true
     $connect = $client.BeginConnect($HostName, $Port, $null, $null)
@@ -155,18 +164,19 @@ try {
     if ($imeiAck[0] -ne 1) { throw "IMEI $Imei was rejected." }
 
     Write-Host "[PASS] IMEI accepted by gateway (01)."
-    Write-Host "[SIMULATION] Teltonika Codec 8E | GSM/TCP | 20 points | interval=${IntervalSeconds}s"
+    Write-Host "[SIMULATION] Teltonika Codec 8E | GSM/TCP | $PointCount points | interval=${IntervalSeconds}s"
     Write-Host "[ROUTE] Plaza Indonesia -> Sarinah, Jl. M.H. Thamrin, Jakarta"
-    for ($index = 0; $index -lt $route.Count; $index++) {
-        $nextIndex = [Math]::Min($index + 1, $route.Count - 1)
-        $previousIndex = [Math]::Max(0, $index - 1)
-        $from = if ($index -lt ($route.Count - 1)) { $route[$index] } else { $route[$previousIndex] }
-        $to = if ($index -lt ($route.Count - 1)) { $route[$nextIndex] } else { $route[$index] }
+    for ($index = 0; $index -lt $PointCount; $index++) {
+        $routeIndex = $StartPoint + $index
+        $nextIndex = [Math]::Min($routeIndex + 1, $route.Count - 1)
+        $previousIndex = [Math]::Max(0, $routeIndex - 1)
+        $from = if ($routeIndex -lt ($route.Count - 1)) { $route[$routeIndex] } else { $route[$previousIndex] }
+        $to = if ($routeIndex -lt ($route.Count - 1)) { $route[$nextIndex] } else { $route[$routeIndex] }
         $angle = Get-Bearing $from[0] $from[1] $to[0] $to[1]
-        $distance = if ($index -eq 0) { 0 } else { Get-DistanceMeters $route[$previousIndex][0] $route[$previousIndex][1] $route[$index][0] $route[$index][1] }
-        $speed = if ($index -eq 0 -or $index -eq ($route.Count - 1) -or $IntervalSeconds -eq 0) { 0 } else { [Math]::Max(3, [Math]::Round(($distance / $IntervalSeconds) * 3.6 + $random.Next(-2,3))) }
+        $distance = if ($routeIndex -eq 0) { 0 } else { Get-DistanceMeters $route[$previousIndex][0] $route[$previousIndex][1] $route[$routeIndex][0] $route[$routeIndex][1] }
+        $speed = if ($routeIndex -eq 0 -or $routeIndex -eq ($route.Count - 1) -or $IntervalSeconds -eq 0) { 0 } else { [Math]::Max(3, [Math]::Round(($distance / $IntervalSeconds) * 3.6 + $random.Next(-2,3))) }
         $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-        [byte[]]$frame = New-Codec8EFrame $route[$index][0] $route[$index][1] $speed $angle $index $timestamp
+        [byte[]]$frame = New-Codec8EFrame $route[$routeIndex][0] $route[$routeIndex][1] $speed $angle $routeIndex $timestamp
         $ackTimer = [System.Diagnostics.Stopwatch]::StartNew()
         $stream.Write($frame, 0, $frame.Length)
         $stream.Flush()
@@ -174,8 +184,8 @@ try {
         $ackTimer.Stop()
         $accepted = ([int]$ack[0] -shl 24) -bor ([int]$ack[1] -shl 16) -bor ([int]$ack[2] -shl 8) -bor [int]$ack[3]
         if ($accepted -ne 1) { throw "Point $($index + 1) was rejected with ACK $([BitConverter]::ToString($ack))." }
-        Write-Host ("[{0:00}/20] ACK=1 latency={1}ms lat={2:F5} lon={3:F5} speed={4}km/h heading={5}deg sat={6}" -f ($index + 1), $ackTimer.ElapsedMilliseconds, $route[$index][0], $route[$index][1], $speed, $angle, (11 + ($index % 3)))
-        if ($index -lt ($route.Count - 1) -and $IntervalSeconds -gt 0) { Start-Sleep -Seconds $IntervalSeconds }
+        Write-Host ("[{0:00}/{1:00}] ACK=1 latency={2}ms routePoint={3} lat={4:F5} lon={5:F5} speed={6}km/h heading={7}deg sat={8}" -f ($index + 1), $PointCount, $ackTimer.ElapsedMilliseconds, ($routeIndex + 1), $route[$routeIndex][0], $route[$routeIndex][1], $speed, $angle, (11 + ($routeIndex % 3)))
+        if ($index -lt ($PointCount - 1) -and $IntervalSeconds -gt 0) { Start-Sleep -Seconds $IntervalSeconds }
     }
     Write-Host "[PASS] Realistic drive session complete. Final position: Sarinah Thamrin."
     Write-Host "[PRESENCE] Expected ONLINE now; expected OFFLINE only after 30 minutes without a new packet."

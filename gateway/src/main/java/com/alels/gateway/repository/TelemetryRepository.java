@@ -1,11 +1,11 @@
 package com.alels.gateway.repository;
 
+import com.alels.gateway.util.TimeUtil;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.OffsetDateTime;
 
 import com.alels.gateway.config.DatabaseConfig;
 import com.alels.gateway.model.DriverInfo;
@@ -190,34 +190,6 @@ public class TelemetryRepository {
     }
 
     private static Timestamp parseTimestamp(String value) {
-
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-
-        try {
-
-            try {
-                return Timestamp.from(Instant.parse(value.trim()));
-            } catch (Exception ignored) {
-                try {
-                    return Timestamp.from(OffsetDateTime.parse(value.trim()).toInstant());
-                } catch (Exception ignoredOffset) {
-                    // Fall through to the legacy local timestamp format below.
-                }
-            }
-
-            String normalized =
-                    value.trim().replace("T", " ");
-
-            if (normalized.length() == 16) {
-                normalized += ":00";
-            }
-
-            return Timestamp.valueOf(normalized);
-
-        } catch (Exception e) {
-            return null;
-        }
+        return TimeUtil.parseDeviceTimestampUtc(value);
     }
 }

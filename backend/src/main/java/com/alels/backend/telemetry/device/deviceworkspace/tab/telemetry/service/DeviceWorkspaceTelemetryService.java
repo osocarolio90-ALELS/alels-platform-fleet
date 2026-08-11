@@ -221,6 +221,7 @@ public class DeviceWorkspaceTelemetryService {
 
         return values.values().stream()
                 .sorted(Comparator.comparingInt(DeviceWorkspaceTelemetryService::categoryOrder)
+                        .thenComparingInt(DeviceWorkspaceTelemetryService::parameterOrder)
                         .thenComparing(DataParameter::label, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
     }
@@ -252,10 +253,40 @@ public class DeviceWorkspaceTelemetryService {
                 + (parameter.fieldCode() == null ? "" : parameter.fieldCode()) + " "
                 + (parameter.label() == null ? "" : parameter.label())).toUpperCase(Locale.ROOT);
         if (haystack.contains("GPS") || haystack.contains("GNSS") || haystack.contains("LATITUDE")
-                || haystack.contains("LONGITUDE") || haystack.contains("SATELLITE") || haystack.contains("HDOP")) return 0;
+                || haystack.contains("LONGITUDE") || haystack.contains("SATELLITE")
+                || haystack.contains("HDOP") || haystack.contains("PDOP")) return 0;
         if (haystack.contains("GSM") || haystack.contains("SIGNAL") || haystack.contains("RSSI")
                 || haystack.contains("OPERATOR") || haystack.contains("CELL")) return 1;
         return 2;
+    }
+
+    private static int parameterOrder(DataParameter parameter) {
+        String text = ((parameter.fieldCode() == null ? "" : parameter.fieldCode()) + " "
+                + (parameter.label() == null ? "" : parameter.label())).toUpperCase(Locale.ROOT);
+        int category = categoryOrder(parameter);
+        if (category == 0) {
+            if (text.contains("LATITUDE")) return 0;
+            if (text.contains("LONGITUDE")) return 1;
+            if (text.contains("ALTITUDE")) return 2;
+            if (text.contains("ANGLE") || text.contains("HEADING")) return 3;
+            if (text.contains("SPEED")) return 4;
+            if (text.contains("SATELLITE")) return 5;
+            if (text.contains("HDOP")) return 6;
+            if (text.contains("PDOP")) return 7;
+            return 20;
+        }
+        if (category == 1) {
+            if (text.contains("SIGNAL") || text.contains("RSSI")) return 0;
+            if (text.contains("OPERATOR")) return 1;
+            if (text.contains("CELL")) return 2;
+            if (text.contains("AREA") || text.contains("LAC")) return 3;
+            return 20;
+        }
+        if (parameter.parameterId() != null) {
+            try { return 100 + Integer.parseInt(parameter.parameterId()); }
+            catch (NumberFormatException ignored) { return 10_000; }
+        }
+        return 50;
     }
 
     private static Integer findSignalStrength(List<DataParameter> parameters) {

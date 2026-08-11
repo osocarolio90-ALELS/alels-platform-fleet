@@ -135,7 +135,7 @@ public class DeviceWorkspaceTelemetryRepository {
                        priority, event_io_id, io_data::text AS io_data
                 FROM telemetry
                 WHERE imei = ?
-                ORDER BY server_time DESC, id DESC
+                ORDER BY COALESCE(device_time, server_time) DESC, server_time DESC, id DESC
                 LIMIT 1
                 """, (rs, rowNum) -> new LatestPacket(
                     rs.getLong("id"), rs.getObject("packet_sequence", Long.class),
@@ -151,7 +151,7 @@ public class DeviceWorkspaceTelemetryRepository {
 
     public List<TrackPoint> recentTrack(String imei, int limit) {
         return jdbc.query("""
-                SELECT latitude, longitude, angle, speed, occurred_at
+                SELECT id, latitude, longitude, angle, speed, occurred_at
                 FROM (
                     SELECT id, latitude, longitude, angle, speed,
                            COALESCE(device_time, server_time) AS occurred_at
@@ -160,10 +160,10 @@ public class DeviceWorkspaceTelemetryRepository {
                       AND latitude BETWEEN -90 AND 90
                       AND longitude BETWEEN -180 AND 180
                       AND NOT (latitude = 0 AND longitude = 0)
-                    ORDER BY server_time DESC, id DESC
+                    ORDER BY COALESCE(device_time, server_time) DESC, server_time DESC, id DESC
                     LIMIT ?
                 ) recent
-                ORDER BY occurred_at
+                ORDER BY occurred_at, id
                 """, (rs, rowNum) -> new TrackPoint(
                     rs.getObject("latitude", Double.class), rs.getObject("longitude", Double.class),
                     rs.getObject("angle", Integer.class), rs.getObject("speed", Double.class),

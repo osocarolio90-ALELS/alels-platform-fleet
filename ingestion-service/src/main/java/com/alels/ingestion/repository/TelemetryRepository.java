@@ -360,6 +360,8 @@ public class TelemetryRepository {
                     device_time = EXCLUDED.device_time,
                     server_time = EXCLUDED.server_time,
                     updated_at = NOW()
+                WHERE COALESCE(EXCLUDED.device_time, EXCLUDED.server_time)
+                      >= COALESCE(device_latest_position.device_time, device_latest_position.server_time)
                 """;
 
         int processed = 0;

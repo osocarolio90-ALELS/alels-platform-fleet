@@ -1,5 +1,7 @@
 package com.alels.gateway.service;
 
+import com.alels.gateway.util.TimeUtil;
+
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Map;
@@ -279,22 +281,6 @@ public class TelemetryAlertEvaluator {
     }
 
     private static Timestamp parseTimestamp(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-
-        try {
-            String normalized =
-                    value.trim().replace("T", " ");
-
-            if (normalized.length() == 16) {
-                normalized += ":00";
-            }
-
-            return Timestamp.valueOf(normalized);
-
-        } catch (Exception e) {
-            return null;
-        }
+        return TimeUtil.parseDeviceTimestampUtc(value);
     }
 }
