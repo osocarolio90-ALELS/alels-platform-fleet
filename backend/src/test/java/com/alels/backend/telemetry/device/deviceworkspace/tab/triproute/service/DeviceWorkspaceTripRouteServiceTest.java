@@ -41,14 +41,14 @@ class DeviceWorkspaceTripRouteServiceTest {
     }
 
     @Test
-    void segmentsChronologicalNormalizedMovementIntoTrip() {
+    void segmentsTripFromConfirmedIgnitionOnUntilIgnitionOff() {
         authorized();
         Instant start = Instant.parse("2026-08-11T08:00:00Z");
         List<TelemetryPoint> points = List.of(
-                point(1L, start, 20.0, 1.0),
-                point(2L, start.plusSeconds(60), 30.0, 1.0),
-                point(3L, start.plusSeconds(120), 0.0, 0.0),
-                point(4L, start.plusSeconds(480), 0.0, 0.0)
+                point(1L, start, 0.0, 1.0),
+                point(2L, start.plusSeconds(11), 20.0, 1.0),
+                point(3L, start.plusSeconds(60), 30.0, 1.0),
+                point(4L, start.plusSeconds(120), 0.0, 0.0)
         );
         when(repository.points(eq("359000000000011"), any(), any())).thenReturn(points);
 
@@ -56,7 +56,49 @@ class DeviceWorkspaceTripRouteServiceTest {
 
         assertEquals(1, result.trips().size());
         assertEquals("1-4", result.trips().get(0).id());
+        assertEquals("TRIP", result.trips().get(0).type());
         assertEquals("COMPLETED", result.trips().get(0).status());
+        assertEquals(1, result.routes().size());
+        assertEquals(4, result.routes().get(0).track().size());
+    }
+
+    @Test
+    void createsStopFromIgnitionOffUntilNextIgnitionOnUsingDeviceTimeOrder() {
+        authorized();
+        Instant start = Instant.parse("2026-08-11T08:00:00Z");
+        when(repository.points(eq("359000000000011"), any(), any())).thenReturn(List.of(
+                point(1L, start, 10.0, 1.0),
+                point(2L, start.plusSeconds(11), 20.0, 1.0),
+                point(3L, start.plusSeconds(30), 0.0, 0.0),
+                point(4L, start.plusSeconds(90), 0.0, 0.0),
+                point(5L, start.plusSeconds(120), 0.0, 1.0),
+                point(6L, start.plusSeconds(131), 10.0, 1.0),
+                point(7L, start.plusSeconds(180), 0.0, 0.0)
+        ));
+
+        var result = service.trips(user, 11L, "2026-08-11T00:00:00Z", "2026-08-12T00:00:00Z");
+
+        assertEquals(3, result.trips().size());
+        assertEquals("TRIP", result.trips().get(0).type());
+        assertEquals("STOP", result.trips().get(1).type());
+        assertEquals("3-5", result.trips().get(1).id());
+        assertEquals(90, result.trips().get(1).durationSeconds());
+        assertEquals("TRIP", result.trips().get(2).type());
+    }
+
+    @Test
+    void ignoresIgnitionPulseThatDoesNotExceedTenSeconds() {
+        authorized();
+        Instant start = Instant.parse("2026-08-11T08:00:00Z");
+        when(repository.points(eq("359000000000011"), any(), any())).thenReturn(List.of(
+                point(1L, start, 0.0, 1.0),
+                point(2L, start.plusSeconds(5), 0.0, 1.0),
+                point(3L, start.plusSeconds(10), 0.0, 0.0)
+        ));
+
+        var result = service.trips(user, 11L, "2026-08-11T00:00:00Z", "2026-08-12T00:00:00Z");
+
+        assertEquals(0, result.trips().size());
     }
 
     private void authorized() {
@@ -64,9 +106,9 @@ class DeviceWorkspaceTripRouteServiceTest {
                 .thenReturn(Optional.of(new DeviceAccess(11L, "359000000000011", 20L)));
     }
 
-    private TelemetryPoint point(Long id, Instant time, double speed, double movement) {
+    private TelemetryPoint point(Long id, Instant time, double speed, double ignition) {
         return new TelemetryPoint(id, time, -6.19 + id / 10_000.0, 106.82 + id / 10_000.0,
                 speed, 10, 12, 10, 0.8, "TELTONIKA_CODEC8E", "GSM", "Karina",
-                speed > 0 ? "MOVING" : "STOP", 1.0, movement);
+                speed > 0 ? "MOVING" : "STOP", ignition, speed > 0 ? 1.0 : 0.0);
     }
 }

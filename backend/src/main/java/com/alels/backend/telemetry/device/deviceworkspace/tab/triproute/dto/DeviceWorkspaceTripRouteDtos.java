@@ -6,15 +6,16 @@ public final class DeviceWorkspaceTripRouteDtos {
     private DeviceWorkspaceTripRouteDtos() {}
 
     public record TripSummary(
-            String id, String status, String startTime, String endTime,
+            String id, String type, String status, String startTime, String endTime,
             long durationSeconds, double distanceKm, double averageSpeed,
             double maximumSpeed, String driverName,
             Double startLatitude, Double startLongitude,
             Double endLatitude, Double endLongitude
     ) {}
-    public record TripListResponse(List<TripSummary> trips) {}
     public record TripPoint(Long telemetryId, String occurredAt, Double latitude, Double longitude,
                             Double speed, Integer angle, String movement) {}
+    public record TripRouteOverlay(String tripId, List<TripPoint> track) {}
+    public record TripListResponse(List<TripSummary> trips, List<TripRouteOverlay> routes) {}
     public record TripEvent(Long id, Long telemetryId, String title, String message, String severity,
                             String occurredAt, Double latitude, Double longitude, Double speed) {}
     public record ParameterValue(String fieldCode, String label, String value, String unit, String category) {}

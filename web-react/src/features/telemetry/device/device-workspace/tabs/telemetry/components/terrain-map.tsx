@@ -6,19 +6,19 @@ import type { WorkspaceTrackPoint } from "../types/device-workspace-telemetry";
 import { vehicleMarkerSvg } from "./vehicle-map-marker";
 import type { WorkspaceMapEvent } from "./telemetry-map";
 
-type Props={center:[number,number];valid:boolean;zoom:number;angle?:number|null;vehicleType?:string|null;track:WorkspaceTrackPoint[];events?:WorkspaceMapEvent[];showEvents?:boolean;follow?:boolean;fitToken?:number};
+type Props={center:[number,number];valid:boolean;zoom:number;angle?:number|null;vehicleType?:string|null;track:WorkspaceTrackPoint[];routeOverlays?:WorkspaceTrackPoint[][];events?:WorkspaceMapEvent[];showEvents?:boolean;showTrackPoints?:boolean;follow?:boolean;fitToken?:number;routeColor?:string;routeWeight?:number;brightMap?:boolean};
 const PERFORMANCE_PITCH=48;
 const FOLLOW_INTERVAL_MS=2000;
 const FOLLOW_DEAD_ZONE_RATIO=.3;
 
-export default function TerrainMap({center,valid,zoom,angle,vehicleType,track,events=[],showEvents=false,follow=true,fitToken=0}:Props){
+export default function TerrainMap({center,valid,zoom,angle,vehicleType,track,routeOverlays=[],events=[],showEvents=false,showTrackPoints=false,follow=true,fitToken=0,routeColor="#0284c7",routeWeight=4,brightMap=false}:Props){
  const container=useRef<HTMLDivElement>(null),mapRef=useRef<maplibregl.Map|null>(null),markerRef=useRef<maplibregl.Marker|null>(null);
  const eventMarkersRef=useRef<maplibregl.Marker[]>([]);
  const lastZoomRef=useRef(zoom);
  const lastFollowAtRef=useRef(0);
  const [startupError,setStartupError]=useState(false);
  const [mapReady,setMapReady]=useState(false);
- const routeData=useMemo(()=>routeGeoJson(track),[track]);
+ const routeData=useMemo(()=>routeGeoJson(track,routeOverlays),[track,routeOverlays]);
  const routeDataRef=useRef(routeData);routeDataRef.current=routeData;
  useEffect(()=>{
   if(!container.current)return;
@@ -32,7 +32,7 @@ export default function TerrainMap({center,valid,zoom,angle,vehicleType,track,ev
    if(!active)return;
    setMapReady(true);
    try{map.addSource("alels-buildings",{type:"vector",url:"https://tiles.openfreemap.org/planet"});const labelLayer=(map.getStyle().layers??[]).find(layer=>layer.type==="symbol"&&Boolean(layer.layout?.["text-field"]))?.id;map.addLayer({id:"alels-3d-buildings",source:"alels-buildings","source-layer":"building",type:"fill-extrusion",minzoom:15,filter:["!=",["get","hide_3d"],true],paint:{"fill-extrusion-color":"#b9cee4","fill-extrusion-height":["interpolate",["linear"],["zoom"],15,0,16,["coalesce",["get","render_height"],8]],"fill-extrusion-base":["coalesce",["get","render_min_height"],0],"fill-extrusion-opacity":.82}},labelLayer);}catch(error){console.warn("3D building layer unavailable",error);}
-   addRouteLayers(map,routeDataRef.current);
+   addRouteLayers(map,routeDataRef.current,routeColor,routeWeight,showTrackPoints);
    if(valid&&!markerRef.current)markerRef.current=createVehicleMarker(vehicleType,angle).setLngLat([center[1],center[0]]).addTo(map);
   });
   const resizeObserver=new ResizeObserver(()=>map.resize());resizeObserver.observe(container.current);
@@ -53,11 +53,11 @@ export default function TerrainMap({center,valid,zoom,angle,vehicleType,track,ev
    }
   }else{markerRef.current?.remove();markerRef.current=null;}
  },[center[0],center[1],valid,zoom,angle,vehicleType,follow]);
- useEffect(()=>{const map=mapRef.current;if(!map||!map.loaded())return;addRouteLayers(map,routeData);const source=map.getSource("alels-route") as maplibregl.GeoJSONSource|undefined;source?.setData(routeData);},[routeData]);
- useEffect(()=>{const map=mapRef.current,coordinates=routeData.geometry.coordinates;if(!map||!mapReady||!fitToken||coordinates.length<2)return;const bounds=new maplibregl.LngLatBounds(coordinates[0] as [number,number],coordinates[0] as [number,number]);coordinates.slice(1).forEach(coordinate=>bounds.extend(coordinate as [number,number]));map.fitBounds(bounds,{padding:48,duration:500});},[fitToken,mapReady]);
+ useEffect(()=>{const map=mapRef.current;if(!map||!map.loaded())return;addRouteLayers(map,routeData,routeColor,routeWeight,showTrackPoints);const source=map.getSource("alels-route") as maplibregl.GeoJSONSource|undefined;source?.setData(routeData);const points=map.getSource("alels-route-points") as maplibregl.GeoJSONSource|undefined;points?.setData(routePointGeoJson(routeData,showTrackPoints));if(map.getLayer("alels-route-line")){map.setPaintProperty("alels-route-line","line-color",routeColor);map.setPaintProperty("alels-route-line","line-width",routeWeight);}if(map.getLayer("alels-route-points"))map.setPaintProperty("alels-route-points","circle-color",routeColor);},[routeData,routeColor,routeWeight,showTrackPoints]);
+ useEffect(()=>{const map=mapRef.current,coordinates=routeData.geometry.coordinates.flat();if(!map||!mapReady||!fitToken||coordinates.length<2)return;const bounds=new maplibregl.LngLatBounds(coordinates[0] as [number,number],coordinates[0] as [number,number]);coordinates.slice(1).forEach(coordinate=>bounds.extend(coordinate as [number,number]));map.fitBounds(bounds,{padding:48,duration:500});},[fitToken,mapReady,routeData]);
  useEffect(()=>{const map=mapRef.current;if(!map||!mapReady)return;eventMarkersRef.current.forEach(eventMarker=>eventMarker.remove());eventMarkersRef.current=[];if(!showEvents)return;events.filter(event=>isValidCoordinate(Number(event.latitude),Number(event.longitude))).forEach((event,index)=>{const element=document.createElement("div");element.className="dw-trip-map-pin";element.innerHTML=`<span style="--trip-pin:${eventColor(event.severity)}">${index+1}</span>`;element.title=`${event.title} · ${new Date(event.occurredAt).toLocaleString("id-ID")}`;eventMarkersRef.current.push(new maplibregl.Marker({element}).setLngLat([Number(event.longitude),Number(event.latitude)]).addTo(map));});},[events,showEvents,mapReady]);
  if(startupError)return <div className="dw-map dw-map-empty">3D map is unavailable on this browser. Use 2D mode or enable hardware acceleration.</div>;
- return <div className="dw-map dw-maplibre-3d"><div ref={container} className="dw-maplibre-canvas"/>{!valid?<div className="dw-map-empty">Waiting for GPS position</div>:null}</div>;
+ return <div className={`dw-map dw-maplibre-3d${brightMap?" dw-map-bright":""}`}><div ref={container} className="dw-maplibre-canvas"/>{!valid?<div className="dw-map-empty">Waiting for GPS position</div>:null}</div>;
 }
 
 function createVehicleMarker(vehicleType?:string|null,angle?:number|null){
@@ -77,11 +77,14 @@ function shouldFollowVehicle(map:maplibregl.Map,longitude:number,latitude:number
  return point.x<marginX||point.x>canvas.clientWidth-marginX||point.y<marginY||point.y>canvas.clientHeight-marginY;
 }
 
-function routeGeoJson(track:WorkspaceTrackPoint[]){return {type:"Feature" as const,properties:{},geometry:{type:"LineString" as const,coordinates:track.filter(point=>Number.isFinite(point.latitude)&&Number.isFinite(point.longitude)&&!(point.latitude===0&&point.longitude===0)).map(point=>[point.longitude,point.latitude])}};}
-function addRouteLayers(map:maplibregl.Map,data:ReturnType<typeof routeGeoJson>){
- if(data.geometry.coordinates.length<2)return;
+function routeGeoJson(track:WorkspaceTrackPoint[],overlays:WorkspaceTrackPoint[][]){const lines=[track,...overlays].map(line=>line.filter(point=>Number.isFinite(point.latitude)&&Number.isFinite(point.longitude)&&!(point.latitude===0&&point.longitude===0)).map(point=>[point.longitude,point.latitude])).filter(line=>line.length>1);return {type:"Feature" as const,properties:{},geometry:{type:"MultiLineString" as const,coordinates:lines}};}
+function addRouteLayers(map:maplibregl.Map,data:ReturnType<typeof routeGeoJson>,routeColor:string,routeWeight:number,showTrackPoints:boolean){
+ if(!data.geometry.coordinates.length)return;
  if(map.getSource("alels-route"))return;
  map.addSource("alels-route",{type:"geojson",data});
- map.addLayer({id:"alels-route-line",type:"line",source:"alels-route",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":"#0284c7","line-width":4,"line-opacity":.9}});
+ map.addLayer({id:"alels-route-line",type:"line",source:"alels-route",layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":routeColor,"line-width":routeWeight,"line-opacity":1}});
+ map.addSource("alels-route-points",{type:"geojson",data:routePointGeoJson(data,showTrackPoints)});
+ map.addLayer({id:"alels-route-points",type:"circle",source:"alels-route-points",paint:{"circle-radius":3,"circle-color":routeColor,"circle-stroke-color":"#ffffff","circle-stroke-width":1,"circle-opacity":1}});
 }
+function routePointGeoJson(data:ReturnType<typeof routeGeoJson>,visible:boolean){const all=visible?data.geometry.coordinates.flat():[],step=Math.max(1,Math.ceil(all.length/600)),coordinates=all.filter((_,index)=>index%step===0||index===all.length-1);return{type:"Feature" as const,properties:{},geometry:{type:"MultiPoint" as const,coordinates}};}
 function eventColor(severity?:string|null){const value=(severity||"").toUpperCase();return value.includes("CRITICAL")||value.includes("HIGH")?"#dc2626":value.includes("WARN")?"#f59e0b":"#2563eb";}

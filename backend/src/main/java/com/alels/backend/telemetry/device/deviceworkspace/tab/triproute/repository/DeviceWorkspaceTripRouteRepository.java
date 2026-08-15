@@ -51,9 +51,18 @@ public class DeviceWorkspaceTripRouteRepository {
                 SELECT t.id, COALESCE(t.device_time, t.server_time) AS occurred_at,
                        t.latitude, t.longitude, t.speed, t.angle, t.altitude, t.satellites,
                        t.hdop, t.protocol, t.channel, t.driver_name, t.vehicle_status,
-                       NULL::double precision AS ignition, NULL::double precision AS movement
+                       MAX(CASE WHEN LOWER(n.field_code) = 'ignition' THEN
+                           CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END
+                                ELSE n.numeric_value END END) AS ignition,
+                       MAX(CASE WHEN LOWER(n.field_code) = 'movement' THEN
+                           CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END
+                                ELSE n.numeric_value END END) AS movement
                 FROM telemetry t
+                LEFT JOIN telemetry_normalized n ON n.telemetry_id = t.id AND n.imei = t.imei
                 WHERE t.imei = ? AND COALESCE(t.device_time, t.server_time) BETWEEN ? AND ?
+                GROUP BY t.id, t.server_time, t.device_time, t.latitude, t.longitude, t.speed,
+                         t.angle, t.altitude, t.satellites, t.hdop, t.protocol, t.channel,
+                         t.driver_name, t.vehicle_status
                 ORDER BY occurred_at, t.id LIMIT ?
                 """, (rs, rowNum) -> point(rs), imei, Timestamp.from(from), Timestamp.from(to), MAX_DETAIL_POINTS + 1);
     }
@@ -64,7 +73,7 @@ public class DeviceWorkspaceTripRouteRepository {
         String placeholders = String.join(",", telemetryIds.stream().map(id -> "?").toList());
         String sql = """
                 SELECT n.telemetry_id, n.field_code, COALESCE(NULLIF(n.field_name, ''), n.field_code) AS label,
-                       COALESCE(n.text_value, n.raw_value, n.numeric_value::text,
+                       COALESCE(n.text_value, n.numeric_value::text, n.raw_value,
                            CASE WHEN n.boolean_value IS NULL THEN NULL ELSE n.boolean_value::text END, '-') AS display_value,
                        n.unit, COALESCE(NULLIF(n.category, ''), 'OTHER') AS category
                 FROM telemetry_normalized n JOIN telemetry t ON t.id = n.telemetry_id AND t.imei = n.imei
@@ -76,6 +85,25 @@ public class DeviceWorkspaceTripRouteRepository {
         args.add(imei); args.addAll(telemetryIds); args.add(Timestamp.from(from)); args.add(Timestamp.from(to));
         Map<Long, List<ParameterValue>> result = new LinkedHashMap<>();
         jdbc.query(sql, (RowCallbackHandler) rs -> result.computeIfAbsent(rs.getLong("telemetry_id"), ignored -> new ArrayList<>()).add(
+                new ParameterValue(rs.getString("field_code"), rs.getString("label"),
+                        rs.getString("display_value"), rs.getString("unit"), rs.getString("category"))
+        ), args.toArray());
+        String ioSql = """
+                SELECT i.telemetry_id, 'io.' || i.io_id AS field_code,
+                       COALESCE(NULLIF(i.io_name, ''), 'IO ' || i.io_id) AS label,
+                       COALESCE(i.real_value::text, i.numeric_value::text, i.raw_value, '-') AS display_value,
+                       i.unit, COALESCE(NULLIF(i.io_category, ''), 'OTHER') AS category
+                FROM telemetry_io i JOIN telemetry t ON t.id = i.telemetry_id AND t.imei = i.imei
+                WHERE i.imei = ? AND i.telemetry_id IN (%s)
+                  AND COALESCE(t.device_time, t.server_time) BETWEEN ? AND ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM telemetry_normalized n
+                      WHERE n.telemetry_id = i.telemetry_id AND n.imei = i.imei
+                        AND n.source_io_id = i.io_id
+                  )
+                ORDER BY i.telemetry_id, i.id
+                """.formatted(placeholders);
+        jdbc.query(ioSql, (RowCallbackHandler) rs -> result.computeIfAbsent(rs.getLong("telemetry_id"), ignored -> new ArrayList<>()).add(
                 new ParameterValue(rs.getString("field_code"), rs.getString("label"),
                         rs.getString("display_value"), rs.getString("unit"), rs.getString("category"))
         ), args.toArray());

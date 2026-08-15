@@ -174,7 +174,7 @@ public class DeviceWorkspaceTelemetryRepository {
     public List<DataParameter> normalizedParameters(Long telemetryId, String imei) {
         return jdbc.query("""
                 SELECT field_code, COALESCE(NULLIF(field_name, ''), field_code) AS label,
-                       COALESCE(text_value, raw_value, numeric_value::text, CASE WHEN boolean_value IS NULL THEN NULL ELSE boolean_value::text END, '-') AS display_value,
+                       COALESCE(text_value, numeric_value::text, CASE WHEN boolean_value IS NULL THEN NULL ELSE boolean_value::text END, raw_value, '-') AS display_value,
                        numeric_value, boolean_value, unit, source_io_id,
                        COALESCE(NULLIF(category, ''), 'OTHER') AS category,
                        source_protocol, dictionary_code, device_model_id
