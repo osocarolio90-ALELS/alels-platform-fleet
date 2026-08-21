@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import com.alels.backend.masterdata.dto.DeviceMasterDtos.DeviceBrandRow;
+import com.alels.backend.masterdata.dto.DeviceMasterDtos.AvlDefinitionRequest;
 import com.alels.backend.masterdata.dto.DeviceMasterDtos.DeviceMasterRequest;
 import com.alels.backend.masterdata.dto.DeviceMasterDtos.DeviceModelRow;
 
@@ -35,10 +36,13 @@ public class DeviceMasterRepository {
     }
 
     public List<DeviceModelRow> listModels(Long brandId) {
+        List<DeviceModelRow> rows;
         if (brandId == null) {
-            return jdbcTemplate.query(baseModelSql() + " ORDER BY b.brand_name, m.sort_order, m.model_name", modelMapper());
+            rows = jdbcTemplate.query(baseModelSql() + " ORDER BY b.brand_name, m.sort_order, m.model_name", modelMapper());
+        } else {
+            rows = jdbcTemplate.query(baseModelSql() + " AND m.brand_id = ? ORDER BY b.brand_name, m.sort_order, m.model_name", modelMapper(), brandId);
         }
-        return jdbcTemplate.query(baseModelSql() + " AND m.brand_id = ? ORDER BY b.brand_name, m.sort_order, m.model_name", modelMapper(), brandId);
+        return rows.stream().map(this::withAvlDefinitions).toList();
     }
 
     public Long createBrand(DeviceMasterRequest request, Long actorUserId) {
@@ -168,6 +172,51 @@ public class DeviceMasterRepository {
         return count != null && count > 0;
     }
 
+    public boolean protocolParserSupported(String parserCode) {
+        if (parserCode == null || parserCode.isBlank()) return false;
+        return java.util.Set.of("TELTONIKA_AUTO", "ALELS_JSON", "CODEC8", "CODEC8E", "CODEC12", "TELTONIKA_IMEI")
+                .contains(parserCode.trim().toUpperCase());
+    }
+
+    public void upsertProtocolAndDictionary(Long modelId, DeviceMasterRequest request) {
+        DeviceMasterRequest normalized = normalizeProtocolFields(request);
+        String mappingProtocol = "TELTONIKA_AUTO".equalsIgnoreCase(normalized.parserCode()) ? "TELTONIKA_AUTO" : normalized.protocolCode();
+        String brandCode = jdbcTemplate.queryForObject("SELECT brand_code FROM device_brands WHERE id = ?", String.class, normalized.brandId());
+        jdbcTemplate.update("""
+                INSERT INTO protocol_registry(protocol_code, protocol_name, brand_code, protocol_family, detector_code, parser_code, transport_type, direction, status)
+                VALUES (?, ?, ?, ?, ?, ?, 'TCP_UDP', 'BIDIRECTIONAL', 'ACTIVE')
+                ON CONFLICT (protocol_code) DO UPDATE SET protocol_name=EXCLUDED.protocol_name, brand_code=EXCLUDED.brand_code,
+                    protocol_family=EXCLUDED.protocol_family, detector_code=EXCLUDED.detector_code, parser_code=EXCLUDED.parser_code, status='ACTIVE'
+                """, normalized.protocolCode(), normalized.modelName() + " protocol", brandCode, brandCode,
+                normalized.parserCode(), normalized.parserCode());
+        jdbcTemplate.update("""
+                INSERT INTO dictionary_registry(device_model_id, dictionary_code, dictionary_name, dictionary_file, dictionary_version,
+                    source_type, source_path, device_model, file_path, status, updated_at)
+                VALUES (?, ?, ?, 'DATABASE', '1', 'DATABASE', 'device_io_mappings', ?, 'device_io_mappings', 'ACTIVE', NOW())
+                ON CONFLICT (dictionary_code) DO UPDATE SET device_model_id=EXCLUDED.device_model_id,
+                    dictionary_name=EXCLUDED.dictionary_name, dictionary_file='DATABASE', source_type='DATABASE',
+                    source_path='device_io_mappings', device_model=EXCLUDED.device_model, file_path='device_io_mappings', status='ACTIVE', updated_at=NOW()
+                """, modelId, normalized.dictionaryCode(), normalized.modelName() + " AVL dictionary", normalized.modelCode());
+        jdbcTemplate.update("UPDATE device_io_mappings SET status='INACTIVE' WHERE device_model_id=? AND mapping_source='MASTER_DEVICE'", modelId);
+        for (AvlDefinitionRequest avl : normalized.avlDefinitions()) {
+            int updated = jdbcTemplate.update("""
+                    UPDATE device_io_mappings SET dictionary_code=?, source_name=?, source_unit=?, field_code=?, field_name=?,
+                        category=?, unit=?, target_unit=?, multiplier=?, value_type=?, status='ACTIVE', mapping_source='MASTER_DEVICE'
+                    WHERE device_model_id=? AND source_protocol=? AND source_io_id=? AND normalized_field_id IS NULL
+                    """, normalized.dictionaryCode(), clean(avl.name()), clean(avl.unit()), "io." + clean(avl.avlId()), clean(avl.name()),
+                    clean(avl.category()), clean(avl.unit()), clean(avl.unit()), avl.multiplier() == null ? 1.0 : avl.multiplier(),
+                    clean(avl.valueType()) == null ? "NUMBER" : clean(avl.valueType()).toUpperCase(), modelId, mappingProtocol, clean(avl.avlId()));
+            if (updated > 0) continue;
+            jdbcTemplate.update("""
+                    INSERT INTO device_io_mappings(device_model_id, dictionary_code, source_protocol, source_io_id, source_name,
+                        source_unit, field_code, field_name, category, unit, target_unit, multiplier, offset_value, value_type, status, mapping_source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'ACTIVE', 'MASTER_DEVICE')
+                    """, modelId, normalized.dictionaryCode(), mappingProtocol, clean(avl.avlId()), clean(avl.name()), clean(avl.unit()),
+                    "io." + clean(avl.avlId()), clean(avl.name()), clean(avl.category()), clean(avl.unit()), clean(avl.unit()),
+                    avl.multiplier() == null ? 1.0 : avl.multiplier(), clean(avl.valueType()) == null ? "NUMBER" : clean(avl.valueType()).toUpperCase());
+        }
+    }
+
     public void log(Long actorUserId, Long actorCompanyId, String targetType, Long targetId, String action) {
         try {
             jdbcTemplate.update("""
@@ -187,6 +236,12 @@ public class DeviceMasterRepository {
                 LEFT JOIN users u ON u.id = m.created_by
                 WHERE m.deleted_at IS NULL
                   AND m.is_active = TRUE
+                  AND b.is_active = TRUE
+                  AND EXISTS (
+                      SELECT 1 FROM protocol_registry protocol
+                      WHERE protocol.protocol_code = m.protocol_code
+                        AND protocol.status = 'ACTIVE'
+                  )
                   AND NULLIF(TRIM(m.dictionary_code), '') IS NOT NULL
                   AND EXISTS (
                       SELECT 1
@@ -196,6 +251,12 @@ public class DeviceMasterRepository {
                         AND NULLIF(TRIM(dictionary.dictionary_file), '') IS NOT NULL
                         AND LOWER(dictionary.dictionary_code) = LOWER(m.dictionary_code)
                   )
+                  AND EXISTS (
+                      SELECT 1 FROM device_io_mappings mapping
+                      WHERE mapping.device_model_id = m.id
+                        AND mapping.status = 'ACTIVE'
+                        AND mapping.source_protocol IN (m.protocol_code, m.parser_code)
+                  )
                 """;
     }
 
@@ -204,8 +265,20 @@ public class DeviceMasterRepository {
                 rs.getLong("id"), rs.getObject("brand_id", Long.class), rs.getString("brand_code"), rs.getString("brand_name"),
                 rs.getString("model_code"), rs.getString("model_name"), rs.getString("protocol_code"), rs.getString("parser_code"),
                 rs.getString("dictionary_code"), rs.getString("description"), rs.getBoolean("is_active"), rs.getBoolean("is_system"),
-                rs.getInt("sort_order"), rs.getString("created_at"), rs.getString("created_by"), rs.getString("updated_at")
+                rs.getInt("sort_order"), rs.getString("created_at"), rs.getString("created_by"), rs.getString("updated_at"), List.of()
         );
+    }
+
+    private DeviceModelRow withAvlDefinitions(DeviceModelRow row) {
+        List<AvlDefinitionRequest> avl = jdbcTemplate.query("""
+                SELECT source_io_id, source_name, source_unit, value_type, multiplier, category
+                FROM device_io_mappings WHERE device_model_id=? AND status='ACTIVE'
+                ORDER BY source_io_id
+                """, (rs, n) -> new AvlDefinitionRequest(rs.getString("source_io_id"), rs.getString("source_name"),
+                rs.getString("source_unit"), rs.getString("value_type"), rs.getObject("multiplier", Double.class), rs.getString("category")), row.id());
+        return new DeviceModelRow(row.id(), row.brandId(), row.brandCode(), row.brandName(), row.modelCode(), row.modelName(),
+                row.protocolCode(), row.parserCode(), row.dictionaryCode(), row.description(), row.active(), row.system(), row.sortOrder(),
+                row.createdAt(), row.createdBy(), row.updatedAt(), avl);
     }
 
     private DeviceMasterRequest normalizeProtocolFields(DeviceMasterRequest request) {
@@ -215,7 +288,7 @@ public class DeviceMasterRepository {
         if (protocol == null || protocol.isBlank()) protocol = normalizeCode(request.modelCode(), request.modelName());
         if (parser == null || parser.isBlank()) parser = protocol + "_PARSER";
         if (dictionary == null || dictionary.isBlank()) dictionary = protocol + "_AVL";
-        return new DeviceMasterRequest(request.brandId(), request.brandCode(), request.brandName(), request.modelCode(), request.modelName(), protocol, parser, dictionary, request.description(), request.active(), request.sortOrder());
+        return new DeviceMasterRequest(request.brandId(), request.brandCode(), request.brandName(), request.modelCode(), request.modelName(), protocol, parser, dictionary, request.description(), request.active(), request.sortOrder(), request.avlDefinitions() == null ? List.of() : request.avlDefinitions());
     }
 
     private String activeStatus(Boolean active) { return Boolean.FALSE.equals(active) ? "INACTIVE" : "ACTIVE"; }

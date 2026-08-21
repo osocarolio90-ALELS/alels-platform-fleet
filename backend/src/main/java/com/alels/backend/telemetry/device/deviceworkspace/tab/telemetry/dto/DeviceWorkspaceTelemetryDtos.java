@@ -65,5 +65,7 @@ public final class DeviceWorkspaceTelemetryDtos {
             WorkspaceConfiguration configuration, List<TrackPoint> track
     ) {}
 
+    public record HistoricalRoutesResponse(List<List<TrackPoint>> routes) {}
+
     public record EventPage(List<RecentEvent> events, Long nextBeforeId, boolean hasMore) {}
 }

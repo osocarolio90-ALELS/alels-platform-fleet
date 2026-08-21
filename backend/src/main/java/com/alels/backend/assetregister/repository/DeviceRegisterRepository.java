@@ -61,27 +61,12 @@ public class DeviceRegisterRepository {
                 SELECT id, brand_name, brand_code
                 FROM device_brands
                 WHERE is_active = TRUE AND deleted_at IS NULL
+                  AND EXISTS (SELECT 1 FROM device_models m WHERE m.brand_id=device_brands.id AND m.is_active=TRUE AND m.deleted_at IS NULL
+                    AND EXISTS (SELECT 1 FROM protocol_registry p WHERE p.protocol_code=m.protocol_code AND p.status='ACTIVE')
+                    AND EXISTS (SELECT 1 FROM dictionary_registry dr WHERE dr.device_model_id=m.id AND dr.dictionary_code=m.dictionary_code AND dr.status='ACTIVE')
+                    AND EXISTS (SELECT 1 FROM device_io_mappings io WHERE io.device_model_id=m.id AND io.source_protocol IN (m.protocol_code, m.parser_code) AND io.status='ACTIVE'))
                 ORDER BY sort_order, brand_name
                 """, (rs, rowNum) -> new DeviceLookupOption(rs.getLong("id"), rs.getString("brand_name"), rs.getString("brand_code"), null));
-    }
-
-    public List<DeviceLookupOption> modelOptions(Long brandId) {
-        if (brandId == null) {
-            return jdbcTemplate.query("""
-                    SELECT m.id, m.model_name, m.model_code, b.brand_name
-                    FROM device_models m
-                    LEFT JOIN device_brands b ON b.id = m.brand_id
-                    WHERE m.is_active = TRUE AND m.deleted_at IS NULL
-                    ORDER BY b.brand_name, m.sort_order, m.model_name
-                    """, (rs, rowNum) -> new DeviceLookupOption(rs.getLong("id"), rs.getString("model_name"), rs.getString("model_code"), rs.getString("brand_name")));
-        }
-        return jdbcTemplate.query("""
-                SELECT m.id, m.model_name, m.model_code, b.brand_name
-                FROM device_models m
-                LEFT JOIN device_brands b ON b.id = m.brand_id
-                WHERE m.is_active = TRUE AND m.deleted_at IS NULL AND m.brand_id = ?
-                ORDER BY m.sort_order, m.model_name
-                """, (rs, rowNum) -> new DeviceLookupOption(rs.getLong("id"), rs.getString("model_name"), rs.getString("model_code"), rs.getString("brand_name")), brandId);
     }
 
     public Long create(DeviceRegisterRequest request, Long actorUserId) {
@@ -147,7 +132,11 @@ public class DeviceRegisterRepository {
     }
 
     public boolean brandExists(Long id) { return exists("device_brands", id); }
-    public boolean modelExists(Long id) { return exists("device_models", id); }
+    public boolean modelExists(Long id) {
+        if (id == null) return false;
+        Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM device_models m WHERE m.id=? AND m.is_active=TRUE AND m.deleted_at IS NULL AND " + verifiedModelSql(), Integer.class, id);
+        return count != null && count > 0;
+    }
     public boolean modelBelongsToBrand(Long modelId, Long brandId) {
         if (modelId == null || brandId == null) return true;
         Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM device_models WHERE id = ? AND brand_id = ? AND is_active = TRUE AND deleted_at IS NULL", Integer.class, modelId, brandId);
@@ -212,6 +201,11 @@ public class DeviceRegisterRepository {
         Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE id = ? AND is_active = TRUE AND deleted_at IS NULL", Integer.class, id);
         return count != null && count > 0;
     }
+    private String verifiedModelSql() { return """
+            EXISTS (SELECT 1 FROM protocol_registry p WHERE p.protocol_code=m.protocol_code AND p.status='ACTIVE')
+            AND EXISTS (SELECT 1 FROM dictionary_registry dr WHERE dr.device_model_id=m.id AND dr.dictionary_code=m.dictionary_code AND dr.status='ACTIVE')
+            AND EXISTS (SELECT 1 FROM device_io_mappings io WHERE io.device_model_id=m.id AND io.source_protocol IN (m.protocol_code, m.parser_code) AND io.status='ACTIVE')
+            """; }
     private Long effectiveBrandId(DeviceRegisterRequest request, ModelProtocol protocol) { return request.deviceBrandId() != null ? request.deviceBrandId() : protocol.brandId(); }
     private String normalizeImei(String value) { return clean(value) == null ? null : clean(value).replaceAll("\\s+", ""); }
     private String normalizeRegisterStatus(String value) { return value == null || value.isBlank() ? "ACTIVE" : value.trim().toUpperCase().replaceAll("[\\s_-]+", "_"); }

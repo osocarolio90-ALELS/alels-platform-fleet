@@ -14,6 +14,7 @@ public class DirectDatabaseTelemetryPublisher implements TelemetryPublisher {
 
     @Override
     public CompletionStage<Long> publish(
+            Long rawPacketId,
             TelemetryData telemetryData,
             String protocol,
             String channel,
@@ -22,7 +23,7 @@ public class DirectDatabaseTelemetryPublisher implements TelemetryPublisher {
     ) {
         try {
             Long telemetryId = TelemetryRepository.insert(
-                    null, telemetryData, protocol, channel, dictionaryCode
+                    rawPacketId, telemetryData, protocol, channel, dictionaryCode
             );
             if (telemetryId == null) {
                 throw new IllegalStateException("Telemetry persistence did not return an id");
@@ -33,7 +34,7 @@ public class DirectDatabaseTelemetryPublisher implements TelemetryPublisher {
 
         TelemetryIoRepository.insertAll(
                 telemetryId,
-                null,
+                rawPacketId,
                 telemetryData,
                 protocol,
                 channel,
@@ -42,7 +43,7 @@ public class DirectDatabaseTelemetryPublisher implements TelemetryPublisher {
 
         NormalizationEngine.normalizeAndStore(
                 telemetryId,
-                null,
+                rawPacketId,
                 null,
                 null,
                 telemetryData,

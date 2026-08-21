@@ -30,7 +30,10 @@ export type DeviceModelRow = {
   createdAt?: string | null;
   createdBy?: string | null;
   updatedAt?: string | null;
+  avlDefinitions?: AvlDefinitionInput[];
 };
+
+export type AvlDefinitionInput = { avlId: string; name: string; unit?: string | null; valueType?: string | null; multiplier?: number | null; category?: string | null };
 
 export type DeviceMasterInput = {
   brandId?: number | null;
@@ -44,6 +47,7 @@ export type DeviceMasterInput = {
   description?: string | null;
   active?: boolean | null;
   sortOrder?: number | null;
+  avlDefinitions?: AvlDefinitionInput[];
 };
 
 const BASE = "/api/master-data/device-master";

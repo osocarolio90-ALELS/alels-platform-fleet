@@ -29,7 +29,7 @@ public class DeviceRegisterController {
     @GetMapping public List<DeviceRegisterRow> list(Authentication auth) { return service.list(user(auth)); }
     @GetMapping("/company-options") public List<DeviceLookupOption> companyOptions(Authentication auth) { return service.companyOptions(user(auth)); }
     @GetMapping("/brand-options") public List<DeviceLookupOption> brandOptions() { return service.brandOptions(); }
-    @GetMapping("/model-options") public List<DeviceLookupOption> modelOptions(@RequestParam(required = false) Long brandId) { return service.modelOptions(brandId); }
+    @GetMapping("/model-options") public List<DeviceLookupOption> modelOptions(Authentication auth, @RequestParam(required = false) Long brandId) { return service.modelOptions(user(auth), brandId); }
     @PostMapping public Map<String, Object> create(Authentication auth, @RequestBody DeviceRegisterRequest request) { return Map.of("success", true, "id", service.create(user(auth), request)); }
     @PutMapping("/{id}") public Map<String, Object> update(Authentication auth, @PathVariable Long id, @RequestBody DeviceRegisterRequest request) { service.update(user(auth), id, request); return Map.of("success", true); }
     @DeleteMapping("/{id}") public Map<String, Object> delete(Authentication auth, @PathVariable Long id) { service.delete(user(auth), id); return Map.of("success", true); }

@@ -11,6 +11,7 @@ public class AlertRule {
     private String ioId;
     private String alertType;
     private String title;
+    private String ruleCode;
     private String severity;
     private String conditionOperator;
     private Double thresholdValue;
@@ -42,6 +43,9 @@ public class AlertRule {
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
+
+    public String getRuleCode() { return ruleCode; }
+    public void setRuleCode(String ruleCode) { this.ruleCode = ruleCode; }
 
     public String getSeverity() { return severity; }
     public void setSeverity(String severity) { this.severity = severity; }

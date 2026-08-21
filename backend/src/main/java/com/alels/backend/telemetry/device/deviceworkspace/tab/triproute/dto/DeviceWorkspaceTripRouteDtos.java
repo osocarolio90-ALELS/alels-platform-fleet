@@ -12,16 +12,56 @@ public final class DeviceWorkspaceTripRouteDtos {
             Double startLatitude, Double startLongitude,
             Double endLatitude, Double endLongitude
     ) {}
+    public record TripInstrumentSnapshot(
+            Double engineRpm, Double fuelLevel, Double fuelConsumption, String fuelConsumptionUnit,
+            Double batterySoc, Double batteryConsumptionKw,
+            Double gasLevelPressure, String gasLevelPressureUnit,
+            Double gasConsumption, String gasConsumptionUnit
+    ) {}
     public record TripPoint(Long telemetryId, String occurredAt, Double latitude, Double longitude,
-                            Double speed, Integer angle, String movement) {}
+                            Double speed, Integer angle, String movement, TripInstrumentSnapshot instruments) {}
     public record TripRouteOverlay(String tripId, List<TripPoint> track) {}
-    public record TripListResponse(List<TripSummary> trips, List<TripRouteOverlay> routes) {}
+    public record TripListResponse(List<TripSummary> trips, List<TripRouteOverlay> routes, String energyGroup) {}
+    public record SelectedRouteRange(String tripId, String from, String to) {}
+    public record SelectedRoutesRequest(List<SelectedRouteRange> ranges) {}
+    public record SelectedRoutesResponse(List<TripRouteOverlay> routes) {}
     public record TripEvent(Long id, Long telemetryId, String title, String message, String severity,
                             String occurredAt, Double latitude, Double longitude, Double speed) {}
     public record ParameterValue(String fieldCode, String label, String value, String unit, String category) {}
-    public record TripLogRow(Long telemetryId, String imei, String occurredAt, String protocol, String source,
+    public record TripLogRow(Long telemetryId, String imei, String occurredAt, String receivedAt, String protocol, String source,
+                             String driverName, String vehiclePlateNumber,
                              Double latitude, Double longitude, Integer altitude, Integer angle,
                              Double speed, Integer satellites, Double hdop, List<ParameterValue> parameters) {}
+    public record SelectedTimeRange(String from, String to) {}
+    public record SelectedEventsRequest(List<SelectedTimeRange> ranges) {}
+    public record SelectedLogsRequest(List<SelectedTimeRange> ranges, Integer page, Integer size, List<Long> telemetryIds) {}
+    public record SelectedDeviceLogPage(List<TripLogRow> rows, int page, int size,
+                                        long totalRows, int totalPages, Long latestTelemetryId) {}
+    public record PlaybackTelemetryRow(Long telemetryId, Double speed, List<ParameterValue> parameters) {}
+    public record DeviceLogPage(List<TripLogRow> rows, boolean hasMore,
+                                String nextBeforeTime, Long nextBeforeId, Long latestTelemetryId) {}
+    public record LatestDeviceLog(Long latestTelemetryId) {}
+    public record DeleteDeviceHistoryRequest(String imeiConfirmation) {}
+    public record DeleteDeviceHistoryResponse(
+            String imei, String resetAt, int telemetryRows, int ioRows,
+            int normalizedRows, int alertRows, int eventRows, int rawPacketRows, int latestPositionRows, int presenceRows
+    ) {
+        public int totalDeletedRows() {
+            return telemetryRows + ioRows + normalizedRows + alertRows + eventRows + rawPacketRows + latestPositionRows + presenceRows;
+        }
+    }
     public record TripDetailResponse(TripSummary trip, List<TripPoint> track, List<TripEvent> events,
                                      List<TripLogRow> logs) {}
+
+    public record InstrumentSourceProfile(
+            Long id, String name, String rpmSource, String speedSource, String levelSource,
+            String consumptionSource, String odometerSource, boolean companyDefault
+    ) {}
+    public record InstrumentSourceProfileList(List<InstrumentSourceProfile> profiles, Long effectiveProfileId) {}
+    public record InstrumentSourceOption(String fieldCode, String label, String unit, String category) {}
+    public record SaveInstrumentSourceProfileRequest(
+            String name, String rpmSource, String speedSource, String levelSource,
+            String consumptionSource, String odometerSource, Boolean applyAll
+    ) {}
+    public record ApplyInstrumentSourceProfileRequest(Long profileId, Boolean applyAll) {}
 }

@@ -334,8 +334,6 @@ public class ClientSession implements Runnable {
                 ProtocolType.ALELS_JSON
         );
 
-        sendAlelsAck(out, imei, "ALELS HB");
-
         RawPacketService.logRawPacket(
                 imei,
                 ProtocolType.ALELS_JSON,
@@ -343,6 +341,8 @@ public class ClientSession implements Runnable {
                 packet,
                 socket.getRemoteSocketAddress().toString()
         );
+
+        sendAlelsAck(out, imei, "ALELS HB");
 
         DeviceSessionManager.registerOrUpdate(
                 imei,
@@ -418,9 +418,7 @@ public class ClientSession implements Runnable {
             ackType = "ALELS HB";
         }
 
-        sendAlelsAck(out, result.getImei(), ackType);
-
-        RawPacketService.logRawPacket(
+        Long rawPacketId = RawPacketService.logRawPacket(
                 result.getImei(),
                 ProtocolType.ALELS_JSON,
                 ChannelType.WIFI,
@@ -457,11 +455,13 @@ public class ClientSession implements Runnable {
 
         if (isResponse) {
             CommandResponseHandler.handleAlelsJsonResponse(packet);
+            sendAlelsAck(out, result.getImei(), ackType);
             DeviceSessionManager.printSessions();
             return;
         }
 
         if (isId || isHeartbeat) {
+            sendAlelsAck(out, result.getImei(), ackType);
             DeviceSessionManager.printSessions();
             return;
         }
@@ -472,15 +472,18 @@ public class ClientSession implements Runnable {
             telemetryData.print();
 
             telemetryPublisher.publish(
+                    rawPacketId,
                     telemetryData,
                     ProtocolType.ALELS_JSON.name(),
                     ChannelType.WIFI.name(),
                     dictionaryCode,
                     "ALELS_JSON"
-            );
+            ).toCompletableFuture().join();
 
             printDictionaryIo(telemetryData, dictionaryCode);
         }
+
+        sendAlelsAck(out, result.getImei(), ackType);
 
         DeviceSessionManager.printSessions();
 
@@ -605,7 +608,7 @@ public class ClientSession implements Runnable {
         String dictionaryCode =
                 resolveDictionaryCode(boundImei);
 
-        RawPacketService.logRawPacket(
+        Long rawPacketId = RawPacketService.logRawPacket(
                 boundImei,
                 ProtocolType.TELTONIKA_CODEC8,
                 ChannelType.GSM,
@@ -619,12 +622,13 @@ public class ClientSession implements Runnable {
                 t.print();
 
                 telemetryPublisher.publish(
+                        rawPacketId,
                         t,
                         ProtocolType.TELTONIKA_CODEC8.name(),
                         ChannelType.GSM.name(),
                         dictionaryCode,
                         "CODEC8"
-                );
+                ).toCompletableFuture().join();
 
                 printDictionaryIo(t, dictionaryCode);
             });
@@ -706,7 +710,7 @@ public class ClientSession implements Runnable {
         String dictionaryCode =
                 resolveDictionaryCode(boundImei);
 
-        RawPacketService.logRawPacket(
+        Long rawPacketId = RawPacketService.logRawPacket(
                 boundImei,
                 ProtocolType.TELTONIKA_CODEC8E,
                 ChannelType.GSM,
@@ -720,12 +724,13 @@ public class ClientSession implements Runnable {
                 t.print();
 
                 telemetryPublisher.publish(
+                        rawPacketId,
                         t,
                         ProtocolType.TELTONIKA_CODEC8E.name(),
                         ChannelType.GSM.name(),
                         dictionaryCode,
                         "CODEC8E"
-                );
+                ).toCompletableFuture().join();
 
                 printDictionaryIo(t, dictionaryCode);
             });

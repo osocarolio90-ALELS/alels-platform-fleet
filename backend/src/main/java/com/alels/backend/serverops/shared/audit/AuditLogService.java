@@ -17,6 +17,11 @@ public class AuditLogService {
         auditLogRepository.insert(userId, companyId, "SERVEROPS_READ", "SERVER_OPERATIONS", path, ipAddress, metadata);
     }
 
+    public void logTelemetryHistoryDeletion(Long userId, Long companyId, String imei, int deletedRows) {
+        String metadata = "{\"imei\":\"" + escape(imei) + "\",\"deletedRows\":" + deletedRows + "}";
+        auditLogRepository.insert(userId, companyId, "PERMANENT_DELETE", "DEVICE_TELEMETRY_HISTORY", imei, null, metadata);
+    }
+
     private String escape(String value) {
         if (value == null) {
             return "";

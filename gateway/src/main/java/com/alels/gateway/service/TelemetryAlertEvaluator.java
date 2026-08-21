@@ -159,6 +159,7 @@ public class TelemetryAlertEvaluator {
                 deviceId,
                 telemetryId,
                 telemetryData.getImei(),
+                rule.getRuleCode(),
                 dictionaryCode,
                 protocol,
                 channel,

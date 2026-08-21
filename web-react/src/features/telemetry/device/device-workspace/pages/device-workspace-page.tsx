@@ -48,6 +48,6 @@ export function DeviceWorkspacePage(){
   </>}/>
   {notice?<div className="dw-notice" role="status">{notice}<button type="button" onClick={()=>setNotice("")} aria-label="Dismiss">×</button></div>:null}
   <nav className="dw-tabs" aria-label="Device workspace tabs"><button type="button" className={activeTab==="telemetry"?"active":""} onClick={()=>setActiveTab("telemetry")}>Telemetry</button><button type="button" className={activeTab==="trip-route"?"active":""} onClick={()=>setActiveTab("trip-route")}>Trip &amp; Route</button><button type="button" disabled>Log &amp; Message</button><button type="button" disabled>Command</button><button type="button" disabled>Analytics</button></nav>
-  {activeTab==="telemetry"?<TelemetryWorkspaceTab deviceId={deviceId} live={live} refreshToken={refreshToken} clusterRef={clusterRef}/>:<TripRouteWorkspaceTab deviceId={deviceId} vehicleType={data?.vehicle.type} refreshToken={refreshToken}/>}
+  {activeTab==="telemetry"?<TelemetryWorkspaceTab deviceId={deviceId} live={live} refreshToken={refreshToken} clusterRef={clusterRef}/>:<TripRouteWorkspaceTab deviceId={deviceId} imei={device?.imei||""} vehicleType={data?.vehicle.type} refreshToken={refreshToken}/>}
  </div></div>;
 }

@@ -1,10 +1,15 @@
 package com.alels.gateway.dictionary;
 
 import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.alels.gateway.config.DatabaseConfig;
 
 public class DeviceDictionaryLoader {
 
@@ -38,11 +43,7 @@ public class DeviceDictionaryLoader {
                                 .getClassLoader()
                                 .getResourceAsStream(path);
 
-                if (inputStream == null) {
-                    throw new RuntimeException(
-                            "Dictionary file not found: " + path
-                    );
-                }
+                if (inputStream == null) return loadFromDatabase(key);
 
                 DeviceDictionary dictionary =
                         mapper.readValue(
@@ -77,6 +78,42 @@ public class DeviceDictionaryLoader {
                 );
             }
         });
+    }
+
+    private static DeviceDictionary loadFromDatabase(String dictionaryCode) throws Exception {
+        String sql = """
+                SELECT dr.device_model, m.source_io_id, m.source_name, m.source_unit, m.value_type, m.multiplier, m.category
+                FROM dictionary_registry dr
+                JOIN device_io_mappings m ON m.device_model_id=dr.device_model_id AND m.dictionary_code=dr.dictionary_code
+                WHERE LOWER(dr.dictionary_code)=? AND dr.status='ACTIVE' AND m.status='ACTIVE'
+                ORDER BY m.source_io_id
+                """;
+        Map<String, AvlDefinition> definitions = new LinkedHashMap<>();
+        String model = null;
+        try (Connection connection = DatabaseConfig.getConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, dictionaryCode);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    model = rs.getString("device_model");
+                    AvlDefinition definition = new AvlDefinition();
+                    String id = rs.getString("source_io_id");
+                    definition.setId(id);
+                    definition.setName(rs.getString("source_name"));
+                    definition.setUnit(rs.getString("source_unit"));
+                    definition.setType(rs.getString("value_type"));
+                    definition.setMultiplier(rs.getDouble("multiplier"));
+                    definition.setCategory(rs.getString("category"));
+                    definitions.put(id, definition);
+                }
+            }
+        }
+        if (definitions.isEmpty()) throw new RuntimeException("Active database dictionary has no verified AVL mapping: " + dictionaryCode);
+        DeviceDictionary dictionary = new DeviceDictionary();
+        dictionary.setModel(model);
+        dictionary.setSource("ALELS_MASTER_DEVICE");
+        dictionary.setTotal_avl(definitions.size());
+        dictionary.setAvl(definitions);
+        return dictionary;
     }
 
     public static boolean isLoaded(String dictionaryCode) {

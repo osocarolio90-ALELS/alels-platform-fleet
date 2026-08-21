@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Button } from "@/components/ui/button";
 import { getDriverPhoto } from "@/features/asset-register/api/driver-register-api";
-import { getDeviceWorkspaceEvents, getDeviceWorkspaceTelemetry, saveDeviceWorkspaceConfiguration } from "../api/device-workspace-telemetry-api";
+import { getDeviceWorkspaceEvents, getDeviceWorkspaceHistoricalRoutes, getDeviceWorkspaceTelemetry, saveDeviceWorkspaceConfiguration } from "../api/device-workspace-telemetry-api";
 import { ConfigureDataDialog } from "../components/configure-data-dialog";
 import { InstrumentGauge } from "../components/instrument-gauge";
 import { hasValidPosition, TelemetryMap } from "../components/telemetry-map";
@@ -19,10 +19,11 @@ export function TelemetryWorkspaceTab({deviceId,live,refreshToken,clusterRef}:Pr
  const [mapMode,setMapMode]=useState<"2d"|"3d">("2d"),[zoom,setZoom]=useState(15),[configure,setConfigure]=useState(false),[configurationError,setConfigurationError]=useState(""),[fullscreen,setFullscreen]=useState(false);
  const validDeviceId=Number.isSafeInteger(deviceId)&&deviceId>0;
  const query=useQuery({queryKey:["device-workspace","telemetry",deviceId],queryFn:()=>getDeviceWorkspaceTelemetry(deviceId),enabled:validDeviceId,refetchInterval:live?1_000:false,refetchIntervalInBackground:false});
+ const historyRoutes=useQuery({queryKey:["device-workspace","telemetry-history-routes",deviceId],queryFn:()=>getDeviceWorkspaceHistoricalRoutes(deviceId),enabled:validDeviceId,staleTime:300_000,refetchOnWindowFocus:false});
  const online=useDevicePresence(query.data);
  const events=useInfiniteQuery({queryKey:["device-workspace","events",deviceId],queryFn:({pageParam})=>getDeviceWorkspaceEvents(deviceId,pageParam,50),enabled:validDeviceId,initialPageParam:null as number|null,getNextPageParam:last=>last.hasMore?last.nextBeforeId:undefined,refetchInterval:live?5_000:false});
  const save=useMutation({mutationFn:(value:WorkspaceTelemetry["configuration"])=>saveDeviceWorkspaceConfiguration(deviceId,value),onMutate:()=>setConfigurationError(""),onSuccess:value=>{client.setQueryData<WorkspaceTelemetry>(["device-workspace","telemetry",deviceId],current=>current?{...current,configuration:value}:current);setConfigure(false);},onError:error=>setConfigurationError(error instanceof Error?error.message:"Configuration could not be saved.")});
- useEffect(()=>{if(refreshToken>0){void query.refetch();void events.refetch();}},[refreshToken]);
+ useEffect(()=>{if(refreshToken>0){void query.refetch();void historyRoutes.refetch();void events.refetch();}},[refreshToken]);
  useEffect(()=>{const update=()=>setFullscreen(document.fullscreenElement===clusterRef.current);document.addEventListener("fullscreenchange",update);return()=>document.removeEventListener("fullscreenchange",update);},[clusterRef]);
  if(query.isLoading)return <WorkspaceState title="Loading device workspace..."/>;
  if(query.isError||!query.data)return <WorkspaceState title="Workspace cannot be loaded" message={errorMessage(query.error)}/>;
@@ -36,7 +37,7 @@ export function TelemetryWorkspaceTab({deviceId,live,refreshToken,clusterRef}:Pr
  return <div className="dw-telemetry-layout">
   <div className="dw-left-column">
    <section ref={clusterRef} className="dw-cluster dw-sticky-cluster" data-cluster-theme="dark">
-    <TelemetryMap latitude={data.position.latitude} longitude={data.position.longitude} angle={data.position.angle} vehicleType={data.vehicle.type} track={data.track||[]} threeDimensional={mapMode==="3d"} zoom={zoom} routeColor="#1d4ed8"/>
+    <TelemetryMap latitude={data.position.latitude} longitude={data.position.longitude} angle={data.position.angle} vehicleType={data.vehicle.type} track={data.track||[]} routeOverlays={historyRoutes.data?.routes||[]} threeDimensional={mapMode==="3d"} zoom={zoom} routeColor="#1d4ed8"/>
     <div className="dw-cluster-toolbar">
      <div className="dw-map-actions"><Button variant="outline" onClick={()=>setConfigure(true)}><Settings2 className="h-4 w-4"/>Configure Data</Button><ModeButton active={mapMode==="2d"} onClick={()=>setMapMode("2d")}>2D</ModeButton><ModeButton active={mapMode==="3d"} onClick={()=>setMapMode("3d")}>3D</ModeButton><Button size="icon" variant="outline" title={fullscreen?"Exit fullscreen":"Fullscreen cluster"} aria-pressed={fullscreen} disabled={!document.fullscreenEnabled} onClick={()=>void toggleFullscreen()}>{fullscreen?<Minimize2 className="h-4 w-4"/>:<Maximize className="h-4 w-4"/>}</Button><Button size="icon" variant="outline" title="Zoom in" disabled={zoom>=19} onClick={()=>setZoom(value=>Math.min(19,value+1))}><Plus className="h-4 w-4"/></Button><Button size="icon" variant="outline" title="Zoom out" disabled={zoom<=3} onClick={()=>setZoom(value=>Math.max(3,value-1))}><Minus className="h-4 w-4"/></Button></div>
      <div className="dw-connectivity"><ConnectionStat label="Signal Strength" value={data.connection.signalStrength==null?"– / 5":`${data.connection.signalStrength} / 5`} bars={data.connection.signalStrength}/><ConnectionStat label="Satellites Used" value={String(data.connection.satellitesUsed??"–")}/><ConnectionStat label="GNSS Status" value={data.connection.gnssStatus} blue/><ConnectionStat label="Connection" value={data.connection.channel||data.connection.tcpStatus} blue/><ConnectionStat label="Protocol" value={formatProtocol(data.connection.protocol)} blue/></div>

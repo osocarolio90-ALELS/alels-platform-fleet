@@ -41,4 +41,9 @@ public class DeviceDictionary {
 
         return avl.get(avlId);
     }
+
+    public void setModel(String model) { this.model = model; }
+    public void setSource(String source) { this.source = source; }
+    public void setTotal_avl(int totalAvl) { this.total_avl = totalAvl; }
+    public void setAvl(Map<String, AvlDefinition> avl) { this.avl = avl; }
 }

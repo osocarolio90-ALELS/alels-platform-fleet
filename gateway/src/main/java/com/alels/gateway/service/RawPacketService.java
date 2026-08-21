@@ -10,7 +10,7 @@ import com.alels.gateway.util.HexUtil;
 
 public class RawPacketService {
 
-    public static void logRawPacket(
+    public static Long logRawPacket(
             String imei,
             ProtocolType protocolType,
             ChannelType channelType,
@@ -43,7 +43,7 @@ public class RawPacketService {
 
         System.out.println("================================");
 
-        RawPacketRepository.insert(
+        return RawPacketRepository.insert(
                 imei,
                 protocolType.name(),
                 channelType.name(),

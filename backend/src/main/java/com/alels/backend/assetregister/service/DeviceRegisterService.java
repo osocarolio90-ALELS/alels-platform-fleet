@@ -10,6 +10,7 @@ import com.alels.backend.assetregister.dto.DeviceRegisterDtos.DeviceLookupOption
 import com.alels.backend.assetregister.dto.DeviceRegisterDtos.DeviceRegisterRequest;
 import com.alels.backend.assetregister.dto.DeviceRegisterDtos.DeviceRegisterRow;
 import com.alels.backend.assetregister.repository.DeviceRegisterRepository;
+import com.alels.backend.masterdata.repository.DeviceMasterRepository;
 import com.alels.backend.serverops.shared.security.JwtUserContext;
 import com.alels.backend.serverops.shared.config.GatewayPublicEndpoint;
 import com.alels.backend.serverops.shared.config.GatewayPublicEndpoint.Endpoint;
@@ -17,17 +18,24 @@ import com.alels.backend.serverops.shared.config.GatewayPublicEndpoint.Endpoint;
 @Service
 public class DeviceRegisterService {
     private final DeviceRegisterRepository repository;
+    private final DeviceMasterRepository deviceMasterRepository;
     private final GatewayPublicEndpoint gatewayEndpoint;
 
-    public DeviceRegisterService(DeviceRegisterRepository repository, GatewayPublicEndpoint gatewayEndpoint) {
+    public DeviceRegisterService(DeviceRegisterRepository repository, DeviceMasterRepository deviceMasterRepository, GatewayPublicEndpoint gatewayEndpoint) {
         this.repository = repository;
+        this.deviceMasterRepository = deviceMasterRepository;
         this.gatewayEndpoint = gatewayEndpoint;
     }
 
     public List<DeviceRegisterRow> list(JwtUserContext user) { return repository.list(user.companyId(), user.normalizedRole()); }
     public List<DeviceLookupOption> companyOptions(JwtUserContext user) { return repository.companyOptions(user.companyId(), user.normalizedRole()); }
     public List<DeviceLookupOption> brandOptions() { return repository.brandOptions(); }
-    public List<DeviceLookupOption> modelOptions(Long brandId) { return repository.modelOptions(brandId); }
+    public List<DeviceLookupOption> modelOptions(JwtUserContext user, Long brandId) {
+        if (user == null || user.userId() == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User tidak valid.");
+        return deviceMasterRepository.listModels(brandId).stream()
+                .map(model -> new DeviceLookupOption(model.id(), model.modelName(), model.modelCode(), model.brandName()))
+                .toList();
+    }
 
     public Long create(JwtUserContext user, DeviceRegisterRequest request) {
         if (request == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Request device wajib diisi.");

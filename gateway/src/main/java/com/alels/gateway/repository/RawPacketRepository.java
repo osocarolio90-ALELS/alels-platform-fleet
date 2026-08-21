@@ -2,12 +2,13 @@ package com.alels.gateway.repository;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 
 import com.alels.gateway.config.DatabaseConfig;
 
 public class RawPacketRepository {
 
-    public static void insert(
+    public static Long insert(
             String imei,
             String protocol,
             String channel,
@@ -29,6 +30,7 @@ public class RawPacketRepository {
                     bytes_count
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
                 """;
 
         try (
@@ -49,10 +51,13 @@ public class RawPacketRepository {
                 stmt.setInt(8, bytesCount);
             }
 
-            stmt.executeUpdate();
+            try (ResultSet result = stmt.executeQuery()) {
+                if (result.next()) return result.getLong("id");
+            }
 
         } catch (Exception e) {
-            System.err.println("[DB RAW PACKET ERROR] " + e.getMessage());
+            throw new IllegalStateException("Raw packet persistence failed", e);
         }
+        throw new IllegalStateException("Raw packet persistence did not return an id");
     }
 }

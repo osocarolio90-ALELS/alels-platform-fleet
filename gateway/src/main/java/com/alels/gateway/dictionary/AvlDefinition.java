@@ -55,4 +55,11 @@ public class AvlDefinition {
     public String getDescription() {
         return description;
     }
+
+    public void setId(String id) { this.id = id; }
+    public void setName(String name) { this.name = name; }
+    public void setType(String type) { this.type = type; }
+    public void setUnit(String unit) { this.unit = unit; }
+    public void setMultiplier(double multiplier) { this.multiplier = multiplier; }
+    public void setCategory(String category) { this.category = category; }
 }

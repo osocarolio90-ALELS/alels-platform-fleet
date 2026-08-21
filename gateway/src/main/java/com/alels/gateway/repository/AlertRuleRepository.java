@@ -28,6 +28,7 @@ public class AlertRuleRepository {
                     protocol,
                     io_id,
                     alert_type,
+                    rule_code,
                     title,
                     severity,
                     condition_operator,
@@ -89,6 +90,7 @@ public class AlertRuleRepository {
         rule.setProtocol(rs.getString("protocol"));
         rule.setIoId(rs.getString("io_id"));
         rule.setAlertType(rs.getString("alert_type"));
+        rule.setRuleCode(rs.getString("rule_code"));
         rule.setTitle(rs.getString("title"));
         rule.setSeverity(rs.getString("severity"));
         rule.setConditionOperator(rs.getString("condition_operator"));

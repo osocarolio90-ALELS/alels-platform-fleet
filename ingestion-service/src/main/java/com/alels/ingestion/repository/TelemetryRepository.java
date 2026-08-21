@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.alels.ingestion.model.TelemetryMessage;
+import com.alels.ingestion.util.TelemetryNumericNormalizer;
 import com.alels.ingestion.model.IngestionRecord;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.alels.ingestion.validation.service.TelemetryMessageValidator;
@@ -377,6 +378,7 @@ public class TelemetryRepository {
 
             conn.setAutoCommit(false);
             Set<String> claimedOffsets = claimOffsets(conn, records, messages);
+            Set<Integer> claimedDeliveries = claimDeliveryRecords(conn, records, messages, claimedOffsets);
 
             for (int i = 0; i < records.size(); i++) {
                 IngestionRecord record = records.get(i);
@@ -387,11 +389,17 @@ public class TelemetryRepository {
                     continue;
                 }
 
+                TelemetryNumericNormalizer.normalizeForPersistence(message);
+
                 try {
                     if (record.topic != null && !record.topic.isBlank()) {
                         if (!claimedOffsets.contains(offsetKey(record))) {
                             continue;
                         }
+                    }
+
+                    if (message.packetSequence != null && !claimedDeliveries.contains(i)) {
+                        continue;
                     }
 
                     rawStmt.setString(1, message.imei);
@@ -482,6 +490,151 @@ public class TelemetryRepository {
         }
 
         return new BatchIngestionResult(processed, failed, records.size() - processed - failed, List.of());
+    }
+
+    /**
+     * Claims logical device deliveries before inserting raw/parsed telemetry.
+     *
+     * Kafka offset idempotency protects consumer replay, but an ALELS WiFi retry
+     * is a new Kafka message with a new offset. For records carrying Q
+     * (packetSequence), the stable retry identity is the device identity + Q +
+     * exact payload hash.
+     *
+     * The advisory transaction lock makes the existence check atomic across
+     * concurrent ingestion workers without adding another ever-growing guard
+     * table. payload_hash is intentionally part of the identity so an explicit
+     * ALELS WiFi "reset q" can reuse a sequence number for a genuinely new
+     * payload without being rejected.
+     */
+    private Set<Integer> claimDeliveryRecords(
+            Connection connection,
+            List<IngestionRecord> records,
+            List<TelemetryMessage> messages,
+            Set<String> claimedOffsets
+    ) throws Exception {
+        Map<String, Integer> firstIndexByDelivery = new LinkedHashMap<>();
+
+        for (int i = 0; i < records.size(); i++) {
+            IngestionRecord record = records.get(i);
+            TelemetryMessage message = messages.get(i);
+
+            if (record == null || message == null || message.imei == null || message.imei.isBlank()
+                    || message.packetSequence == null) {
+                continue;
+            }
+
+            if (record.topic != null && !record.topic.isBlank()
+                    && !claimedOffsets.contains(offsetKey(record))) {
+                continue;
+            }
+
+            String payloadHash = sha256(record.payload);
+            String deliveryKey = deliveryKey(message, payloadHash);
+            firstIndexByDelivery.putIfAbsent(deliveryKey, i);
+        }
+
+        if (firstIndexByDelivery.isEmpty()) {
+            return Set.of();
+        }
+
+        List<String> lockKeys = new ArrayList<>(firstIndexByDelivery.keySet());
+        lockKeys.sort(String::compareTo);
+        acquireDeliveryLocks(connection, lockKeys);
+
+        List<Integer> candidateIndexes = new ArrayList<>(firstIndexByDelivery.values());
+        Set<Integer> existing = findExistingDeliveries(connection, records, messages, candidateIndexes);
+        Set<Integer> claimed = new HashSet<>();
+        for (int index : candidateIndexes) {
+            if (!existing.contains(index)) {
+                claimed.add(index);
+            }
+        }
+        return claimed;
+    }
+
+    private void acquireDeliveryLocks(Connection connection, List<String> lockKeys) throws Exception {
+        String sql = """
+                SELECT pg_advisory_xact_lock(hashtextextended(lock_key, 0))
+                FROM unnest(?::text[]) AS lock_key
+                ORDER BY lock_key
+                """;
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            java.sql.Array keyArray = connection.createArrayOf("text", lockKeys.toArray(String[]::new));
+            try {
+                statement.setArray(1, keyArray);
+                statement.executeQuery().close();
+            } finally {
+                keyArray.free();
+            }
+        }
+    }
+
+    private Set<Integer> findExistingDeliveries(
+            Connection connection,
+            List<IngestionRecord> records,
+            List<TelemetryMessage> messages,
+            List<Integer> candidateIndexes
+    ) throws Exception {
+        if (candidateIndexes.isEmpty()) {
+            return Set.of();
+        }
+
+        String values = String.join(",", java.util.Collections.nCopies(
+                candidateIndexes.size(), "(?::integer, ?::varchar, ?::varchar, ?::varchar, ?::bigint, ?::varchar)"
+        ));
+        String sql = """
+                WITH candidates(record_index, imei, protocol, channel, packet_sequence, payload_hash) AS (
+                    VALUES %s
+                )
+                SELECT c.record_index
+                FROM candidates c
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM telemetry t
+                    WHERE t.imei = c.imei
+                      AND t.protocol IS NOT DISTINCT FROM c.protocol
+                      AND t.channel IS NOT DISTINCT FROM c.channel
+                      AND t.packet_sequence = c.packet_sequence
+                      AND t.payload_hash = c.payload_hash
+                    LIMIT 1
+                )
+                """.formatted(values);
+
+        Set<Integer> existing = new HashSet<>();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            int parameter = 1;
+            for (int index : candidateIndexes) {
+                IngestionRecord record = records.get(index);
+                TelemetryMessage message = messages.get(index);
+                statement.setInt(parameter++, index);
+                statement.setString(parameter++, message.imei);
+                statement.setString(parameter++, message.protocol);
+                statement.setString(parameter++, message.channel);
+                statement.setLong(parameter++, message.packetSequence);
+                statement.setString(parameter++, sha256(record.payload));
+            }
+
+            try (ResultSet result = statement.executeQuery()) {
+                while (result.next()) {
+                    existing.add(result.getInt("record_index"));
+                }
+            }
+        }
+        return existing;
+    }
+
+    private String deliveryKey(TelemetryMessage message, String payloadHash) {
+        return lengthPrefixed(message.imei)
+                + lengthPrefixed(message.protocol)
+                + lengthPrefixed(message.channel)
+                + lengthPrefixed(String.valueOf(message.packetSequence))
+                + lengthPrefixed(payloadHash);
+    }
+
+    private String lengthPrefixed(String value) {
+        String safe = value == null ? "" : value;
+        return safe.length() + ":" + safe;
     }
 
     private Set<String> claimOffsets(

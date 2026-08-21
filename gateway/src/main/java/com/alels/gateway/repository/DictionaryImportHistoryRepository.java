@@ -8,6 +8,8 @@ import java.sql.ResultSet;
 
 public class DictionaryImportHistoryRepository {
 
+    private static final int MAPPING_SCHEMA_VERSION = 2;
+
     private DictionaryImportHistoryRepository() {
     }
 
@@ -26,6 +28,7 @@ public class DictionaryImportHistoryRepository {
                 AND file_checksum = ?
                 AND import_status = 'SUCCESS'
                 AND imported_mapping_count > 0
+                AND metadata ->> 'mappingSchemaVersion' = ?
                 LIMIT 1
                 """;
 
@@ -35,6 +38,7 @@ public class DictionaryImportHistoryRepository {
         ) {
             ps.setString(1, dictionaryCode);
             ps.setString(2, checksum);
+            ps.setString(3, String.valueOf(MAPPING_SCHEMA_VERSION));
 
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next();
@@ -99,9 +103,10 @@ public class DictionaryImportHistoryRepository {
                     dictionary_file,
                     file_checksum,
                     import_status,
-                    imported_mapping_count
+                    imported_mapping_count,
+                    metadata
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, jsonb_build_object('mappingSchemaVersion', ?))
                 """;
 
         try (
@@ -119,6 +124,7 @@ public class DictionaryImportHistoryRepository {
             ps.setString(4, checksum);
             ps.setString(5, status);
             ps.setInt(6, mappingCount);
+            ps.setInt(7, MAPPING_SCHEMA_VERSION);
 
             ps.executeUpdate();
 

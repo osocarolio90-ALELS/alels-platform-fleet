@@ -6,13 +6,22 @@ import java.sql.Timestamp;
 
 import com.alels.gateway.config.DatabaseConfig;
 
-public class TelemetryAlertRepository {
+/**
+ * Persists rule-engine alerts using the canonical telemetry_alerts schema.
+ * Device-originated Event IO records are materialized independently by the
+ * database telemetry event pipeline and are not converted into alerts here.
+ */
+public final class TelemetryAlertRepository {
+
+    private TelemetryAlertRepository() {
+    }
 
     public static void insert(
             Long companyId,
             Long deviceId,
             Long telemetryId,
             String imei,
+            String ruleCode,
             String dictionaryCode,
             String protocol,
             String channel,
@@ -34,30 +43,48 @@ public class TelemetryAlertRepository {
         String sql = """
                 INSERT INTO telemetry_alerts (
                     company_id,
-                    device_id,
+                    vehicle_id,
                     telemetry_id,
                     imei,
-                    dictionary_code,
-                    protocol,
-                    channel,
-                    io_id,
-                    io_name,
-                    raw_value,
-                    numeric_value,
-                    real_value,
-                    alert_type,
+                    rule_code,
                     severity,
+                    status,
                     title,
                     message,
-                    driver_name,
-                    latitude,
-                    longitude,
-                    speed,
-                    gps_time
+                    metadata,
+                    created_at
                 )
                 VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?,
+                    (
+                        SELECT assignment.vehicle_id
+                        FROM vehicle_device_assignments assignment
+                        WHERE assignment.device_id = ?
+                          AND (? IS NULL OR assignment.company_id = ?)
+                          AND assignment.assignment_status = 'ACTIVE'
+                          AND assignment.deleted_at IS NULL
+                        ORDER BY assignment.assigned_at DESC
+                        LIMIT 1
+                    ),
+                    ?, ?, ?, ?, 'OPEN', ?, ?,
+                    jsonb_strip_nulls(jsonb_build_object(
+                        'deviceId', ?::bigint,
+                        'dictionaryCode', ?::text,
+                        'protocol', ?::text,
+                        'channel', ?::text,
+                        'ioId', ?::text,
+                        'ioName', ?::text,
+                        'rawValue', ?::text,
+                        'numericValue', ?::double precision,
+                        'realValue', ?::double precision,
+                        'alertType', ?::text,
+                        'driverName', ?::text,
+                        'latitude', ?::double precision,
+                        'longitude', ?::double precision,
+                        'speed', ?::integer,
+                        'gpsTime', ?::timestamptz
+                    )),
+                    NOW()
                 )
                 """;
 
@@ -65,40 +92,45 @@ public class TelemetryAlertRepository {
                 Connection conn = DatabaseConfig.getConnection();
                 PreparedStatement stmt = conn.prepareStatement(sql)
         ) {
-            setLongOrNull(stmt, 1, companyId);
-            setLongOrNull(stmt, 2, deviceId);
-            setLongOrNull(stmt, 3, telemetryId);
-            stmt.setString(4, imei);
-            stmt.setString(5, dictionaryCode);
-            stmt.setString(6, protocol);
-            stmt.setString(7, channel);
-            stmt.setString(8, ioId);
-            stmt.setString(9, ioName);
-            stmt.setString(10, rawValue);
-            setDoubleOrNull(stmt, 11, numericValue);
-            setDoubleOrNull(stmt, 12, realValue);
-            stmt.setString(13, alertType);
-            stmt.setString(14, severity);
-            stmt.setString(15, title);
-            stmt.setString(16, message);
-            stmt.setString(17, driverName);
-            setDoubleOrNull(stmt, 18, latitude);
-            setDoubleOrNull(stmt, 19, longitude);
+            int index = 1;
+            setLongOrNull(stmt, index++, companyId);
+            setLongOrNull(stmt, index++, deviceId);
+            setLongOrNull(stmt, index++, companyId);
+            setLongOrNull(stmt, index++, companyId);
+            setLongOrNull(stmt, index++, telemetryId);
+            stmt.setString(index++, imei);
+            stmt.setString(index++, ruleCode == null || ruleCode.isBlank() ? alertType : ruleCode);
+            stmt.setString(index++, severity == null || severity.isBlank() ? "WARNING" : severity);
+            stmt.setString(index++, title);
+            stmt.setString(index++, message);
+            setLongOrNull(stmt, index++, deviceId);
+            stmt.setString(index++, dictionaryCode);
+            stmt.setString(index++, protocol);
+            stmt.setString(index++, channel);
+            stmt.setString(index++, ioId);
+            stmt.setString(index++, ioName);
+            stmt.setString(index++, rawValue);
+            setDoubleOrNull(stmt, index++, numericValue);
+            setDoubleOrNull(stmt, index++, realValue);
+            stmt.setString(index++, alertType);
+            stmt.setString(index++, driverName);
+            setDoubleOrNull(stmt, index++, latitude);
+            setDoubleOrNull(stmt, index++, longitude);
             if (speed == null) {
-                stmt.setNull(20, java.sql.Types.INTEGER);
+                stmt.setNull(index++, java.sql.Types.INTEGER);
             } else {
-                stmt.setInt(20, speed);
+                stmt.setInt(index++, speed);
             }
             if (gpsTime == null) {
-                stmt.setNull(21, java.sql.Types.TIMESTAMP);
+                stmt.setNull(index, java.sql.Types.TIMESTAMP_WITH_TIMEZONE);
             } else {
-                stmt.setTimestamp(21, gpsTime);
+                stmt.setTimestamp(index, gpsTime);
             }
 
             stmt.executeUpdate();
 
-            System.out.println("[TELEMETRY ALERT] inserted type="
-                    + alertType
+            System.out.println("[TELEMETRY ALERT] inserted rule="
+                    + (ruleCode == null ? alertType : ruleCode)
                     + " imei=" + imei
                     + " io=" + ioId
                     + " message=" + message);
@@ -108,11 +140,7 @@ public class TelemetryAlertRepository {
         }
     }
 
-    private static void setLongOrNull(
-            PreparedStatement stmt,
-            int index,
-            Long value
-    ) throws Exception {
+    private static void setLongOrNull(PreparedStatement stmt, int index, Long value) throws Exception {
         if (value == null) {
             stmt.setNull(index, java.sql.Types.BIGINT);
         } else {
@@ -120,11 +148,7 @@ public class TelemetryAlertRepository {
         }
     }
 
-    private static void setDoubleOrNull(
-            PreparedStatement stmt,
-            int index,
-            Double value
-    ) throws Exception {
+    private static void setDoubleOrNull(PreparedStatement stmt, int index, Double value) throws Exception {
         if (value == null) {
             stmt.setNull(index, java.sql.Types.DOUBLE);
         } else {

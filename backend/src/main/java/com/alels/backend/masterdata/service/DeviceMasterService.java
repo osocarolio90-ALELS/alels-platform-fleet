@@ -38,6 +38,7 @@ public class DeviceMasterService {
         assertCanEdit(user);
         validateModel(request);
         Long id = repository.createModel(request, user.userId());
+        repository.upsertProtocolAndDictionary(id, request);
         assertHasActiveDictionary(id);
         repository.log(user.userId(), user.companyId(), "DEVICE_MODEL", id, "DEVICE_MODEL_CREATE");
         return id;
@@ -47,6 +48,7 @@ public class DeviceMasterService {
         assertCanEdit(user);
         validateModel(request);
         repository.updateModel(id, request, user.userId());
+        repository.upsertProtocolAndDictionary(id, request);
         assertHasActiveDictionary(id);
         repository.log(user.userId(), user.companyId(), "DEVICE_MODEL", id, "DEVICE_MODEL_UPDATE");
     }
@@ -70,6 +72,16 @@ public class DeviceMasterService {
     private void validateModel(DeviceMasterRequest request) {
         if (request == null || request.brandId() == null || !repository.brandExists(request.brandId())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Device Brand tidak valid.");
         if (request.modelName() == null || request.modelName().isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Device Model wajib diisi.");
+        if (request.protocolCode() == null || request.protocolCode().isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Protocol Code wajib diisi.");
+        if (request.parserCode() == null || request.parserCode().isBlank() || !repository.protocolParserSupported(request.parserCode())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Parser protocol belum didukung ALELS.");
+        if (request.dictionaryCode() == null || request.dictionaryCode().isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Dictionary Code wajib diisi.");
+        if (request.avlDefinitions() == null || request.avlDefinitions().isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Minimal satu AVL ID terverifikasi wajib diisi.");
+        java.util.HashSet<String> ids = new java.util.HashSet<>();
+        for (var avl : request.avlDefinitions()) {
+            if (avl == null || avl.avlId() == null || avl.avlId().isBlank() || avl.name() == null || avl.name().isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AVL ID dan nama parameter wajib diisi.");
+            if (!ids.add(avl.avlId().trim())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AVL ID tidak boleh duplikat.");
+            if (avl.multiplier() != null && (!Double.isFinite(avl.multiplier()) || avl.multiplier() == 0)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Multiplier AVL harus terukur dan tidak boleh nol.");
+        }
     }
     private void assertHasActiveDictionary(Long deviceModelId) {
         if (!repository.hasActiveDictionary(deviceModelId)) {

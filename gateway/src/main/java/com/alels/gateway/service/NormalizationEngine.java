@@ -8,6 +8,7 @@ import com.alels.gateway.model.TelemetryData;
 import com.alels.gateway.repository.NormalizedFieldRepository;
 import com.alels.gateway.repository.TelemetryNormalizedRepository;
 import com.alels.gateway.repository.UnknownIoRepository;
+import com.alels.gateway.util.TelemetryNumericNormalizer;
 
 public class NormalizationEngine {
 
@@ -117,8 +118,8 @@ public class NormalizationEngine {
                                     ? fieldInfo.getOffsetValue()
                                     : 0.0;
 
-                    numericValue = (rawDouble * multiplier) + offset;
-                    textValue = String.valueOf(numericValue);
+                    numericValue = TelemetryNumericNormalizer.round((rawDouble * multiplier) + offset);
+                    textValue = TelemetryNumericNormalizer.formatDisplay(numericValue);
                 } else {
                     textValue = rawValue;
                 }

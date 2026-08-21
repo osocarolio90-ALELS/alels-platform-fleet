@@ -1,12 +1,11 @@
 package com.alels.gateway.dictionary;
 
-import java.text.DecimalFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class AvlValueConverter {
+import com.alels.gateway.util.TelemetryNumericNormalizer;
 
-    private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.###");
+public class AvlValueConverter {
 
     public static Map<String, Object> convert(
         Map<String, Object> rawIo,
@@ -90,7 +89,7 @@ public class AvlValueConverter {
     }
 
     private static String formatValue(double value, String unit) {
-        String formattedValue = DECIMAL_FORMAT.format(value);
+        String formattedValue = TelemetryNumericNormalizer.formatDisplay(value);
 
         if (unit == null || unit.isBlank() || unit.equals("-")) {
             return formattedValue;

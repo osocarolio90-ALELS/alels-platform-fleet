@@ -9,6 +9,7 @@ import com.alels.gateway.dictionary.AvlDefinition;
 import com.alels.gateway.dictionary.DeviceDictionary;
 import com.alels.gateway.dictionary.DeviceDictionaryLoader;
 import com.alels.gateway.model.TelemetryData;
+import com.alels.gateway.util.TelemetryNumericNormalizer;
 
 public class TelemetryIoRepository {
 
@@ -52,9 +53,9 @@ public class TelemetryIoRepository {
             String unit = definition != null ? definition.getUnit() : null;
             double multiplier = definition != null ? definition.getMultiplier() : 1.0;
 
-            Double numericValue = toDouble(rawValue);
+            Double numericValue = TelemetryNumericNormalizer.round(toDouble(rawValue));
             Double realValue = numericValue != null
-                    ? numericValue * multiplier
+                    ? TelemetryNumericNormalizer.round(toDouble(rawValue) * multiplier)
                     : null;
 
             boolean isEvent = false;

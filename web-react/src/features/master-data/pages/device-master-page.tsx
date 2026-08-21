@@ -84,6 +84,10 @@ export function DeviceMasterPage() {
       modelCode: row.modelCode || "",
       brandId: row.brandId ? String(row.brandId) : "",
       modelName: row.modelName || "",
+      protocolCode: row.protocolCode || "",
+      parserCode: row.parserCode || "",
+      dictionaryCode: row.dictionaryCode || "",
+      avlDefinitions: formatAvlDefinitions(row.avlDefinitions || []),
       active: true
     });
     setFormOpen(true);
@@ -99,6 +103,7 @@ export function DeviceMasterPage() {
     event.preventDefault();
     if (!canEdit) return;
     if (!form.brandId) { setNotice("Device Brand wajib dipilih."); return; }
+    try { parseAvlDefinitions(form.avlDefinitions); } catch (error) { setNotice(error instanceof Error ? error.message : "AVL Dictionary tidak valid."); return; }
     saveMutation.mutate();
   }
 
@@ -119,6 +124,10 @@ export function DeviceMasterPage() {
             <Field label="Device Model">
               <Input value={form.modelName} onChange={(event) => setForm((current) => ({ ...current, modelName: event.target.value }))} required />
             </Field>
+            <Field label="Protocol Code"><Input value={form.protocolCode} onChange={(event) => setForm((current) => ({ ...current, protocolCode: event.target.value.toUpperCase() }))} required /></Field>
+            <Field label="Parser Code"><Input value={form.parserCode} onChange={(event) => setForm((current) => ({ ...current, parserCode: event.target.value.toUpperCase() }))} placeholder="TELTONIKA_AUTO / ALELS_JSON" required /></Field>
+            <Field label="Dictionary Code"><Input value={form.dictionaryCode} onChange={(event) => setForm((current) => ({ ...current, dictionaryCode: event.target.value.toUpperCase() }))} required /></Field>
+            <div className="md:col-span-3"><Field label="AVL Dictionary (satu baris: ID | Nama | Unit | Tipe | Multiplier | Kategori)"><textarea className="min-h-32 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" value={form.avlDefinitions} onChange={(event) => setForm((current) => ({ ...current, avlDefinitions: event.target.value }))} placeholder="239 | Ignition | - | BOOLEAN | 1 | vehicle" required /></Field></div>
             <div className="md:col-span-3 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={closeForm}><X className="h-4 w-4" /> Cancel</Button>
               <Button type="submit" disabled={saveMutation.isPending}><Save className="h-4 w-4" /> Save</Button>
@@ -155,10 +164,10 @@ export function DeviceMasterPage() {
   );
 }
 
-type FormState = { modelCode: string; brandId: string; modelName: string; active: boolean };
+type FormState = { modelCode: string; brandId: string; modelName: string; protocolCode: string; parserCode: string; dictionaryCode: string; avlDefinitions: string; active: boolean };
 
 function emptyForm(): FormState {
-  return { modelCode: "", brandId: "", modelName: "", active: true };
+  return { modelCode: "", brandId: "", modelName: "", protocolCode: "", parserCode: "", dictionaryCode: "", avlDefinitions: "", active: true };
 }
 
 function toInput(form: FormState): DeviceMasterInput {
@@ -166,8 +175,28 @@ function toInput(form: FormState): DeviceMasterInput {
     brandId: form.brandId ? Number(form.brandId) : null,
     modelCode: form.modelCode || null,
     modelName: form.modelName || null,
+    protocolCode: form.protocolCode || null,
+    parserCode: form.parserCode || null,
+    dictionaryCode: form.dictionaryCode || null,
+    avlDefinitions: parseAvlDefinitions(form.avlDefinitions),
     active: true
   };
+}
+
+function parseAvlDefinitions(value: string) {
+  const rows = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line, index) => {
+    const [avlId, name, unit = "", valueType = "NUMBER", multiplierText = "1", category = ""] = line.split("|").map((part) => part.trim());
+    const multiplier = Number(multiplierText);
+    if (!avlId || !name || !Number.isFinite(multiplier) || multiplier === 0) throw new Error(`AVL Dictionary baris ${index + 1} tidak valid.`);
+    return { avlId, name, unit: unit || null, valueType: valueType || "NUMBER", multiplier, category: category || null };
+  });
+  if (!rows.length) throw new Error("Minimal satu AVL ID terverifikasi wajib diisi.");
+  if (new Set(rows.map((row) => row.avlId)).size !== rows.length) throw new Error("AVL ID tidak boleh duplikat.");
+  return rows;
+}
+
+function formatAvlDefinitions(rows: NonNullable<DeviceModelRow["avlDefinitions"]>) {
+  return rows.map((row) => [row.avlId, row.name, row.unit || "", row.valueType || "NUMBER", row.multiplier ?? 1, row.category || ""].join(" | ")).join("\n");
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

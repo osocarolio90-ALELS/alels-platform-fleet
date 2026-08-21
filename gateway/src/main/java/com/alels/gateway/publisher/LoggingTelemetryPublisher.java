@@ -8,6 +8,7 @@ public class LoggingTelemetryPublisher implements TelemetryPublisher {
 
     @Override
     public CompletionStage<Long> publish(
+            Long rawPacketId,
             TelemetryData telemetryData,
             String protocol,
             String channel,

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.alels.backend.serverops.shared.security.JwtUserContext;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.EventPage;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.HistoricalRoutesResponse;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.WorkspaceConfiguration;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.WorkspaceTelemetryResponse;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.service.DeviceWorkspaceTelemetryService;
@@ -27,6 +28,11 @@ public class DeviceWorkspaceTelemetryController {
     @GetMapping
     public WorkspaceTelemetryResponse telemetry(Authentication authentication, @PathVariable Long deviceId) {
         return service.telemetry(user(authentication), deviceId);
+    }
+
+    @GetMapping("/history-routes")
+    public HistoricalRoutesResponse historicalRoutes(Authentication authentication, @PathVariable Long deviceId) {
+        return service.historicalRoutes(user(authentication), deviceId);
     }
 
     @GetMapping("/events")

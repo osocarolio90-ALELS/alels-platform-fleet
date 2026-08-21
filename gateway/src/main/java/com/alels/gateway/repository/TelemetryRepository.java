@@ -12,6 +12,7 @@ import com.alels.gateway.model.DriverInfo;
 import com.alels.gateway.model.TelemetryData;
 import com.alels.gateway.service.DriverResolver;
 import com.alels.gateway.service.VehicleStatusResolver;
+import com.alels.gateway.util.TelemetryNumericNormalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class TelemetryRepository {
@@ -27,6 +28,8 @@ public class TelemetryRepository {
         if (data == null) {
             return null;
         }
+
+        TelemetryNumericNormalizer.normalizeForPersistence(data);
 
         String vehicleStatus =
                 VehicleStatusResolver.resolve(

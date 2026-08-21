@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import com.alels.gateway.model.TelemetryData;
 import com.alels.gateway.config.KafkaSecurityConfig;
 import com.alels.gateway.cell.config.CellRoutingConfig;
+import com.alels.gateway.util.TelemetryNumericNormalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class KafkaTelemetryPublisher implements TelemetryPublisher {
@@ -73,6 +74,7 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
 
     @Override
     public CompletionStage<Long> publish(
+            Long rawPacketId,
             TelemetryData telemetryData,
             String protocol,
             String channel,
@@ -83,12 +85,15 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
             return CompletableFuture.failedFuture(new IllegalArgumentException("telemetryData is required"));
         }
 
+        TelemetryNumericNormalizer.normalizeForPersistence(telemetryData);
+
         CompletableFuture<Long> result = new CompletableFuture<>();
         try {
             String payload =
                     mapper.writeValueAsString(
                             toPayload(
                                     telemetryData,
+                                    rawPacketId,
                                     protocol,
                                     channel,
                                     dictionaryCode,
@@ -131,6 +136,7 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
 
     private Map<String, Object> toPayload(
             TelemetryData telemetryData,
+            Long rawPacketId,
             String protocol,
             String channel,
             String dictionaryCode,
@@ -139,6 +145,7 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
         Map<String, Object> payload =
                 new LinkedHashMap<>();
 
+        payload.put("gatewayRawPacketId", rawPacketId);
         payload.put("label", logLabel);
         payload.put("cellId", CellRoutingConfig.current().cellId());
         payload.put("cellIndex", CellRoutingConfig.current().cellIndex());

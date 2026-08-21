@@ -18,6 +18,7 @@ import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.Devi
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.DataParameter;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.DriverInfo;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.EventPage;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.HistoricalRoutesResponse;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.InstrumentMapping;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.PacketInfo;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.PositionInfo;
@@ -38,6 +39,8 @@ public class DeviceWorkspaceTelemetryService {
     private static final Set<String> REQUIRED_INSTRUMENT_SLOTS = Set.of("RPM", "SPEED");
     private static final int MAX_EVENT_PAGE_SIZE = 100;
     private static final int MAX_TRACK_POINTS = 500;
+    private static final int MAX_HISTORY_ROUTE_POINTS = 12_000;
+    private static final int HISTORY_ROUTE_GAP_MINUTES = 30;
 
     private final TelemetryDeviceRepository deviceRepository;
     private final DeviceWorkspaceTelemetryRepository workspaceRepository;
@@ -81,10 +84,16 @@ public class DeviceWorkspaceTelemetryService {
         );
     }
 
+    public HistoricalRoutesResponse historicalRoutes(JwtUserContext user, Long deviceId) {
+        ScopedDevice device = scopedDevice(user, deviceId);
+        return new HistoricalRoutesResponse(workspaceRepository.historicalRoutes(
+                device.info().imei(), MAX_HISTORY_ROUTE_POINTS, HISTORY_ROUTE_GAP_MINUTES));
+    }
+
     public EventPage events(JwtUserContext user, Long deviceId, Long beforeId, int requestedLimit) {
         ScopedDevice device = scopedDevice(user, deviceId);
         int limit = Math.max(10, Math.min(requestedLimit, MAX_EVENT_PAGE_SIZE));
-        var rows = workspaceRepository.events(device.info().imei(), beforeId, limit + 1);
+        var rows = workspaceRepository.events(device.info().imei(), device.companyId(), beforeId, limit + 1);
         boolean hasMore = rows.size() > limit;
         var page = hasMore ? List.copyOf(rows.subList(0, limit)) : rows;
         Long nextBeforeId = hasMore && !page.isEmpty() ? page.get(page.size() - 1).id() : null;
@@ -188,7 +197,9 @@ public class DeviceWorkspaceTelemetryService {
         addCore(values, "packet.priority", "Priority", packet.priority(), null, null, null, "OTHER");
         addCore(values, "packet.event_io_id", "Event IO ID", packet.eventIoId(), null, null, null, "OTHER");
 
-        List<DataParameter> normalized = workspaceRepository.normalizedParameters(packet.id(), imei);
+        List<DataParameter> normalized = workspaceRepository.normalizedParameters(packet.id(), imei).stream()
+                .map(DeviceWorkspaceTelemetryService::withCanonicalDisplay)
+                .toList();
         for (DataParameter parameter : normalized) {
             values.put(parameterKey(parameter.fieldCode(), parameter.parameterId()), parameter);
         }
@@ -197,7 +208,8 @@ public class DeviceWorkspaceTelemetryService {
                 .map(DataParameter::parameterId)
                 .filter(value -> value != null && !value.isBlank())
                 .collect(java.util.stream.Collectors.toSet());
-        for (DataParameter parameter : workspaceRepository.ioParameters(packet.id(), imei)) {
+        for (DataParameter sourceParameter : workspaceRepository.ioParameters(packet.id(), imei)) {
+            DataParameter parameter = withCanonicalDisplay(sourceParameter);
             if (!normalizedIds.contains(parameter.parameterId())) {
                 values.put(parameterKey(parameter.fieldCode(), parameter.parameterId()), parameter);
             }
@@ -212,10 +224,10 @@ public class DeviceWorkspaceTelemetryService {
             if (persistedIds.contains(id)) return;
             Double numeric = asDouble(rawValue);
             Boolean bool = rawValue instanceof Boolean booleanValue ? booleanValue : null;
-            DataParameter parameter = new DataParameter(
+            DataParameter parameter = withCanonicalDisplay(new DataParameter(
                     "io." + id, "IO " + id, String.valueOf(rawValue), numeric, bool, null, id, "OTHER",
                     packet.protocol(), null, null
-            );
+            ));
             values.put(parameterKey(parameter.fieldCode(), parameter.parameterId()), parameter);
         });
 
@@ -241,7 +253,8 @@ public class DeviceWorkspaceTelemetryService {
     ) {
         if (numeric == null && booleanValue == null) return;
         Double number = numeric == null ? null : numeric.doubleValue();
-        String display = booleanValue != null ? String.valueOf(booleanValue) : formatNumber(number);
+        String display = booleanValue != null ? String.valueOf(booleanValue)
+                : isCoordinateField(code) ? formatCoordinate(number) : formatNumber(number);
         DataParameter parameter = new DataParameter(
                 code, label, display, number, booleanValue, unit, parameterId, category, null, null, null
         );
@@ -313,10 +326,35 @@ public class DeviceWorkspaceTelemetryService {
         catch (NumberFormatException ignored) { return null; }
     }
 
+    private static DataParameter withCanonicalDisplay(DataParameter parameter) {
+        if (parameter == null || parameter.booleanValue() != null || parameter.numericValue() == null) return parameter;
+        if (isCoordinateField(parameter.fieldCode())) return parameter;
+        return new DataParameter(
+                parameter.fieldCode(), parameter.label(), formatNumber(parameter.numericValue()), parameter.numericValue(),
+                parameter.booleanValue(), parameter.unit(), parameter.parameterId(), parameter.category(),
+                parameter.sourceProtocol(), parameter.dictionaryCode(), parameter.deviceModelId()
+        );
+    }
+
+    private static boolean isCoordinateField(String fieldCode) {
+        if (fieldCode == null) return false;
+        String normalized = fieldCode.toLowerCase(Locale.ROOT);
+        return normalized.equals("gps.latitude") || normalized.equals("gps.longitude")
+                || normalized.endsWith(".latitude") || normalized.endsWith(".longitude");
+    }
+
+    private static String formatCoordinate(Double value) {
+        if (value == null) return "-";
+        return String.format(Locale.ROOT, "%.7f", value).replaceAll("0+$", "").replaceAll("\\.$", "");
+    }
+
     private static String formatNumber(Double value) {
         if (value == null) return "-";
-        if (Math.rint(value) == value) return Long.toString(value.longValue());
-        return String.format(Locale.ROOT, "%.4f", value).replaceAll("0+$", "").replaceAll("\\.$", "");
+        if (!Double.isFinite(value)) return String.valueOf(value);
+        double rounded = java.math.BigDecimal.valueOf(value)
+                .setScale(2, java.math.RoundingMode.HALF_UP).doubleValue();
+        if (Math.rint(rounded) == rounded) return Long.toString((long) rounded);
+        return String.format(Locale.ROOT, "%.2f", rounded);
     }
 
     private static String clean(String value) {

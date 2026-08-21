@@ -1,5 +1,7 @@
 package com.alels.backend.masterdata.dto;
 
+import java.util.List;
+
 public final class DeviceMasterDtos {
     private DeviceMasterDtos() {}
 
@@ -32,7 +34,8 @@ public final class DeviceMasterDtos {
             Integer sortOrder,
             String createdAt,
             String createdBy,
-            String updatedAt
+            String updatedAt,
+            List<AvlDefinitionRequest> avlDefinitions
     ) {}
 
     public record DeviceMasterRequest(
@@ -46,6 +49,16 @@ public final class DeviceMasterDtos {
             String dictionaryCode,
             String description,
             Boolean active,
-            Integer sortOrder
+            Integer sortOrder,
+            List<AvlDefinitionRequest> avlDefinitions
+    ) {}
+
+    public record AvlDefinitionRequest(
+            String avlId,
+            String name,
+            String unit,
+            String valueType,
+            Double multiplier,
+            String category
     ) {}
 }

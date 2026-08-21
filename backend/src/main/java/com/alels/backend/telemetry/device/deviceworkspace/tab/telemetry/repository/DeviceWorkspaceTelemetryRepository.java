@@ -1,6 +1,7 @@
 package com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.repository;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -171,6 +172,50 @@ public class DeviceWorkspaceTelemetryRepository {
                 ), imei, limit);
     }
 
+    public List<List<TrackPoint>> historicalRoutes(String imei, int maximumPoints, int gapMinutes) {
+        Map<Long, List<TrackPoint>> routes = new java.util.LinkedHashMap<>();
+        jdbc.query("""
+                WITH valid AS (
+                    SELECT id, latitude, longitude, angle, speed,
+                           COALESCE(device_time, server_time) AS occurred_at
+                    FROM telemetry
+                    WHERE imei = ?
+                      AND latitude BETWEEN -90 AND 90
+                      AND longitude BETWEEN -180 AND 180
+                      AND NOT (latitude = 0 AND longitude = 0)
+                ), boundaries AS (
+                    SELECT *,
+                           CASE WHEN LAG(occurred_at) OVER (ORDER BY occurred_at, id) IS NULL
+                                  OR occurred_at - LAG(occurred_at) OVER (ORDER BY occurred_at, id) > (? * INTERVAL '1 minute')
+                                THEN 1 ELSE 0 END AS starts_route
+                    FROM valid
+                ), segmented AS (
+                    SELECT *, SUM(starts_route) OVER (ORDER BY occurred_at, id) AS route_id
+                    FROM boundaries
+                ), ranked AS (
+                    SELECT *,
+                           ROW_NUMBER() OVER (PARTITION BY route_id ORDER BY occurred_at, id) AS route_row,
+                           COUNT(*) OVER (PARTITION BY route_id) AS route_count,
+                           COUNT(*) OVER () AS total_count
+                    FROM segmented
+                )
+                SELECT route_id, latitude, longitude, angle, speed, occurred_at
+                FROM ranked
+                WHERE route_row = 1
+                   OR route_row = route_count
+                   OR MOD(route_row - 1, GREATEST(1, CEIL(total_count::numeric / ?::numeric)::bigint)) = 0
+                ORDER BY route_id, occurred_at
+                """, rs -> {
+            long routeId = rs.getLong("route_id");
+            routes.computeIfAbsent(routeId, ignored -> new java.util.ArrayList<>()).add(new TrackPoint(
+                    rs.getObject("latitude", Double.class), rs.getObject("longitude", Double.class),
+                    rs.getObject("angle", Integer.class), rs.getObject("speed", Double.class),
+                    rs.getString("occurred_at")
+            ));
+        }, imei, gapMinutes, maximumPoints);
+        return routes.values().stream().filter(route -> route.size() > 1).toList();
+    }
+
     public List<DataParameter> normalizedParameters(Long telemetryId, String imei) {
         return jdbc.query("""
                 SELECT field_code, COALESCE(NULLIF(field_name, ''), field_code) AS label,
@@ -206,23 +251,49 @@ public class DeviceWorkspaceTelemetryRepository {
                 ), telemetryId, imei);
     }
 
-    public List<RecentEvent> events(String imei, Long beforeId, int limit) {
-        String cursor = beforeId == null ? "" : " AND id < ?";
+    public List<RecentEvent> events(String imei, Long companyId, Long beforeId, int limit) {
+        String cursor = beforeId == null ? "" : """
+                  AND (e.occurred_at, e.id) < (
+                      SELECT anchor.occurred_at, anchor.id
+                      FROM telemetry_events anchor
+                      WHERE anchor.id = ? AND anchor.imei = ?
+                        AND (anchor.company_id IS NULL OR anchor.company_id = ?)
+                  )
+                """;
         String sql = """
-                SELECT id, COALESCE(NULLIF(title, ''), rule_code, 'Telemetry event') AS title,
-                       COALESCE(message, '') AS message, COALESCE(severity, 'INFO') AS severity,
-                       created_at
-                FROM telemetry_alerts
-                WHERE imei = ? %s
-                ORDER BY id DESC
+                SELECT e.id,
+                       COALESCE(NULLIF(mapping.source_name, ''), NULLIF(e.io_name, ''), NULLIF(e.title, ''), e.event_code, 'Telemetry event') AS title,
+                       COALESCE(e.message, '') AS message, COALESCE(e.severity, 'INFO') AS severity,
+                       e.occurred_at
+                FROM telemetry_events e
+                LEFT JOIN LATERAL (
+                    SELECT m.source_name
+                    FROM device_io_mappings m
+                    WHERE e.event_io_id IS NOT NULL
+                      AND m.source_io_id = e.event_io_id
+                      AND m.status = 'ACTIVE'
+                      AND (m.dictionary_code = e.metadata ->> 'dictionaryCode' OR m.dictionary_code IS NULL OR e.metadata ->> 'dictionaryCode' IS NULL)
+                      AND (m.source_protocol = e.metadata ->> 'sourceProtocol' OR m.source_protocol IN ('TELTONIKA_AUTO', 'ANY')
+                           OR m.source_protocol IS NULL OR e.metadata ->> 'sourceProtocol' IS NULL)
+                    ORDER BY CASE WHEN m.dictionary_code = e.metadata ->> 'dictionaryCode' THEN 0 ELSE 1 END,
+                             CASE WHEN m.source_protocol = e.metadata ->> 'sourceProtocol' THEN 0
+                                  WHEN m.source_protocol = 'TELTONIKA_AUTO' THEN 1 ELSE 2 END,
+                             CASE WHEN m.normalized_field_id IS NOT NULL THEN 0 ELSE 1 END,
+                             m.id DESC
+                    LIMIT 1
+                ) mapping ON TRUE
+                WHERE e.imei = ?
+                  AND (e.company_id IS NULL OR e.company_id = ?)
+                  %s
+                ORDER BY e.occurred_at DESC, e.id DESC
                 LIMIT ?
                 """.formatted(cursor);
         Object[] parameters = beforeId == null
-                ? new Object[]{imei, limit}
-                : new Object[]{imei, beforeId, limit};
+                ? new Object[]{imei, companyId, limit}
+                : new Object[]{imei, companyId, beforeId, imei, companyId, limit};
         return jdbc.query(sql, (rs, rowNum) -> new RecentEvent(
                 rs.getLong("id"), rs.getString("title"), rs.getString("message"),
-                rs.getString("severity"), rs.getString("created_at")
+                rs.getString("severity"), rs.getString("occurred_at")
         ), parameters);
     }
 
