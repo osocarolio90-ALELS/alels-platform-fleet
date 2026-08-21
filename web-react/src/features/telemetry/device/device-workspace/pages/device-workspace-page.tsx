@@ -13,12 +13,13 @@ import { getDeviceWorkspaceTelemetry } from "../tabs/telemetry/api/device-worksp
 import { TelemetryWorkspaceTab } from "../tabs/telemetry/pages/telemetry-workspace-tab";
 import { useDevicePresence } from "../tabs/telemetry/hooks/use-device-presence";
 import { TripRouteWorkspaceTab } from "../tabs/trip-route/pages/trip-route-workspace-tab";
+import { LogsMessageWorkspaceTab } from "../tabs/logs-message/pages/logs-message-workspace-tab";
 import "../device-workspace.css";
 
 export function DeviceWorkspacePage(){
  const params=useParams(),deviceId=Number(params.deviceId),theme=useThemeStore(state=>state.theme),toggleTheme=useThemeStore(state=>state.toggleTheme);
  const live=true;
- const [activeTab,setActiveTab]=useState<"telemetry"|"trip-route">("telemetry");
+ const [activeTab,setActiveTab]=useState<"telemetry"|"trip-route"|"logs-message">("telemetry");
  const [refreshToken,setRefreshToken]=useState(0),[notice,setNotice]=useState("");
  const workspaceRef=useRef<HTMLDivElement>(null),clusterRef=useRef<HTMLDivElement>(null);
  const headerQuery=useQuery({queryKey:["device-workspace","telemetry",deviceId],queryFn:()=>getDeviceWorkspaceTelemetry(deviceId),enabled:Number.isSafeInteger(deviceId)&&deviceId>0});
@@ -47,7 +48,7 @@ export function DeviceWorkspacePage(){
    <Button type="button" variant="outline" onClick={()=>void snapshot()}><Camera className="h-4 w-4"/>Snapshot</Button>
   </>}/>
   {notice?<div className="dw-notice" role="status">{notice}<button type="button" onClick={()=>setNotice("")} aria-label="Dismiss">×</button></div>:null}
-  <nav className="dw-tabs" aria-label="Device workspace tabs"><button type="button" className={activeTab==="telemetry"?"active":""} onClick={()=>setActiveTab("telemetry")}>Telemetry</button><button type="button" className={activeTab==="trip-route"?"active":""} onClick={()=>setActiveTab("trip-route")}>Trip &amp; Route</button><button type="button" disabled>Log &amp; Message</button><button type="button" disabled>Command</button><button type="button" disabled>Analytics</button></nav>
-  {activeTab==="telemetry"?<TelemetryWorkspaceTab deviceId={deviceId} live={live} refreshToken={refreshToken} clusterRef={clusterRef}/>:<TripRouteWorkspaceTab deviceId={deviceId} imei={device?.imei||""} vehicleType={data?.vehicle.type} refreshToken={refreshToken}/>}
+  <nav className="dw-tabs" aria-label="Device workspace tabs"><button type="button" className={activeTab==="telemetry"?"active":""} onClick={()=>setActiveTab("telemetry")}>Telemetry</button><button type="button" className={activeTab==="trip-route"?"active":""} onClick={()=>setActiveTab("trip-route")}>Trip &amp; Route</button><button type="button" className={activeTab==="logs-message"?"active":""} onClick={()=>setActiveTab("logs-message")}>Log &amp; Message</button><button type="button" disabled>Command</button><button type="button" disabled>Analytics</button></nav>
+  {activeTab==="telemetry"?<TelemetryWorkspaceTab deviceId={deviceId} live={live} refreshToken={refreshToken} clusterRef={clusterRef}/>:activeTab==="trip-route"?<TripRouteWorkspaceTab deviceId={deviceId} imei={device?.imei||""} vehicleType={data?.vehicle.type} refreshToken={refreshToken}/>:<LogsMessageWorkspaceTab deviceId={deviceId} imei={device?.imei||""} refreshToken={refreshToken}/>}
  </div></div>;
 }
