@@ -30,6 +30,18 @@ public final class TelemetryBatchPublisher {
             String dictionaryCode,
             String parserCode
     ) {
+        return publish(null, parsed, imei, protocol, channel, dictionaryCode, parserCode);
+    }
+
+    public CompletionStage<Integer> publish(
+            Long rawPacketId,
+            ParserResult parsed,
+            String imei,
+            ProtocolType protocol,
+            ChannelType channel,
+            String dictionaryCode,
+            String parserCode
+    ) {
         if (parsed == null || !parsed.isValid() || imei == null || imei.isBlank()) {
             return CompletableFuture.completedFuture(0);
         }
@@ -48,7 +60,7 @@ public final class TelemetryBatchPublisher {
             }
             telemetry.setImei(imei);
             CompletableFuture<Long> future = publisher.publish(
-                    telemetry, protocol.name(), channel.name(), dictionaryCode, parserCode
+                    rawPacketId, telemetry, protocol.name(), channel.name(), dictionaryCode, parserCode
             ).toCompletableFuture();
             future.whenComplete((ignored, error) -> metrics.publishCompleted(error == null));
             pending.add(future);

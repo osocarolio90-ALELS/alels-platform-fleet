@@ -11,6 +11,7 @@ import com.alels.gateway.poller.PendingCommandPoller;
 import com.alels.gateway.service.DictionaryStartupImporter;
 import com.alels.gateway.service.DevicePresenceScheduler;
 import com.alels.gateway.service.ProtocolRegistryResolver;
+import com.alels.gateway.service.PacketAuditService;
 
 public class Main {
 
@@ -46,6 +47,7 @@ public class Main {
             commandPoller.stop();
             DevicePresenceScheduler.stop();
             NettyDeviceChannelHandler.shutdownSessionOwnership();
+            PacketAuditService.shutdown();
         }, "gateway-services-stop"));
 
         System.out.println(

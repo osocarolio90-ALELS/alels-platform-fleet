@@ -13,6 +13,7 @@ import com.alels.gateway.publisher.TelemetryPublisherFactory;
 import com.alels.gateway.server.ChannelType;
 import com.alels.gateway.service.ProtocolRegistryResolver;
 import com.alels.gateway.service.TelemetryBatchPublisher;
+import com.alels.gateway.service.PacketAuditService;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandler;
@@ -41,12 +42,13 @@ public final class NettyUdpDeviceHandler extends SimpleChannelInboundHandler<Dat
         METRICS.frameReceived(bytes.length);
 
         UDP.parse(bytes).ifPresentOrElse(
-                datagram -> process(context, packet, datagram),
+                datagram -> process(context, packet, datagram, bytes),
                 () -> log.warn("event=teltonika_udp_invalid remote={} bytes={}", packet.sender(), bytes.length)
         );
     }
 
-    private void process(ChannelHandlerContext context, DatagramPacket packet, TeltonikaUdpDatagram datagram) {
+    private void process(ChannelHandlerContext context, DatagramPacket packet, TeltonikaUdpDatagram datagram,
+                         byte[] rawDatagram) {
         ProtocolType protocol = datagram.codecId() == 0x08
                 ? ProtocolType.TELTONIKA_CODEC8 : ProtocolType.TELTONIKA_CODEC8E;
         if (!CellRoutingConfig.current().owns(datagram.imei())
@@ -59,28 +61,44 @@ public final class NettyUdpDeviceHandler extends SimpleChannelInboundHandler<Dat
                 ? CODEC8.parse(datagram.tcpCompatiblePacket())
                 : CODEC8E.parse(datagram.tcpCompatiblePacket());
         if (!parsed.isValid()) {
-            respond(context, packet, UDP.acknowledgement(datagram, 0));
+            respond(context, packet, UDP.acknowledgement(datagram, 0), datagram.imei(), protocol);
             return;
         }
 
-        BATCH.publish(
-                parsed,
-                datagram.imei(),
-                protocol,
-                ChannelType.GSM,
-                DeviceAdmissionRegistry.dictionaryCode(datagram.imei()),
-                protocol == ProtocolType.TELTONIKA_CODEC8 ? "CODEC8" : "CODEC8E"
-        ).whenComplete((accepted, error) -> context.executor().execute(() -> {
-            if (error == null) respond(context, packet, UDP.acknowledgement(datagram, accepted));
-            else {
-                respond(context, packet, UDP.acknowledgement(datagram, 0));
-                log.error("event=teltonika_udp_publish_failed imei={} error={}",
-                        datagram.imei(), error.getClass().getSimpleName());
+        PacketAuditService.persistReceived(
+                datagram.imei(), protocol, "UDP", rawDatagram, String.valueOf(packet.sender())
+        ).whenComplete((rawPacketId, auditError) -> context.executor().execute(() -> {
+            if (auditError != null || rawPacketId == null) {
+                respond(context, packet, UDP.acknowledgement(datagram, 0), datagram.imei(), protocol);
+                log.error("event=teltonika_udp_audit_failed imei={} error={}", datagram.imei(),
+                        auditError == null ? "missing_raw_packet_id" : auditError.getClass().getSimpleName());
+                return;
             }
+            BATCH.publish(
+                    rawPacketId, parsed, datagram.imei(), protocol, ChannelType.GSM,
+                    DeviceAdmissionRegistry.dictionaryCode(datagram.imei()),
+                    protocol == ProtocolType.TELTONIKA_CODEC8 ? "CODEC8" : "CODEC8E"
+            ).whenComplete((accepted, error) -> context.executor().execute(() -> {
+                if (error == null) respond(context, packet, UDP.acknowledgement(datagram, accepted), datagram.imei(), protocol);
+                else {
+                    respond(context, packet, UDP.acknowledgement(datagram, 0), datagram.imei(), protocol);
+                    log.error("event=teltonika_udp_publish_failed imei={} error={}",
+                            datagram.imei(), error.getClass().getSimpleName());
+                }
+            }));
         }));
     }
 
-    private void respond(ChannelHandlerContext context, DatagramPacket request, byte[] response) {
-        context.writeAndFlush(new DatagramPacket(Unpooled.wrappedBuffer(response), request.sender()));
+    private void respond(ChannelHandlerContext context, DatagramPacket request, byte[] response,
+                         String imei, ProtocolType protocol) {
+        context.writeAndFlush(new DatagramPacket(Unpooled.wrappedBuffer(response), request.sender()))
+                .addListener(result -> {
+                    if (!result.isSuccess()) return;
+                    PacketAuditService.persistSent(imei, protocol, "UDP", response, String.valueOf(request.sender()))
+                            .whenComplete((ignored, error) -> {
+                                if (error != null) log.error("event=udp_packet_tx_audit_failed imei={} protocol={} error={}",
+                                        imei, protocol, error.getClass().getSimpleName());
+                            });
+                });
     }
 }

@@ -20,7 +20,7 @@ class GatewayDurabilityContractTest {
     @Test
     void deviceAckIsCompletedFromPublishCallback() throws Exception {
         String source=Files.readString(Path.of("src/main/java/com/alels/gateway/netty/NettyDeviceChannelHandler.java"));
-        int publish=source.indexOf("publish(telemetry");
+        int publish=source.indexOf("publish(rawPacketId, telemetry");
         int completion=source.indexOf(".whenComplete",publish);
         int ack=source.indexOf("sendAlelsAck(ctx)",completion);
         assertTrue(publish>=0&&completion>publish&&ack>completion);

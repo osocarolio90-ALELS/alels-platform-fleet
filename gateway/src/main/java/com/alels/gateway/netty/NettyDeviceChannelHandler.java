@@ -31,6 +31,8 @@ import java.util.UUID;
 import com.alels.gateway.session.ownership.SessionOwnershipConfig;
 import com.alels.gateway.session.ownership.SessionOwnershipService;
 import com.alels.gateway.service.TelemetryBatchPublisher;
+import com.alels.gateway.service.PacketAuditService;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +60,7 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
     private String boundImei;
     private String sessionImei;
     private ChannelType sessionChannel;
+    private ProtocolType sessionProtocol;
     private NettyCommandWriter sessionWriter;
     private String lastTeltonikaCommandName;
 
@@ -117,35 +120,38 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         }
         withOwnership(ctx, result.getImei(), () -> {
             bindSession(ctx, result.getImei(), ChannelType.WIFI, ProtocolType.ALELS_JSON);
-            String json = new String(packet, StandardCharsets.UTF_8).trim();
-            boolean response = json.contains("\"T\":\"resp\"");
-            boolean control = response || json.contains("\"T\":\"id\"") || isAlelsHeartbeat(packet);
-            if (response) {
-                sendAlelsAck(ctx);
-                CommandResponsePersistenceService.persistAlels(packet.clone());
-                return;
-            }
-            if (control) {
-                sendAlelsAck(ctx);
-                return;
-            }
-            TelemetryData telemetry;
-            try {
-                telemetry = AlelsJsonTelemetryNormalizer.normalize(packet);
-            } catch (Exception error) {
-                log.warn("event=telemetry_normalization_failed imei={} error={}",
-                        result.getImei(), error.getClass().getSimpleName());
-                return;
-            }
-            if (telemetry == null) {
-                return;
-            }
-            publish(telemetry, ProtocolType.ALELS_JSON, ChannelType.WIFI, "ALELS_JSON")
-                    .whenComplete((ignored, error) -> {
-                        if (error == null) sendAlelsAck(ctx);
-                        else logPublishFailure(result.getImei(), error);
-                    });
+            auditReceived(ctx, result.getImei(), ProtocolType.ALELS_JSON, packet,
+                    rawPacketId -> processAlelsJson(ctx, packet, result.getImei(), rawPacketId));
         });
+    }
+
+    private void processAlelsJson(ChannelHandlerContext ctx, byte[] packet, String imei, Long rawPacketId) {
+        String json = new String(packet, StandardCharsets.UTF_8).trim();
+        boolean response = json.contains("\"T\":\"resp\"");
+        boolean control = response || json.contains("\"T\":\"id\"") || isAlelsHeartbeat(packet);
+        if (response) {
+            sendAlelsAck(ctx);
+            CommandResponsePersistenceService.persistAlels(packet.clone());
+            return;
+        }
+        if (control) {
+            sendAlelsAck(ctx);
+            return;
+        }
+        TelemetryData telemetry;
+        try {
+            telemetry = AlelsJsonTelemetryNormalizer.normalize(packet);
+        } catch (Exception error) {
+            log.warn("event=telemetry_normalization_failed imei={} error={}",
+                    imei, error.getClass().getSimpleName());
+            return;
+        }
+        if (telemetry == null) return;
+        publish(rawPacketId, telemetry, ProtocolType.ALELS_JSON, ChannelType.WIFI, "ALELS_JSON")
+                .whenComplete((ignored, error) -> {
+                    if (error == null) sendAlelsAck(ctx);
+                    else logPublishFailure(imei, error);
+                });
     }
 
     private void handleAlelsHeartbeat(ChannelHandlerContext ctx, byte[] packet) {
@@ -160,7 +166,8 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         String heartbeatImei = imei;
         withOwnership(ctx, heartbeatImei, () -> {
             bindSession(ctx, heartbeatImei, ChannelType.WIFI, ProtocolType.ALELS_JSON);
-            sendAlelsAck(ctx);
+            auditReceived(ctx, heartbeatImei, ProtocolType.ALELS_JSON, packet,
+                    ignored -> sendAlelsAck(ctx));
         });
     }
 
@@ -173,23 +180,26 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         withOwnership(ctx, result.getImei(), () -> {
             boundImei = result.getImei();
             bindSession(ctx, boundImei, ChannelType.GSM, ProtocolType.TELTONIKA_IMEI);
-            ctx.writeAndFlush(Unpooled.wrappedBuffer(new byte[]{0x01}));
-            lastTeltonikaCommandName = "getinfo";
+            auditReceived(ctx, boundImei, ProtocolType.TELTONIKA_IMEI, packet, ignored -> {
+                sendAudited(ctx, new byte[]{0x01}, ProtocolType.TELTONIKA_IMEI);
+                lastTeltonikaCommandName = "getinfo";
+            });
         });
     }
 
     private void handleTeltonikaCodec8(ChannelHandlerContext ctx, byte[] packet) {
-        handleTeltonikaTelemetry(ctx, CODEC8_PARSER.parse(packet),
+        handleTeltonikaTelemetry(ctx, packet, CODEC8_PARSER.parse(packet),
                 ProtocolType.TELTONIKA_CODEC8, "CODEC8");
     }
 
     private void handleTeltonikaCodec8E(ChannelHandlerContext ctx, byte[] packet) {
-        handleTeltonikaTelemetry(ctx, CODEC8E_PARSER.parse(packet),
+        handleTeltonikaTelemetry(ctx, packet, CODEC8E_PARSER.parse(packet),
                 ProtocolType.TELTONIKA_CODEC8E, "CODEC8E");
     }
 
     private void handleTeltonikaTelemetry(
             ChannelHandlerContext ctx,
+            byte[] packet,
             ParserResult result,
             ProtocolType protocol,
             String parserCode
@@ -200,20 +210,17 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         }
         withOwnership(ctx, boundImei, () -> {
             bindSession(ctx, boundImei, ChannelType.GSM, protocol);
-            BATCH.publish(
-                    result,
-                    boundImei,
-                    protocol,
-                    ChannelType.GSM,
-                    DeviceAdmissionRegistry.dictionaryCode(boundImei),
-                    parserCode
-            ).whenComplete((accepted, error) -> {
+            auditReceived(ctx, boundImei, protocol, packet, rawPacketId ->
+                    BATCH.publish(
+                            rawPacketId, result, boundImei, protocol, ChannelType.GSM,
+                            DeviceAdmissionRegistry.dictionaryCode(boundImei), parserCode
+                    ).whenComplete((accepted, error) -> {
                         if (error == null) sendTeltonikaAck(ctx, accepted);
                         else {
                             sendTeltonikaAck(ctx, 0);
                             logPublishFailure(boundImei, error);
                         }
-                    });
+                    }));
         });
     }
 
@@ -230,6 +237,7 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
     }
 
     private CompletableFuture<Long> publish(
+            Long rawPacketId,
             TelemetryData telemetry,
             ProtocolType protocol,
             ChannelType channel,
@@ -241,7 +249,7 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
             );
         }
         CompletableFuture<Long> result = PUBLISHER.publish(
-                telemetry,
+                rawPacketId, telemetry,
                 protocol.name(),
                 channel.name(),
                 DeviceAdmissionRegistry.dictionaryCode(telemetry.getImei()),
@@ -249,6 +257,20 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         ).toCompletableFuture();
         result.whenComplete((ignored, error) -> METRICS.publishCompleted(error == null));
         return result;
+    }
+
+    private void auditReceived(ChannelHandlerContext ctx, String imei, ProtocolType protocol,
+                               byte[] packet, Consumer<Long> afterPersist) {
+        PacketAuditService.persistReceived(imei, protocol, "TCP", packet, remoteAddress(ctx))
+                .whenComplete((rawPacketId, error) -> ctx.executor().execute(() -> {
+                    if (error != null || rawPacketId == null) {
+                        log.error("event=packet_audit_failed imei={} protocol={} error={}", imei,
+                                protocol, error == null ? "missing_raw_packet_id" : error.getClass().getSimpleName());
+                        ctx.close();
+                        return;
+                    }
+                    afterPersist.accept(rawPacketId);
+                }));
     }
 
     private boolean admit(String imei) {
@@ -301,17 +323,29 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         }
         sessionImei = imei;
         sessionChannel = channel;
+        sessionProtocol = protocol;
         DeviceSessionRegistry.registerOrUpdate(
                 imei, channel, protocol, remoteAddress(ctx), sessionWriter
         );
     }
 
     private void sendAlelsAck(ChannelHandlerContext ctx) {
-        ctx.writeAndFlush(Unpooled.wrappedBuffer("01\n".getBytes(StandardCharsets.UTF_8)));
+        sendAudited(ctx, "01\n".getBytes(StandardCharsets.UTF_8), ProtocolType.ALELS_JSON);
     }
 
     private void sendTeltonikaAck(ChannelHandlerContext ctx, int recordCount) {
-        ctx.writeAndFlush(Unpooled.wrappedBuffer(ByteBuffer.allocate(4).putInt(recordCount).array()));
+        sendAudited(ctx, ByteBuffer.allocate(4).putInt(recordCount).array(), sessionProtocol);
+    }
+
+    private void sendAudited(ChannelHandlerContext ctx, byte[] packet, ProtocolType protocol) {
+        ctx.writeAndFlush(Unpooled.wrappedBuffer(packet)).addListener(result -> {
+            if (!result.isSuccess() || sessionImei == null || protocol == null) return;
+            PacketAuditService.persistSent(sessionImei, protocol, "TCP", packet, remoteAddress(ctx))
+                    .whenComplete((ignored, error) -> {
+                        if (error != null) log.error("event=packet_tx_audit_failed imei={} protocol={} error={}",
+                                sessionImei, protocol, error.getClass().getSimpleName());
+                    });
+        });
     }
 
     private boolean isAlelsHeartbeat(byte[] packet) {

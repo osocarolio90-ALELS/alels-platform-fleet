@@ -10,13 +10,13 @@ import { deleteAllDeviceHistory, exportSelectedDeviceLogs, getSelectedDeviceLogs
 import type { SelectedTimeRange, TripLogRow, TripSummary } from "../types/device-workspace-trip-route";
 import { exportTripLog, type ExportFormat } from "../utils/trip-log-export";
 
-type Props = { deviceId: number; imei: string; selectedSegments: TripSummary[] };
+type Props = { deviceId: number; imei: string; selectedSegments: TripSummary[]; rangeIdentity?: string };
 type Column = { key: string; label: string; value: (row: TripLogRow) => string };
 
 const PAGE_SIZES = [15, 25, 50, 75, 100] as const;
 const BASE_CODES = new Set(["latitude", "longitude", "altitude", "angle", "speed", "satellites", "hdop", "protocol", "channel"]);
 
-export function TripLogTable({ deviceId, imei, selectedSegments }: Props) {
+export function TripLogTable({ deviceId, imei, selectedSegments, rangeIdentity }: Props) {
   const queryClient = useQueryClient();
   const role = normalizeRole(useAuthStore(state => state.user?.role));
   const canDeleteAll = role === "SUPERADMIN" || role === "ADMIN";
@@ -39,14 +39,15 @@ export function TripLogTable({ deviceId, imei, selectedSegments }: Props) {
     () => selectedSegments.map(segment => `${segment.id}:${segment.startTime}:${segment.endTime}`).join("|"),
     [selectedSegments],
   );
+  const resetKey = rangeIdentity ?? selectionKey;
 
   useEffect(() => {
     setPage(0);
     setSearch("");
-  }, [deviceId, selectionKey, pageSize]);
+  }, [deviceId, resetKey, pageSize]);
 
   const query = useQuery({
-    queryKey: ["device-workspace", "device-log-selection", deviceId, selectionKey, page, pageSize],
+    queryKey: ["device-workspace", "device-log-selection", deviceId, resetKey, page, pageSize],
     queryFn: () => getSelectedDeviceLogs(deviceId, ranges, page, pageSize),
     enabled: deviceId > 0 && ranges.length > 0,
     placeholderData: previous => previous,
@@ -126,7 +127,8 @@ export function TripLogTable({ deviceId, imei, selectedSegments }: Props) {
     setExportOpen(false);
     try {
       const exportRows = await exportSelectedDeviceLogs(deviceId, ranges);
-      exportTripLog(format, exportRows, exportColumns(exportRows), imei, selectedSegments.length);
+      const visibleExportColumns = exportColumns(exportRows).filter(column => !hidden.has(column.key));
+      exportTripLog(format, exportRows, visibleExportColumns, imei, selectedSegments.length);
     } finally {
       setExporting(null);
     }
@@ -149,7 +151,6 @@ export function TripLogTable({ deviceId, imei, selectedSegments }: Props) {
           {exportOpen ? <div className="dw-trip-export-menu">
             <button type="button" onClick={() => void exportSelection("xlsx")}>Excel (.xlsx)</button>
             <button type="button" onClick={() => void exportSelection("csv")}>CSV (.csv)</button>
-            <button type="button" onClick={() => void exportSelection("pdf")}>PDF (.pdf)</button>
           </div> : null}
         </div>
         {canDeleteAll ? <Button type="button" size="sm" variant="destructive" onClick={() => { setDeleteNotice(""); setDeleteOpen(true); }} disabled={!imei}><Trash2/>Delete All Data</Button> : null}
