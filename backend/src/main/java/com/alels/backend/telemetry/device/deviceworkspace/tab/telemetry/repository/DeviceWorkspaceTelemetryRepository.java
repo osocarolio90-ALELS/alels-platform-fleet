@@ -131,7 +131,7 @@ public class DeviceWorkspaceTelemetryRepository {
 
     public Optional<LatestPacket> latestPacket(String imei) {
         return jdbc.query("""
-                SELECT id, packet_sequence, server_time, device_time, protocol, channel,
+                SELECT id, packet_sequence, server_time, device_time, protocol, channel, dictionary_code,
                        latitude, longitude, speed, angle, altitude, satellites, hdop,
                        priority, event_io_id, io_data::text AS io_data
                 FROM telemetry
@@ -141,7 +141,7 @@ public class DeviceWorkspaceTelemetryRepository {
                 """, (rs, rowNum) -> new LatestPacket(
                     rs.getLong("id"), rs.getObject("packet_sequence", Long.class),
                     rs.getString("server_time"), rs.getString("device_time"),
-                    rs.getString("protocol"), rs.getString("channel"),
+                    rs.getString("protocol"), rs.getString("channel"), rs.getString("dictionary_code"),
                     rs.getObject("latitude", Double.class), rs.getObject("longitude", Double.class),
                     rs.getObject("speed", Double.class), rs.getObject("angle", Integer.class),
                     rs.getObject("altitude", Integer.class), rs.getObject("satellites", Integer.class),
@@ -218,14 +218,17 @@ public class DeviceWorkspaceTelemetryRepository {
 
     public List<DataParameter> normalizedParameters(Long telemetryId, String imei) {
         return jdbc.query("""
-                SELECT field_code, COALESCE(NULLIF(field_name, ''), field_code) AS label,
-                       COALESCE(text_value, numeric_value::text, CASE WHEN boolean_value IS NULL THEN NULL ELSE boolean_value::text END, raw_value, '-') AS display_value,
-                       numeric_value, boolean_value, unit, source_io_id,
-                       COALESCE(NULLIF(category, ''), 'OTHER') AS category,
-                       source_protocol, dictionary_code, device_model_id
-                FROM telemetry_normalized
-                WHERE telemetry_id = ? AND imei = ?
-                ORDER BY id
+                SELECT normalized.field_code, COALESCE(NULLIF(normalized.field_name, ''), normalized.field_code) AS label,
+                       COALESCE(normalized.text_value, normalized.numeric_value::text,
+                                CASE WHEN normalized.boolean_value IS NULL THEN NULL ELSE normalized.boolean_value::text END,
+                                normalized.raw_value, '-') AS display_value,
+                       normalized.numeric_value, normalized.boolean_value, normalized.unit, normalized.source_io_id,
+                       COALESCE(NULLIF(mapping.category, ''), NULLIF(normalized.category, ''), 'OTHER') AS category,
+                       normalized.source_protocol, normalized.dictionary_code, normalized.device_model_id
+                FROM telemetry_normalized normalized
+                LEFT JOIN device_io_mappings mapping ON mapping.id = normalized.mapping_id
+                WHERE normalized.telemetry_id = ? AND normalized.imei = ?
+                ORDER BY normalized.id
                 """, (rs, rowNum) -> new DataParameter(
                     rs.getString("field_code"), rs.getString("label"), rs.getString("display_value"),
                     rs.getObject("numeric_value", Double.class), rs.getObject("boolean_value", Boolean.class),
@@ -323,7 +326,7 @@ public class DeviceWorkspaceTelemetryRepository {
     public record ScopedDevice(DeviceInfo info, Long companyId) {}
     public record VehicleResult(Long id, VehicleInfo info) {}
     public record LatestPacket(
-            Long id, Long sequence, String serverTime, String deviceTime, String protocol, String channel,
+            Long id, Long sequence, String serverTime, String deviceTime, String protocol, String channel, String dictionaryCode,
             Double latitude, Double longitude, Double speed, Integer angle,
             Integer altitude, Integer satellites, Double hdop, Integer priority,
             Integer eventIoId, String ioDataJson

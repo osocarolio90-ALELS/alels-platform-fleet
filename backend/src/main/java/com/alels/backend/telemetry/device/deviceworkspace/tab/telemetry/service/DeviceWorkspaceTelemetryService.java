@@ -63,7 +63,8 @@ public class DeviceWorkspaceTelemetryService {
                 .orElseGet(DeviceWorkspaceTelemetryService::notPairedVehicle);
         DriverInfo driver = workspaceRepository.driver(deviceId, device.companyId()).orElseGet(DeviceWorkspaceTelemetryService::notPairedDriver);
         LatestPacket packet = workspaceRepository.latestPacket(device.info().imei()).orElse(null);
-        List<DataParameter> parameters = packet == null ? List.of() : packetParameters(packet, device.info().imei());
+        String dictionaryCode = packet == null ? null : packet.dictionaryCode();
+        List<DataParameter> parameters = packet == null ? List.of() : packetParameters(packet, device.info().imei(), device.info().model(), dictionaryCode);
         PositionInfo position = packet == null ? emptyPosition() : new PositionInfo(
                 packet.latitude(), packet.longitude(), packet.speed(), packet.angle(), packet.altitude(),
                 packet.satellites(), packet.hdop(), packet.deviceTime(), packet.serverTime()
@@ -79,6 +80,7 @@ public class DeviceWorkspaceTelemetryService {
 
         return new WorkspaceTelemetryResponse(
                 device.info(), driver, vehicle, position, connection, packetInfo, parameters,
+                DeviceParameterGroupCatalog.groups(device.info().model(), dictionaryCode),
                 readConfiguration(deviceId, user.userId()),
                 workspaceRepository.recentTrack(device.info().imei(), MAX_TRACK_POINTS)
         );
@@ -185,7 +187,7 @@ public class DeviceWorkspaceTelemetryService {
         );
     }
 
-    private List<DataParameter> packetParameters(LatestPacket packet, String imei) {
+    private List<DataParameter> packetParameters(LatestPacket packet, String imei, String model, String dictionaryCode) {
         Map<String, DataParameter> values = new LinkedHashMap<>();
         addCore(values, "gps.latitude", "Latitude", packet.latitude(), null, "°", null, "GPS");
         addCore(values, "gps.longitude", "Longitude", packet.longitude(), null, "°", null, "GPS");
@@ -197,7 +199,13 @@ public class DeviceWorkspaceTelemetryService {
         addCore(values, "packet.priority", "Priority", packet.priority(), null, null, null, "OTHER");
         addCore(values, "packet.event_io_id", "Event IO ID", packet.eventIoId(), null, null, null, "OTHER");
 
+        List<DataParameter> sourceParameters = workspaceRepository.ioParameters(packet.id(), imei);
+        Map<String, String> sourceCategories = sourceParameters.stream()
+                .filter(parameter -> parameter.parameterId() != null && parameter.category() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                        DataParameter::parameterId, DataParameter::category, (first, ignored) -> first));
         List<DataParameter> normalized = workspaceRepository.normalizedParameters(packet.id(), imei).stream()
+                .map(parameter -> withSourceCategory(parameter, sourceCategories.get(parameter.parameterId())))
                 .map(DeviceWorkspaceTelemetryService::withCanonicalDisplay)
                 .toList();
         for (DataParameter parameter : normalized) {
@@ -208,7 +216,7 @@ public class DeviceWorkspaceTelemetryService {
                 .map(DataParameter::parameterId)
                 .filter(value -> value != null && !value.isBlank())
                 .collect(java.util.stream.Collectors.toSet());
-        for (DataParameter sourceParameter : workspaceRepository.ioParameters(packet.id(), imei)) {
+        for (DataParameter sourceParameter : sourceParameters) {
             DataParameter parameter = withCanonicalDisplay(sourceParameter);
             if (!normalizedIds.contains(parameter.parameterId())) {
                 values.put(parameterKey(parameter.fieldCode(), parameter.parameterId()), parameter);
@@ -232,10 +240,29 @@ public class DeviceWorkspaceTelemetryService {
         });
 
         return values.values().stream()
+                .map(parameter -> withCanonicalGroup(parameter, model, dictionaryCode))
                 .sorted(Comparator.comparingInt(DeviceWorkspaceTelemetryService::categoryOrder)
                         .thenComparingInt(DeviceWorkspaceTelemetryService::parameterOrder)
                         .thenComparing(DataParameter::label, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
+    }
+
+    private static DataParameter withCanonicalGroup(DataParameter parameter, String model, String dictionaryCode) {
+        return new DataParameter(
+                parameter.fieldCode(), parameter.label(), parameter.value(), parameter.numericValue(),
+                parameter.booleanValue(), parameter.unit(), parameter.parameterId(),
+                DeviceParameterGroupCatalog.canonicalGroup(model, dictionaryCode, parameter.category()),
+                parameter.sourceProtocol(), parameter.dictionaryCode(), parameter.deviceModelId()
+        );
+    }
+
+    private static DataParameter withSourceCategory(DataParameter parameter, String sourceCategory) {
+        if (sourceCategory == null || sourceCategory.isBlank()) return parameter;
+        return new DataParameter(
+                parameter.fieldCode(), parameter.label(), parameter.value(), parameter.numericValue(),
+                parameter.booleanValue(), parameter.unit(), parameter.parameterId(), sourceCategory,
+                parameter.sourceProtocol(), parameter.dictionaryCode(), parameter.deviceModelId()
+        );
     }
 
     private Map<String, Object> readIoData(String json) {

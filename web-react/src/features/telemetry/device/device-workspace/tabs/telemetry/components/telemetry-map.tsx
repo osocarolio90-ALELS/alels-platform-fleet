@@ -15,12 +15,15 @@ type LatLng = [number, number];
 
 export type WorkspaceMapEvent = {
   id: number;
+  telemetryId?: number | null;
   title: string;
+  message?: string | null;
   occurredAt: string;
   latitude?: number | null;
   longitude?: number | null;
   speed?: number | null;
   severity?: string | null;
+  locationSource?: string | null;
 };
 
 export type MapViewportPadding = { top: number; right: number; bottom: number; left: number };
@@ -47,6 +50,7 @@ type Props = {
   zoom: number;
   events?: WorkspaceMapEvent[];
   showEvents?: boolean;
+  compactEvents?: boolean;
   showStops?: boolean;
   showTrackPoints?: boolean;
   follow?: boolean;
@@ -74,6 +78,7 @@ export function TelemetryMap({
   zoom,
   events = [],
   showEvents = false,
+  compactEvents = false,
   showStops = false,
   showTrackPoints = false,
   follow = true,
@@ -118,6 +123,7 @@ export function TelemetryMap({
         playbackProgress={playbackProgress}
         events={events}
         showEvents={showEvents}
+        compactEvents={compactEvents}
         showTrackPoints={showTrackPoints}
         follow={follow}
         fitToken={fitToken}
@@ -161,7 +167,7 @@ export function TelemetryMap({
       {showStops ? track.filter(point => hasValidPosition(point.latitude, point.longitude) && (point.speed ?? 0) <= 1)
         .map((point, index) => <Marker key={`stop-${point.occurredAt}-${index}`} position={[point.latitude, point.longitude]} icon={mapPin("•", "#f59e0b")}><span/></Marker>) : null}
       {showEvents ? events.filter(event => hasValidPosition(event.latitude, event.longitude))
-        .map(event => <Marker key={event.id} position={[event.latitude!, event.longitude!]} icon={eventMapPin(event.title, eventColor(event.severity))}/>) : null}
+        .map(event => <Marker key={event.id} position={[event.latitude!, event.longitude!]} icon={compactEvents ? compactEventMapPin(event) : eventMapPin(event.title, eventColor(event.severity))}/>) : null}
       <LeafletVehicleMarker center={center} valid={valid} angle={angle} vehicleType={vehicleType}/>
     </MapContainer>
     {!valid ? <div className="dw-map-empty">Waiting for GPS position</div> : null}
@@ -558,6 +564,44 @@ function eventMapPin(title: string, color: string) {
     iconSize: [160, 34],
     iconAnchor: [80, 28],
   });
+}
+
+function compactEventMapPin(event: WorkspaceMapEvent) {
+  const title = event.title || "Telemetry event";
+  const message = event.message?.trim();
+  const speed = Number.isFinite(event.speed) ? `${Number(event.speed).toFixed(1)} km/h` : "-";
+  const coordinate = hasValidPosition(event.latitude, event.longitude)
+    ? `${Number(event.latitude).toFixed(5)}, ${Number(event.longitude).toFixed(5)}`
+    : "-";
+  return L.divIcon({
+    className: "dw-trip-map-pin dw-trip-event-pin-compact",
+    html: `<span class="dw-trip-event-icon" data-glyph="${escapeHtml(eventGlyph(title))}" style="--trip-pin:${eventColor(event.severity)}" aria-hidden="true"></span>`
+      + `<div class="dw-trip-event-tooltip-card" role="tooltip"><strong>${escapeHtml(title)}</strong>`
+      + `<span>${escapeHtml(formatEventTime(event.occurredAt))}${event.telemetryId != null ? ` · Telemetry #${event.telemetryId}` : ""}</span>`
+      + (message ? `<p>${escapeHtml(message)}</p>` : "")
+      + `<span>Speed: ${escapeHtml(speed)}</span><span>Lokasi report (${escapeHtml(locationSourceLabel(event.locationSource))}): ${escapeHtml(coordinate)}</span></div>`,
+    iconSize: [30, 36],
+    iconAnchor: [15, 36],
+  });
+}
+
+function locationSourceLabel(source?: string | null) {
+  return source === "TRIGGER_TELEMETRY_GPS" ? "GPS paket pemicu" : "GPS event tersimpan";
+}
+
+function eventGlyph(title: string) {
+  const value = title.toLowerCase();
+  if (value.includes("ignition") || value.includes("engine")) return "⚡";
+  if (value.includes("door") || value.includes("lock")) return "▣";
+  if (value.includes("speed")) return "↗";
+  if (value.includes("geofence") || value.includes("zone")) return "◎";
+  if (value.includes("battery") || value.includes("power")) return "ϟ";
+  return "!";
+}
+
+function formatEventTime(value: string) {
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString("id-ID") : value;
 }
 
 function escapeHtml(value: string) {

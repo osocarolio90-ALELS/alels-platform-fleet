@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import html2canvas from "html2canvas";
 import { Download, Expand, Eye, EyeOff, LocateFixed, Search, Settings2, Shrink } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -11,8 +12,9 @@ import { TripSelectionList } from "../components/trip-selection-list";
 import { TripFullscreenInstruments } from "../components/trip-fullscreen-instruments";
 import { TripInstrumentSourceDialog } from "../components/trip-instrument-source-dialog";
 import { TRIP_ROUTE_MAP_PROVIDER } from "../config/trip-route-map-provider";
+import { exportTripHistory } from "../utils/trip-log-export";
 import { useTripPlayback } from "../hooks/use-trip-playback";
-import type { TripInstrumentSourceMap, TripInstrumentSourceProfile, TripParameter, TripPlaybackTelemetryRow, TripPoint, TripSummary } from "../types/device-workspace-trip-route";
+import type { TripEvent, TripInstrumentSourceMap, TripInstrumentSourceProfile, TripParameter, TripPlaybackTelemetryRow, TripPoint, TripSummary } from "../types/device-workspace-trip-route";
 import "../trip-route.css";
 
 type Props = { deviceId: number; imei: string; vehicleType?: string | null; refreshToken: number };
@@ -234,15 +236,7 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
     placeholderData: previous => previous,
     refetchInterval: () => playbackRunningRef.current ? false : hasLiveSelection ? 15_000 : false,
   });
-  const events = useMemo<WorkspaceMapEvent[]>(() => (selectedEventsQuery.data || []).map(event => ({
-    id: event.id,
-    title: event.title,
-    occurredAt: event.occurredAt,
-    latitude: event.latitude,
-    longitude: event.longitude,
-    speed: event.speed,
-    severity: event.severity,
-  })), [selectedEventsQuery.data]);
+  const events = useMemo<WorkspaceMapEvent[]>(() => groupReportsByTelemetry(selectedEventsQuery.data || []), [selectedEventsQuery.data]);
 
   const firstTrackPoint = mapRouteTracks.find(route => route.length > 0)?.[0];
   const mapLatitude = currentPlayback?.latitude ?? firstTrackPoint?.latitude;
@@ -269,11 +263,34 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
     setCheckedTripIds(new Set());
   }
 
-  function exportTrips() {
-    const csv = ["Type,Start GPS Time,Finish GPS Time,Status,Distance km,Duration seconds,Driver",
-      ...filtered.map(trip => [trip.type, trip.startTime, trip.endTime, trip.status, trip.distanceKm, trip.durationSeconds, trip.driverName]
-        .map(value => `"${String(value).replace(/"/g, '""')}"`).join(","))].join("\r\n");
-    download(csv, "trip-stop-history.csv");
+  async function exportTrips() {
+    if (!filtered.length) {
+      setValidationError("No Trip/Stop data is available to export for the current filters.");
+      return;
+    }
+    if (!selectedSegments.length) {
+      setValidationError("Check at least one Trip/Stop so the export can include its route map snapshot.");
+      return;
+    }
+    if (!mapRouteTracks.some(route => route.length > 1)) {
+      setValidationError("Selected route data is still loading or unavailable. Retry after the route is visible on the map.");
+      return;
+    }
+
+    const mapElement = mapPanelRef.current?.querySelector<HTMLElement>(".dw-map");
+    if (!mapElement) {
+      setValidationError("The selected route map is not available for export.");
+      return;
+    }
+
+    setValidationError("");
+    try {
+      const mapPng = await captureTripMapSnapshot(mapElement, mapRouteTracks);
+      await exportTripHistory(filtered, imei, selectedSegments.length, mapPng);
+    } catch (error) {
+      console.error("Trip export could not be created", error);
+      setValidationError("Trip export could not be created. Please retry after the selected route is fully loaded.");
+    }
   }
 
   function selectTrip(tripId: string) {
@@ -333,7 +350,7 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
       <label>Driver<select value={driver} onChange={event => setDriver(event.target.value)}><option value="ALL">All Driver</option>{drivers.map(name => <option key={name}>{name}</option>)}</select></label>
       <label className="search">Search Location<span><Search/><input value={location} onChange={event => setLocation(event.target.value)} placeholder="Coordinate or location"/></span></label>
       <button type="button" className="primary" onClick={apply}>Apply</button>
-      <button type="button" onClick={exportTrips}><Download/>Export</button>
+      <button type="button" onClick={() => void exportTrips()}><Download/>Export</button>
     </header>
     {validationError ? <div className="dw-trip-error" role="alert">{validationError}</div> : null}
     {listQuery.isError ? <div className="dw-trip-error" role="alert">Trip history could not be loaded. Check the backend service and retry.</div> : null}
@@ -365,7 +382,7 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
             ? <TelemetryMap latitude={mapLatitude} longitude={mapLongitude} angle={mapAngle} vehicleType={vehicleType}
                 track={EMPTY_MAP_TRACK} routeOverlays={mapRouteTracks} fitRouteOverlays={mapRouteTracks}
                 playbackProgress={playback.started ? playback.index + 1 : null} threeDimensional={mode === "3d"} zoom={playback.started ? 19 : 16}
-                events={events} showEvents={showEvents} showStops={false} follow={follow}
+                events={events} showEvents={showEvents} compactEvents showStops={false} follow={follow}
                 fitToken={fitToken} resizeToken={`${tripsVisible}-${mapFullscreen}`} routeColor="#168bff"
                 routeHaloColor="#ffffff" routeWeight={playback.started ? 8 : 7} brightMap viewportPadding={mapViewportPadding}
                 provider={TRIP_ROUTE_MAP_PROVIDER} onUserViewChange={stopFollowingForManualView}/>
@@ -392,6 +409,43 @@ const AUTO_SOURCES:TripInstrumentSourceMap={rpm:"",speed:"__gps_speed__",level:"
 function profileToSources(profile:TripInstrumentSourceProfile):TripInstrumentSourceMap{return{rpm:profile.rpmSource||"",speed:profile.speedSource||"__gps_speed__",level:profile.levelSource||"",consumption:profile.consumptionSource||"",odometer:profile.odometerSource||""};}
 function collectPlaybackParameters(rows:TripPlaybackTelemetryRow[]){const map=new Map<string,TripParameter>();for(const row of rows)for(const parameter of row.parameters||[]){if(!parameter.fieldCode||map.has(parameter.fieldCode)||numeric(parameter.value)==null)continue;map.set(parameter.fieldCode,parameter);}return [...map.values()];}
 function resolveInstrumentSources(current:TripInstrumentSourceMap,options:TripParameter[],energyGroup?:string|null):TripInstrumentSourceMap{const group=String(energyGroup||"FUEL").toUpperCase();return{rpm:current.rpm||findSource(options,["engine_rpm","engine rpm","engine speed","rpm"]),speed:current.speed||"__gps_speed__",level:current.level||findSource(options,group==="ELECTRIC"?["battery_soc","state of charge","battery level"]:group==="GAS"?["gas level","cng level","lpg level","gas pressure"]:["fuel_level","fuel level"]),consumption:current.consumption||findSource(options,group==="ELECTRIC"?["battery consumption","battery power","high voltage battery current"]:group==="GAS"?["gas consumption","cng used","lpg used","gas used"]:["fuel_rate","fuel consumption","fuel used"]),odometer:current.odometer||findSource(options,["total_odometer","odometer","total mileage","mileage"])};}
+
+function groupReportsByTelemetry(events: TripEvent[]): WorkspaceMapEvent[] {
+  const groups = new Map<string, TripEvent[]>();
+  for (const event of events) {
+    if (!Number.isFinite(event.latitude) || !Number.isFinite(event.longitude)) continue;
+    const key = event.telemetryId != null
+      ? `telemetry:${event.telemetryId}`
+      : `gps:${Number(event.latitude).toFixed(6)}:${Number(event.longitude).toFixed(6)}:${event.occurredAt}`;
+    const group = groups.get(key);
+    if (group) group.push(event); else groups.set(key, [event]);
+  }
+  return [...groups.values()].map(group => {
+    const event = group[0];
+    const combined = group.length > 1;
+    return {
+      id: event.id,
+      telemetryId: event.telemetryId,
+      title: combined ? `${group.length} Reports` : event.title,
+      occurredAt: event.occurredAt,
+      latitude: event.latitude,
+      longitude: event.longitude,
+      speed: event.speed,
+      severity: highestSeverity(group),
+      locationSource: event.locationSource,
+      message: combined
+        ? group.map(item => `${item.title}${item.message?.trim() ? `: ${item.message.trim()}` : ""}`).join(" · ")
+        : event.message,
+    };
+  });
+}
+
+function highestSeverity(events: TripEvent[]) {
+  const rank = (severity: string) => severity.toUpperCase().includes("CRITICAL") ? 3
+    : severity.toUpperCase().includes("HIGH") ? 2
+      : severity.toUpperCase().includes("WARN") ? 1 : 0;
+  return events.reduce((selected, event) => rank(event.severity) > rank(selected) ? event.severity : selected, events[0]?.severity || "INFO");
+}
 function findSource(options:TripParameter[],needles:string[]){const normalized=needles.map(value=>value.toLowerCase());return options.find(option=>{const text=`${option.fieldCode} ${option.label}`.toLowerCase();return normalized.some(needle=>text.includes(needle));})?.fieldCode||"";}
 function resolveInstrumentValues(row:TripPlaybackTelemetryRow|undefined,routeSpeed:number|null|undefined,sources:TripInstrumentSourceMap,energyGroup?:string|null){const group=String(energyGroup||"FUEL").toUpperCase();const source=(key:string)=>row?.parameters?.find(parameter=>parameter.fieldCode===key);const value=(key:string)=>numeric(source(key)?.value);const metric=(key:string,label:string,fallbackUnit:string)=>({label,value:value(key),unit:source(key)?.unit||fallbackUnit});return{rpm:value(sources.rpm),speed:sources.speed==="__gps_speed__"?(row?.speed??routeSpeed??null):value(sources.speed),level:metric(sources.level,group==="ELECTRIC"?"SOC / Battery Level":group==="GAS"?"Gas Level":"Fuel Level","%"),consumption:metric(sources.consumption,group==="ELECTRIC"?"Battery Consumption":group==="GAS"?"Gas Consumption":"Fuel Consumption",group==="ELECTRIC"?"kW":group==="GAS"?"kg/h":"l/h"),odometer:metric(sources.odometer,"Odometer / Total Mileage","km")};}
 function numeric(value?:string|null){if(value==null)return null;const parsed=Number(String(value).trim().replace(",","."));return Number.isFinite(parsed)?parsed:null;}
@@ -411,12 +465,103 @@ function coordinate(lat?: number | null, lng?: number | null) {
 function tripLocation(trip: TripSummary) {
   return `${coordinate(trip.startLatitude, trip.startLongitude)} ${coordinate(trip.endLatitude, trip.endLongitude)}`.toLowerCase();
 }
-function download(content: string, name: string) {
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(link.href);
+async function captureTripMapSnapshot(element: HTMLElement, routes: WorkspaceTrackPoint[][]) {
+  try {
+    const canvas = await html2canvas(element, {
+      useCORS: true,
+      allowTaint: false,
+      logging: false,
+      backgroundColor: null,
+      scale: Math.min(window.devicePixelRatio || 1, 1.5),
+    });
+    if (snapshotHasVisibleContent(canvas)) {
+      const png = dataUrlBytes(canvas.toDataURL("image/png"));
+      if (png.length > 1024) return png;
+    }
+  } catch (error) {
+    console.warn("Map snapshot was blocked; using selected-route export fallback.", error);
+  }
+  return routeSnapshotPng(routes, element);
+}
+
+function snapshotHasVisibleContent(canvas: HTMLCanvasElement) {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context || canvas.width < 2 || canvas.height < 2) return false;
+  const colors = new Set<number>();
+  const xStep = Math.max(1, Math.floor(canvas.width / 16));
+  const yStep = Math.max(1, Math.floor(canvas.height / 10));
+  for (let y = yStep / 2; y < canvas.height; y += yStep) {
+    for (let x = xStep / 2; x < canvas.width; x += xStep) {
+      const pixel = context.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+      colors.add((pixel[0] << 24) | (pixel[1] << 16) | (pixel[2] << 8) | pixel[3]);
+      if (colors.size >= 4) return true;
+    }
+  }
+  return false;
+}
+
+function routeSnapshotPng(routes: WorkspaceTrackPoint[][], element: HTMLElement) {
+  const points = routes.flat().filter(point => Number.isFinite(point.latitude) && Number.isFinite(point.longitude));
+  if (points.length < 2) throw new Error("Selected route does not contain enough coordinates for export.");
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200;
+  canvas.height = 430;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas is not available for trip route export.");
+
+  const styles = getComputedStyle(element);
+  context.fillStyle = styles.backgroundColor && styles.backgroundColor !== "rgba(0, 0, 0, 0)" ? styles.backgroundColor : "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const meanLatitude = points.reduce((sum, point) => sum + point.latitude, 0) / points.length;
+  const longitudeScale = Math.max(0.01, Math.cos(meanLatitude * Math.PI / 180));
+  const projected = points.map(point => ({ x: point.longitude * longitudeScale, y: point.latitude }));
+  const minX = Math.min(...projected.map(point => point.x));
+  const maxX = Math.max(...projected.map(point => point.x));
+  const minY = Math.min(...projected.map(point => point.y));
+  const maxY = Math.max(...projected.map(point => point.y));
+  const padding = 36;
+  const usableWidth = canvas.width - padding * 2;
+  const usableHeight = canvas.height - padding * 2;
+  const spanX = Math.max(maxX - minX, 0.000001);
+  const spanY = Math.max(maxY - minY, 0.000001);
+  const scale = Math.min(usableWidth / spanX, usableHeight / spanY);
+  const routeWidth = spanX * scale;
+  const routeHeight = spanY * scale;
+  const offsetX = padding + (usableWidth - routeWidth) / 2;
+  const offsetY = padding + (usableHeight - routeHeight) / 2;
+  const project = (point: WorkspaceTrackPoint) => ({
+    x: offsetX + (point.longitude * longitudeScale - minX) * scale,
+    y: offsetY + (maxY - point.latitude) * scale,
+  });
+
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.strokeStyle = "#168bff";
+  context.lineWidth = 7;
+  for (const route of routes) {
+    const valid = route.filter(point => Number.isFinite(point.latitude) && Number.isFinite(point.longitude));
+    if (valid.length < 2) continue;
+    context.beginPath();
+    valid.forEach((point, index) => {
+      const projected = project(point);
+      if (index === 0) context.moveTo(projected.x, projected.y);
+      else context.lineTo(projected.x, projected.y);
+    });
+    context.stroke();
+  }
+
+  return dataUrlBytes(canvas.toDataURL("image/png"));
+}
+
+function dataUrlBytes(dataUrl: string) {
+  const comma = dataUrl.indexOf(",");
+  if (comma < 0) throw new Error("Invalid PNG data URL.");
+  const binary = atob(dataUrl.slice(comma + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return bytes;
 }
 
 const ZERO_MAP_PADDING:MapViewportPadding={top:0,right:0,bottom:0,left:0};

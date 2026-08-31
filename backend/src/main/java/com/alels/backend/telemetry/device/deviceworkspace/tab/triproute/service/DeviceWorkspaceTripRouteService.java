@@ -48,6 +48,8 @@ import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.reposito
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.TimeWindow;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.RouteWindow;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.TelemetryPoint;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.DriverAssignmentPeriod;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.VehicleAssignmentPeriod;
 import com.alels.backend.telemetry.device.repository.TelemetryDeviceRepository;
 import com.alels.backend.telemetry.device.repository.TelemetryDeviceRepository.DeviceAccess;
 
@@ -81,6 +83,7 @@ public class DeviceWorkspaceTripRouteService {
         repository.scanPoints(device.imei(), range.from(), range.to(), accumulator::accept);
         List<TripSummary> trips = accumulator.finish();
         Collections.reverse(trips);
+        trips = withAssignmentLabels(device.imei(), range, trips);
         // P1: Trip list is summary-only. Route geometry is loaded only for checked Trip/Stop ranges.
         return new TripListResponse(trips, List.of(), repository.vehicleEnergyGroup(deviceId, device.companyId()));
     }
@@ -93,7 +96,8 @@ public class DeviceWorkspaceTripRouteService {
         if (points.size() > DeviceWorkspaceTripRouteRepository.MAX_DETAIL_POINTS) {
             throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Selected trip contains too many telemetry points. Select a shorter interval.");
         }
-        TripSummary summary = summarize(points, ignitionOn(points.getFirst()) ? "TRIP" : "STOP", false);
+        TripSummary summary = withAssignmentLabels(device.imei(), range,
+                List.of(summarize(points, ignitionOn(points.getFirst()) ? "TRIP" : "STOP", false))).getFirst();
         Map<Long, TripInstrumentSnapshot> instruments = repository.instrumentSnapshots(device.imei(), range.from(), range.to());
         List<TripPoint> track = points.stream().filter(this::validPosition).map(point -> new TripPoint(
                 point.id(), point.occurredAt().toString(), point.latitude(), point.longitude(),
@@ -389,6 +393,24 @@ public class DeviceWorkspaceTripRouteService {
         return result.reversed();
     }
 
+    private List<TripSummary> withAssignmentLabels(String imei, TimeRange range, List<TripSummary> summaries) {
+        if (summaries.isEmpty()) return summaries;
+        List<VehicleAssignmentPeriod> vehicles = repository.vehicleAssignmentPeriods(imei, range.from(), range.to());
+        List<DriverAssignmentPeriod> drivers = repository.driverAssignmentPeriods(imei, range.from(), range.to());
+        return summaries.stream().map(summary -> {
+            Instant startedAt = Instant.parse(summary.startTime());
+            String driver = summary.driverName();
+            if (driver == null || driver.isBlank() || "-".equals(driver)) {
+                driver = DeviceWorkspaceTripRouteRepository.driverAt(drivers, startedAt);
+            }
+            String vehicle = DeviceWorkspaceTripRouteRepository.vehiclePlateAt(vehicles, startedAt);
+            return new TripSummary(summary.id(), summary.type(), summary.status(), summary.startTime(), summary.endTime(),
+                    summary.durationSeconds(), summary.distanceKm(), summary.averageSpeed(), summary.maximumSpeed(),
+                    driver, vehicle, summary.fuelConsumption(), summary.fuelStart(), summary.fuelFinish(),
+                    summary.startLatitude(), summary.startLongitude(), summary.endLatitude(), summary.endLongitude());
+        }).toList();
+    }
+
     private void flushSegment(List<TripSummary> result, List<TelemetryPoint> trip,
                               List<TelemetryPoint> stop, boolean tripConfirmed,
                               boolean stopHasIndependentPoint, boolean inProgress) {
@@ -411,7 +433,9 @@ public class DeviceWorkspaceTripRouteService {
         double distance = 0, maximumSpeed = 0, speedTotal = 0;
         long speedCount = 0;
         TelemetryPoint previous = null;
+        FuelAccumulator fuel = new FuelAccumulator();
         for (TelemetryPoint point : points) {
+            fuel.add(point);
             if (point.speed() != null && point.speed() >= 0) {
                 maximumSpeed = Math.max(maximumSpeed, point.speed());
                 if (point.speed() > 0) { speedTotal += point.speed(); speedCount++; }
@@ -428,6 +452,7 @@ public class DeviceWorkspaceTripRouteService {
                 Math.max(0, Duration.between(first.occurredAt(), last.occurredAt()).toSeconds()),
                 round(distance), round(speedCount == 0 ? 0 : speedTotal / speedCount), round(maximumSpeed),
                 first.driverName() == null || first.driverName().isBlank() ? "-" : first.driverName(),
+                fuel.consumption(), fuel.startLevel(), fuel.finishLevel(),
                 first.latitude(), first.longitude(), last.latitude(), last.longitude());
     }
 
@@ -515,8 +540,10 @@ public class DeviceWorkspaceTripRouteService {
         private double maximumSpeed;
         private double speedTotal;
         private long speedCount;
+        private final FuelAccumulator fuel = new FuelAccumulator();
 
         void add(TelemetryPoint point) {
+            fuel.add(point);
             if (first == null) first = point;
             last = point;
             count++;
@@ -545,7 +572,74 @@ public class DeviceWorkspaceTripRouteService {
                     Math.max(0, Duration.between(first.occurredAt(), last.occurredAt()).toSeconds()),
                     round(distance), round(speedCount == 0 ? 0 : speedTotal / speedCount), round(maximumSpeed),
                     first.driverName() == null || first.driverName().isBlank() ? "-" : first.driverName(),
+                    fuel.consumption(), fuel.startLevel(), fuel.finishLevel(),
                     first.latitude(), first.longitude(), last.latitude(), last.longitude());
+        }
+    }
+
+    private static final class FuelAccumulator {
+        private Double firstLevel;
+        private Double lastLevel;
+        private Double firstUsed;
+        private Double lastUsed;
+        private Double previousUsed;
+        private int usedSamples;
+        private boolean usedMonotonic = true;
+        private Double previousRate;
+        private Instant previousRateAt;
+        private double integratedRateLiters;
+        private int integratedRateIntervals;
+
+        void add(TelemetryPoint point) {
+            if (point == null) return;
+            Double level = validFuelLevel(point.fuelLevel()) ? point.fuelLevel() : null;
+            if (level != null) {
+                if (firstLevel == null) firstLevel = level;
+                lastLevel = level;
+            }
+
+            Double used = validNonNegative(point.fuelUsed()) ? point.fuelUsed() : null;
+            if (used != null) {
+                if (firstUsed == null) firstUsed = used;
+                if (previousUsed != null && used + 1e-6 < previousUsed) usedMonotonic = false;
+                previousUsed = used;
+                lastUsed = used;
+                usedSamples++;
+            }
+
+            Double rate = validNonNegative(point.fuelRate()) ? point.fuelRate() : null;
+            if (rate != null && previousRate != null && previousRateAt != null && point.occurredAt() != null) {
+                long seconds = Duration.between(previousRateAt, point.occurredAt()).toSeconds();
+                if (seconds > 0 && seconds <= MAX_PACKET_GAP.toSeconds()) {
+                    integratedRateLiters += ((previousRate + rate) / 2.0) * seconds / 3600.0;
+                    integratedRateIntervals++;
+                }
+            }
+            if (rate != null && point.occurredAt() != null) {
+                previousRate = rate;
+                previousRateAt = point.occurredAt();
+            } else {
+                previousRate = null;
+                previousRateAt = null;
+            }
+        }
+
+        Double consumption() {
+            if (usedSamples >= 2 && usedMonotonic && firstUsed != null && lastUsed != null && lastUsed >= firstUsed) {
+                return round(lastUsed - firstUsed);
+            }
+            return integratedRateIntervals > 0 ? round(integratedRateLiters) : null;
+        }
+
+        Double startLevel() { return firstLevel == null ? null : round(firstLevel); }
+        Double finishLevel() { return lastLevel == null ? null : round(lastLevel); }
+
+        private static boolean validFuelLevel(Double value) {
+            return value != null && Double.isFinite(value) && value >= 0 && value <= 100;
+        }
+
+        private static boolean validNonNegative(Double value) {
+            return value != null && Double.isFinite(value) && value >= 0;
         }
     }
 

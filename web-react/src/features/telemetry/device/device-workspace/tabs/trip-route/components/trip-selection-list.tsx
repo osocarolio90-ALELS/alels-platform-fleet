@@ -41,8 +41,17 @@ export function TripSelectionList({ trips, selectedId, checkedTripIds, allChecke
             <button type="button" onClick={() => onSelect(trip.id)}>
               <span className="dw-trip-card-title"><span><MapPin/>{trip.type}</span><em>{trip.status.replace("_", " ")}</em></span>
               <span className="dw-trip-card-coordinate">{coordinate(trip.startLatitude, trip.startLongitude)}</span>
-              <span className="dw-trip-time"><span><b>Start</b><time>{dateTime(trip.startTime)}</time></span><span><b>Finish</b><time>{dateTime(trip.endTime)}</time></span></span>
-              <span className="dw-trip-card-summary"><b>Duration</b><span>{duration(trip.durationSeconds)} · {trip.distanceKm.toFixed(1)} km</span><span>{trip.driverName}</span></span>
+              <span className="dw-trip-card-data">
+                <span><b>Duration</b><strong>{duration(trip.durationSeconds)}</strong></span>
+                <span><b>Distance</b><strong>{trip.distanceKm.toFixed(1)} km</strong></span>
+                <span className="wide"><b>Fuel Consumption</b><strong>{metric(trip.fuelConsumption, "L")}</strong></span>
+                <span className="wide"><b>Fuel Level</b><strong>{fuelLevel(trip.fuelStart, trip.fuelFinish)}</strong></span>
+                <span><b>Start</b><time>{dateTime(trip.startTime)}</time></span>
+                <span><b>Finish</b><time>{dateTime(trip.endTime)}</time></span>
+                <span><b>Driver</b><strong>{trip.driverName || "-"}</strong></span>
+                <span><b>No. Vehicle</b><strong>{trip.vehiclePlateNumber || "-"}</strong></span>
+              </span>
+              <small className="dw-trip-card-source"><b>Source:</b> GPS telemetry (time, location, distance) · normalized CAN/AVL (fuel) · assignment master (driver, vehicle)</small>
             </button>
           </article>)
         : <p className="empty">No ignition trips or stops in this range.</p>}
@@ -55,6 +64,13 @@ function coordinate(lat?: number | null, lng?: number | null) {
 }
 function dateTime(value: string) {
   return new Date(value).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+function metric(value?: number | null, unit?: string) {
+  return Number.isFinite(value) ? `${Number(value).toFixed(2)}${unit ? ` ${unit}` : ""}` : "-";
+}
+function fuelLevel(start?: number | null, finish?: number | null) {
+  if (!Number.isFinite(start) && !Number.isFinite(finish)) return "-";
+  return `${metric(start, "%")} → ${metric(finish, "%")}`;
 }
 function duration(seconds: number) {
   const hours = Math.floor(seconds / 3600);

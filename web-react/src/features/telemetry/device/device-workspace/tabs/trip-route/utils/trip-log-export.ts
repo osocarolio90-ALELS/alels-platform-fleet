@@ -1,12 +1,14 @@
-import type { TripLogRow } from "../types/device-workspace-trip-route";
+import type { TripLogRow, TripSummary } from "../types/device-workspace-trip-route";
 
 export type ExportColumn = { label: string; value: (row: TripLogRow) => string };
 export type ExportFormat = "xlsx" | "csv";
 
 const COMPANY = "ALELS TECH INDONESIA";
 const DOCUMENT_TITLE = "Device Log History";
+const TRIP_DOCUMENT_TITLE = "Trip & Stop History";
 const LOGO_URL = "/assets/logo-card.png";
 const LOGO_FALLBACK_URL = "/assets/alels-mark-light.png";
+const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="4"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="18"/><color rgb="FF111827"/><name val="Arial"/></font><font><b/><sz val="13"/><color rgb="FF0369A1"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0284C7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border/><border><bottom style="medium"><color rgb="FF0284C7"/></bottom></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="3" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`;
 
 export async function exportTripLog(format: ExportFormat, rows: TripLogRow[], columns: ExportColumn[], imei: string, selectionCount: number) {
   const generated = new Date().toLocaleString("id-ID");
@@ -81,7 +83,7 @@ function exportXlsx(
     "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
     "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Device Log" sheetId="1" r:id="rId1"/></sheets></workbook>`,
     "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-    "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="4"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="18"/><color rgb="FF111827"/><name val="Arial"/></font><font><b/><sz val="13"/><color rgb="FF0369A1"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0284C7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border/><border><bottom style="medium"><color rgb="FF0284C7"/></bottom></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="3" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs></styleSheet>`,
+    "xl/styles.xml": STYLES_XML,
     "xl/worksheets/sheet1.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><cols><col min="1" max="1" width="24" customWidth="1"/><col min="2" max="${Math.max(2, columns.length)}" width="18" customWidth="1"/></cols><sheetData>${sheetRows}</sheetData><mergeCells count="2"><mergeCell ref="A1:${mergeTo}1"/><mergeCell ref="A2:${mergeTo}2"/></mergeCells><autoFilter ref="A8:${lastColumn}${matrix.length}"/><freezePane ySplit="8" topLeftCell="A9" activePane="bottomLeft" state="frozen"/>${logoPng ? '<drawing r:id="rId1"/>' : ""}</worksheet>`,
     "xl/sharedStrings.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sharedStrings.length}" uniqueCount="${sharedStrings.length}">${sharedStrings.map(value => `<si><t xml:space="preserve">${xml(value)}</t></si>`).join("")}</sst>`,
   };
@@ -94,6 +96,104 @@ function exportXlsx(
   }
 
   save(new Blob([zipStored(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), exportFileName(imei, "xlsx"));
+}
+
+
+export async function exportTripHistory(rows: TripSummary[], imei: string, selectedRouteCount: number, mapPng: Uint8Array) {
+  const generated = new Date().toLocaleString("id-ID");
+  const logo = await loadAlelsLogo();
+  const headers = [
+    "Type", "Start Time", "Finish Time", "Duration", "Distance (km)",
+    "Fuel Consumption (L)", "Fuel Start (%)", "Fuel Finish (%)", "Status", "Driver",
+  ];
+  const tableRows = rows.map(row => [
+    row.type, formatDateTime(row.startTime), formatDateTime(row.endTime), formatDuration(row.durationSeconds),
+    formatNumber(row.distanceKm), formatNumber(row.fuelConsumption), formatNumber(row.fuelStart),
+    formatNumber(row.fuelFinish), row.status.replace("_", " "), row.driverName || "-",
+  ]);
+  const tableHeaderRow = 24;
+  const matrix: string[][] = [
+    [COMPANY],
+    [TRIP_DOCUMENT_TITLE],
+    ["Device IMEI", imei],
+    ["Selected Route(s) in Map Snapshot", String(selectedRouteCount)],
+    ["Generated", generated],
+    ["Generated by", "ALELS Platform"],
+    [],
+    ...Array.from({ length: tableHeaderRow - 8 }, () => [] as string[]),
+    headers,
+    ...tableRows,
+  ];
+
+  const sharedStrings: string[] = [];
+  const sharedIndex = new Map<string, number>();
+  const stringIndex = (value: string) => {
+    const known = sharedIndex.get(value);
+    if (known != null) return known;
+    const index = sharedStrings.length;
+    sharedStrings.push(value);
+    sharedIndex.set(value, index);
+    return index;
+  };
+  const sheetRows = matrix.map((row, rowIndex) => {
+    const excelRow = rowIndex + 1;
+    const style = excelRow === 1 ? 1 : excelRow === 2 ? 2 : excelRow === tableHeaderRow ? 3 : 0;
+    const cells = row.map((value, columnIndex) =>
+      `<c r="${columnName(columnIndex)}${excelRow}" t="s" s="${style}"><v>${stringIndex(String(value))}</v></c>`).join("");
+    const height = excelRow === 1 ? ` ht="30" customHeight="1"` : excelRow === 2 ? ` ht="24" customHeight="1"` : "";
+    return `<row r="${excelRow}"${height}>${cells}</row>`;
+  }).join("");
+
+  const lastColumn = columnName(headers.length - 1);
+  const mergeTo = columnName(Math.min(headers.length - 1, 8));
+  const files: Record<string, string | Uint8Array> = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Trip History" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/styles.xml": STYLES_XML,
+    "xl/worksheets/sheet1.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews><sheetView workbookViewId="0"><pane ySplit="${tableHeaderRow}" topLeftCell="A${tableHeaderRow + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="18" customWidth="1"/><col min="2" max="3" width="22" customWidth="1"/><col min="4" max="10" width="18" customWidth="1"/></cols><sheetData>${sheetRows}</sheetData><mergeCells count="2"><mergeCell ref="A1:${mergeTo}1"/><mergeCell ref="A2:${mergeTo}2"/></mergeCells><autoFilter ref="A${tableHeaderRow}:${lastColumn}${matrix.length}"/><drawing r:id="rId1"/></worksheet>`,
+    "xl/sharedStrings.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sharedStrings.length}" uniqueCount="${sharedStrings.length}">${sharedStrings.map(value => `<si><t xml:space="preserve">${xml(value)}</t></si>`).join("")}</sst>`,
+    "xl/media/trip-map.png": mapPng,
+    "xl/worksheets/_rels/sheet1.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>`,
+  };
+
+  const drawingRelationships = [`<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/trip-map.png"/>`];
+  const drawingAnchors = [imageAnchor(1, "Trip Route Map", "rId1", 0, 7, 8_640_000, 3_300_000)];
+  if (logo) {
+    files["xl/media/logo-card.png"] = logo;
+    drawingRelationships.push(`<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/logo-card.png"/>`);
+    drawingAnchors.push(imageAnchor(2, "ALELS Logo", "rId2", 8, 0, 720_000, 720_000));
+  }
+  files["xl/drawings/drawing1.xml"] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${drawingAnchors.join("")}</xdr:wsDr>`;
+  files["xl/drawings/_rels/drawing1.xml.rels"] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${drawingRelationships.join("")}</Relationships>`;
+
+  save(new Blob([zipStored(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), tripExportFileName(imei));
+}
+
+function imageAnchor(id: number, name: string, relationshipId: string, column: number, row: number, width: number, height: number) {
+  return `<xdr:oneCellAnchor><xdr:from><xdr:col>${column}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${width}" cy="${height}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${id}" name="${xml(name)}"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="${relationshipId}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`;
+}
+
+function formatDateTime(value: string) {
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString("id-ID") : value;
+}
+function formatDuration(seconds: number) {
+  const safe = Math.max(0, Math.round(Number(seconds) || 0));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const remaining = safe % 60;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${remaining.toString().padStart(2, "0")}`;
+}
+function formatNumber(value?: number | null) {
+  return Number.isFinite(value) ? Number(value).toFixed(2) : "-";
+}
+function tripExportFileName(imei: string) {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `alels-trip-history-${imei}-${timestamp}.xlsx`;
 }
 
 async function loadAlelsLogo() {

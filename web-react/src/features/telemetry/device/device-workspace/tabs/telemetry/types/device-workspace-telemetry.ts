@@ -14,6 +14,6 @@ export type InstrumentMapping = {
   unit?:string|null; icon?:string|null;
 };
 export type WorkspaceConfiguration = { instruments:InstrumentMapping[]; bottomItems:InstrumentMapping[] };
-export type WorkspaceTelemetry = { device:WorkspaceDevice; driver:WorkspaceDriver; vehicle:WorkspaceVehicle; position:WorkspacePosition; connection:WorkspaceConnection; packet?:WorkspacePacket|null; dataReceived:WorkspaceDataParameter[]; configuration:WorkspaceConfiguration; track:WorkspaceTrackPoint[] };
+export type WorkspaceTelemetry = { device:WorkspaceDevice; driver:WorkspaceDriver; vehicle:WorkspaceVehicle; position:WorkspacePosition; connection:WorkspaceConnection; packet?:WorkspacePacket|null; dataReceived:WorkspaceDataParameter[]; parameterGroups:string[]; configuration:WorkspaceConfiguration; track:WorkspaceTrackPoint[] };
 export type WorkspaceHistoricalRoutes = { routes:WorkspaceTrackPoint[][] };
 export type WorkspaceEventPage = { events:WorkspaceEvent[]; nextBeforeId?:number|null; hasMore:boolean };

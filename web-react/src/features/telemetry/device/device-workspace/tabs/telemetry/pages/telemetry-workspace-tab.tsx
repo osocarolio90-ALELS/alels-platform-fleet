@@ -52,7 +52,25 @@ export function TelemetryWorkspaceTab({deviceId,live,refreshToken,clusterRef}:Pr
  </div>;
 }
 
-function DataReceivedPanel({data,online}:{data:WorkspaceTelemetry;online:boolean}){const parameters=orderedDataParameters(data.dataReceived);return <section className="dw-panel dw-data-panel"><header><h2>Data Received</h2><div><StatusIndicator status={online?"LIVE":"OFFLINE"}/>{data.packet?<><span>Packet #{data.packet.sequence??data.packet.id}</span><i/><span>Received {formatDate(data.packet.receivedAt)}</span></>:<span>Waiting for first packet</span>}</div></header><div className="dw-data-scroll"><TimestampCard label="Server Timestamp" value={data.packet?.receivedAt}/><TimestampCard label="Device Timestamp" value={data.position.deviceTime}/><article className="dw-data-card dw-data-source-card"><span>Data Source</span><strong>{formatChannel(data.connection.channel)}</strong><small><b>{formatProtocol(data.connection.protocol)}</b><br/>IMEI {data.device.imei}</small></article>{parameters.map((parameter,index)=><article className="dw-data-card" key={`${parameter.fieldCode}-${parameter.parameterId||index}`}><span>{parameter.label}</span><strong>{formatParameter(parameter)}</strong>{parameter.parameterId?<small>Parameter ID<br/><b>{parameter.parameterId}</b></small>:null}</article>)}{!parameters.length?<div className="dw-empty-card">No packet data received for this IMEI yet.</div>:null}</div></section>;}
+function DataReceivedPanel({data,online}:{data:WorkspaceTelemetry;online:boolean}){
+ const [activeGroup,setActiveGroup]=useState("ALL");
+ const groups=data.parameterGroups||[];
+ useEffect(()=>{if(activeGroup!=="ALL"&&!groups.includes(activeGroup))setActiveGroup("ALL");},[activeGroup,groups]);
+ const allParameters=orderedDataParameters(data.dataReceived);
+ const parameters=activeGroup==="ALL"?allParameters:allParameters.filter(parameter=>parameter.category===activeGroup);
+ return <section className="dw-panel dw-data-panel">
+  <header><h2>Data Received</h2><div><StatusIndicator status={online?"LIVE":"OFFLINE"}/>{data.packet?<><span>Packet #{data.packet.sequence??data.packet.id}</span><i/><span>Received {formatDate(data.packet.receivedAt)}</span></>:<span>Waiting for first packet</span>}</div></header>
+  <nav className="dw-data-group-tabs" aria-label="Data received parameter groups">
+   <button type="button" className={activeGroup==="ALL"?"active":""} aria-pressed={activeGroup==="ALL"} onClick={()=>setActiveGroup("ALL")}>ALL Data</button>
+   {groups.map(group=><button type="button" key={group} className={activeGroup===group?"active":""} aria-pressed={activeGroup===group} onClick={()=>setActiveGroup(group)}>{parameterGroupTabLabel(group)}</button>)}
+  </nav>
+  <div className="dw-data-scroll">
+   {activeGroup==="ALL"?<><TimestampCard label="Server Timestamp" value={data.packet?.receivedAt}/><TimestampCard label="Device Timestamp" value={data.position.deviceTime}/><article className="dw-data-card dw-data-source-card"><span>Data Source</span><strong>{formatChannel(data.connection.channel)}</strong><small><b>{formatProtocol(data.connection.protocol)}</b><br/>IMEI {data.device.imei}</small></article></>:null}
+   {parameters.map((parameter,index)=><article className="dw-data-card" key={`${parameter.fieldCode}-${parameter.parameterId||index}`}><span>{parameter.label}</span><strong>{formatParameter(parameter)}</strong>{parameter.parameterId?<small>AVL ID<br/><b>{parameter.parameterId}</b></small>:null}</article>)}
+   {!parameters.length?<div className="dw-empty-card">{activeGroup==="ALL"?"No packet data received for this IMEI yet.":"Data not received"}</div>:null}
+  </div>
+ </section>;
+}
 
 function TimestampCard({label,value}:{label:string;value?:string|null}){return <article className="dw-data-card dw-data-time-card"><span>{label}</span><strong>{formatDate(value)}</strong><small>{label==="Server Timestamp"?"Received by ALELS server":"Recorded inside device packet"}</small></article>;}
 
@@ -77,6 +95,7 @@ function findMapped(data:WorkspaceTelemetry,fieldCode?:string|null,parameterId?:
 }
 function resolveNumeric(data:WorkspaceTelemetry,mapping:InstrumentMapping|undefined,aliases:string[]){const mapped=resolveParameter(data,mapping);if(mapped?.numericValue!=null)return mapped.numericValue;const normalizedAliases=aliases.map(value=>value.toLowerCase());return data.dataReceived.find(item=>normalizedAliases.some(alias=>item.fieldCode.toLowerCase().includes(alias)))?.numericValue;}
 function formatParameter(parameter:WorkspaceDataParameter){let value=parameter.value??(parameter.booleanValue==null?"–":parameter.booleanValue?"ON":"OFF");if(parameter.booleanValue!=null)value=parameter.booleanValue?"ON":"OFF";return `${value}${parameter.unit?` ${parameter.unit}`:""}`;}
+function parameterGroupTabLabel(group:string){if(group==="Permanent I/O elements")return"Permanent I/O";if(group==="Eventual I/O elements")return"Event I/O";return group.replace(/ elements$/i,"");}
 function formatChannel(value?:string|null){if(!value)return"UNKNOWN";return value.toUpperCase()==="WIFI"?"Wi-Fi":value.toUpperCase();}
 function formatProtocol(value?:string|null){if(!value)return"–";return value.replace("TELTONIKA_","").replace("CODEC8E","Codec 8E").replace("CODEC8","Codec 8").replace(/_/g," ");}
 function formatDate(value?:string|null){if(!value)return"–";const date=new Date(value);return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Jakarta",day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(date)+" WIB";}

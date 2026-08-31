@@ -26,6 +26,7 @@ type Props = {
   playbackProgress?: number | null;
   events?: WorkspaceMapEvent[];
   showEvents?: boolean;
+  compactEvents?: boolean;
   showTrackPoints?: boolean;
   follow?: boolean;
   fitToken?: number;
@@ -50,6 +51,7 @@ export default function TerrainMap({
   playbackProgress = null,
   events = [],
   showEvents = false,
+  compactEvents = false,
   showTrackPoints = false,
   follow = true,
   fitToken = 0,
@@ -296,16 +298,21 @@ export default function TerrainMap({
     if (!showEvents) return;
 
     events.filter(event => isValidCoordinate(Number(event.latitude), Number(event.longitude))).forEach(event => {
-      const element = document.createElement("div");
-      element.className = "dw-trip-map-pin dw-trip-event-pin";
-      const label = document.createElement("span");
-      label.style.setProperty("--trip-pin", eventColor(event.severity));
-      label.textContent = event.title || "Telemetry event";
-      element.appendChild(label);
-      element.title = `${event.title} · ${new Date(event.occurredAt).toLocaleString("id-ID")}`;
-      eventMarkersRef.current.push(new maplibregl.Marker({ element }).setLngLat([Number(event.longitude), Number(event.latitude)]).addTo(map));
+      let element: HTMLDivElement;
+      if (compactEvents) {
+        element = eventMarkerElement(event);
+      } else {
+        element = document.createElement("div");
+        element.className = "dw-trip-map-pin dw-trip-event-pin";
+        const label = document.createElement("span");
+        label.style.setProperty("--trip-pin", eventColor(event.severity));
+        label.textContent = event.title || "Telemetry event";
+        element.appendChild(label);
+        element.title = `${event.title} · ${new Date(event.occurredAt).toLocaleString("id-ID")}`;
+      }
+      eventMarkersRef.current.push(new maplibregl.Marker({ element, anchor: "bottom" }).setLngLat([Number(event.longitude), Number(event.latitude)]).addTo(map));
     });
-  }, [events, showEvents, mapReady]);
+  }, [events, showEvents, compactEvents, mapReady]);
 
   if (startupError) return <div className="dw-map dw-map-empty">3D map is unavailable on this browser. Use 2D mode or enable hardware acceleration.</div>;
   return <div className={`dw-map dw-maplibre-3d${brightMap ? " dw-map-bright" : ""}`}>
@@ -439,6 +446,59 @@ function routePointGeoJson(data: RouteGeoJson, visible: boolean) {
     properties: {},
     geometry: { type: "MultiPoint" as const, coordinates },
   };
+}
+
+
+function eventMarkerElement(event: WorkspaceMapEvent) {
+  const element = document.createElement("div");
+  element.className = "dw-trip-map-pin dw-trip-event-pin-compact";
+
+  const icon = document.createElement("span");
+  icon.className = "dw-trip-event-icon";
+  icon.style.setProperty("--trip-pin", eventColor(event.severity));
+  icon.dataset.glyph = eventGlyph(event.title || "Telemetry event");
+  icon.setAttribute("aria-hidden", "true");
+  element.appendChild(icon);
+
+  const tooltip = document.createElement("div");
+  tooltip.className = "dw-trip-event-tooltip-card";
+  tooltip.setAttribute("role", "tooltip");
+  const title = document.createElement("strong");
+  title.textContent = event.title || "Telemetry event";
+  const occurredAt = document.createElement("span");
+  occurredAt.textContent = `${formatEventTime(event.occurredAt)}${event.telemetryId != null ? ` · Telemetry #${event.telemetryId}` : ""}`;
+  tooltip.append(title, occurredAt);
+  if (event.message?.trim()) {
+    const message = document.createElement("p");
+    message.textContent = event.message.trim();
+    tooltip.appendChild(message);
+  }
+  const speed = document.createElement("span");
+  speed.textContent = `Speed: ${Number.isFinite(event.speed) ? `${Number(event.speed).toFixed(1)} km/h` : "-"}`;
+  const coordinate = document.createElement("span");
+  coordinate.textContent = `Lokasi report (${locationSourceLabel(event.locationSource)}): ${Number(event.latitude).toFixed(5)}, ${Number(event.longitude).toFixed(5)}`;
+  tooltip.append(speed, coordinate);
+  element.appendChild(tooltip);
+  return element;
+}
+
+function locationSourceLabel(source?: string | null) {
+  return source === "TRIGGER_TELEMETRY_GPS" ? "GPS paket pemicu" : "GPS event tersimpan";
+}
+
+function eventGlyph(title: string) {
+  const value = title.toLowerCase();
+  if (value.includes("ignition") || value.includes("engine")) return "⚡";
+  if (value.includes("door") || value.includes("lock")) return "▣";
+  if (value.includes("speed")) return "↗";
+  if (value.includes("geofence") || value.includes("zone")) return "◎";
+  if (value.includes("battery") || value.includes("power")) return "ϟ";
+  return "!";
+}
+
+function formatEventTime(value: string) {
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString("id-ID") : value;
 }
 
 function eventColor(severity?: string | null) {

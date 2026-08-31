@@ -8,10 +8,24 @@ public final class DeviceWorkspaceTripRouteDtos {
     public record TripSummary(
             String id, String type, String status, String startTime, String endTime,
             long durationSeconds, double distanceKm, double averageSpeed,
-            double maximumSpeed, String driverName,
+            double maximumSpeed, String driverName, String vehiclePlateNumber,
+            Double fuelConsumption, Double fuelStart, Double fuelFinish,
             Double startLatitude, Double startLongitude,
             Double endLatitude, Double endLongitude
-    ) {}
+    ) {
+        public TripSummary(
+                String id, String type, String status, String startTime, String endTime,
+                long durationSeconds, double distanceKm, double averageSpeed,
+                double maximumSpeed, String driverName,
+                Double fuelConsumption, Double fuelStart, Double fuelFinish,
+                Double startLatitude, Double startLongitude,
+                Double endLatitude, Double endLongitude
+        ) {
+            this(id, type, status, startTime, endTime, durationSeconds, distanceKm, averageSpeed,
+                    maximumSpeed, driverName, "-", fuelConsumption, fuelStart, fuelFinish,
+                    startLatitude, startLongitude, endLatitude, endLongitude);
+        }
+    }
     public record TripInstrumentSnapshot(
             Double engineRpm, Double fuelLevel, Double fuelConsumption, String fuelConsumptionUnit,
             Double batterySoc, Double batteryConsumptionKw,
@@ -26,7 +40,14 @@ public final class DeviceWorkspaceTripRouteDtos {
     public record SelectedRoutesRequest(List<SelectedRouteRange> ranges) {}
     public record SelectedRoutesResponse(List<TripRouteOverlay> routes) {}
     public record TripEvent(Long id, Long telemetryId, String title, String message, String severity,
-                            String occurredAt, Double latitude, Double longitude, Double speed) {}
+                            String occurredAt, Double latitude, Double longitude, Double speed,
+                            String locationSource) {
+        public TripEvent(Long id, Long telemetryId, String title, String message, String severity,
+                         String occurredAt, Double latitude, Double longitude, Double speed) {
+            this(id, telemetryId, title, message, severity, occurredAt, latitude, longitude, speed,
+                    telemetryId == null ? "EVENT_RECORDED_GPS" : "TRIGGER_TELEMETRY_GPS");
+        }
+    }
     public record ParameterValue(String fieldCode, String label, String value, String unit, String category) {}
     public record TripLogRow(Long telemetryId, String imei, String occurredAt, String receivedAt, String protocol, String source,
                              String driverName, String vehiclePlateNumber,

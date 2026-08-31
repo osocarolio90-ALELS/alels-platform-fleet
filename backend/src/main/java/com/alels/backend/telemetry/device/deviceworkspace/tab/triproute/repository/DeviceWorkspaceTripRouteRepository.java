@@ -65,10 +65,13 @@ public class DeviceWorkspaceTripRouteRepository {
                                 ELSE n.numeric_value END END) AS ignition,
                        MAX(CASE WHEN n.field_code = 'movement' THEN
                            CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END
-                                ELSE n.numeric_value END END) AS movement
+                                ELSE n.numeric_value END END) AS movement,
+                       MAX(CASE WHEN n.field_code = 'fuel_level' THEN n.numeric_value END) AS fuel_level,
+                       MAX(CASE WHEN n.field_code = 'fuel_rate' THEN n.numeric_value END) AS fuel_rate,
+                       MAX(CASE WHEN n.field_code = 'fuel_used' THEN n.numeric_value END) AS fuel_used
                 FROM telemetry t
                 LEFT JOIN telemetry_normalized n ON n.telemetry_id = t.id AND n.imei = t.imei
-                     AND n.field_code IN ('ignition', 'movement')
+                     AND n.field_code IN ('ignition', 'movement', 'fuel_level', 'fuel_rate', 'fuel_used')
                 WHERE t.imei = ? AND COALESCE(t.device_time, t.server_time) BETWEEN ? AND ?
                 GROUP BY t.id, t.server_time, t.device_time, t.latitude, t.longitude, t.speed,
                          t.angle, t.altitude, t.satellites, t.hdop, t.protocol, t.channel,
@@ -97,7 +100,9 @@ public class DeviceWorkspaceTripRouteRepository {
                        COALESCE(t.device_time, t.server_time) AS occurred_at,
                        t.server_time AS received_at, t.latitude, t.longitude, t.speed, t.angle,
                        t.altitude, t.satellites, t.hdop, t.protocol, t.channel, t.driver_name,
-                       t.vehicle_status, NULL::double precision AS ignition, NULL::double precision AS movement
+                       t.vehicle_status, NULL::double precision AS ignition, NULL::double precision AS movement,
+                       NULL::double precision AS fuel_level, NULL::double precision AS fuel_rate,
+                       NULL::double precision AS fuel_used
                 FROM selected_ranges r
                 JOIN telemetry t
                   ON t.imei = ?
@@ -135,7 +140,9 @@ public class DeviceWorkspaceTripRouteRepository {
                     SELECT t.id, COALESCE(t.device_time, t.server_time) AS occurred_at, t.server_time AS received_at,
                            t.latitude, t.longitude, t.speed, t.angle, t.altitude, t.satellites,
                            t.hdop, t.protocol, t.channel, t.driver_name, t.vehicle_status,
-                           NULL::double precision AS ignition, NULL::double precision AS movement
+                           NULL::double precision AS ignition, NULL::double precision AS movement,
+                           NULL::double precision AS fuel_level, NULL::double precision AS fuel_rate,
+                           NULL::double precision AS fuel_used
                     FROM telemetry t
                     WHERE t.imei = ? AND t.id IN (%s)
                     ORDER BY occurred_at, t.id
@@ -162,10 +169,13 @@ public class DeviceWorkspaceTripRouteRepository {
                                 ELSE n.numeric_value END END) AS ignition,
                        MAX(CASE WHEN n.field_code = 'movement' THEN
                            CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END
-                                ELSE n.numeric_value END END) AS movement
+                                ELSE n.numeric_value END END) AS movement,
+                       MAX(CASE WHEN n.field_code = 'fuel_level' THEN n.numeric_value END) AS fuel_level,
+                       MAX(CASE WHEN n.field_code = 'fuel_rate' THEN n.numeric_value END) AS fuel_rate,
+                       MAX(CASE WHEN n.field_code = 'fuel_used' THEN n.numeric_value END) AS fuel_used
                 FROM telemetry t
                 LEFT JOIN telemetry_normalized n ON n.telemetry_id = t.id AND n.imei = t.imei
-                     AND n.field_code IN ('ignition', 'movement')
+                     AND n.field_code IN ('ignition', 'movement', 'fuel_level', 'fuel_rate', 'fuel_used')
                 WHERE t.imei = ? AND COALESCE(t.device_time, t.server_time) BETWEEN ? AND ?
                 GROUP BY t.id, t.server_time, t.device_time, t.latitude, t.longitude, t.speed,
                          t.angle, t.altitude, t.satellites, t.hdop, t.protocol, t.channel,
@@ -184,7 +194,9 @@ public class DeviceWorkspaceTripRouteRepository {
                 SELECT t.id, COALESCE(t.device_time, t.server_time) AS occurred_at, t.server_time AS received_at,
                        t.latitude, t.longitude, t.speed, t.angle, t.altitude, t.satellites,
                        t.hdop, t.protocol, t.channel, t.driver_name, t.vehicle_status,
-                       NULL::double precision AS ignition, NULL::double precision AS movement
+                       NULL::double precision AS ignition, NULL::double precision AS movement,
+                       NULL::double precision AS fuel_level, NULL::double precision AS fuel_rate,
+                       NULL::double precision AS fuel_used
                 FROM telemetry t
                 WHERE t.imei = ? AND (t.server_time BETWEEN ? AND ? OR t.device_time BETWEEN ? AND ?)
                 %s
@@ -213,7 +225,9 @@ public class DeviceWorkspaceTripRouteRepository {
                 SELECT t.id, COALESCE(t.device_time, t.server_time) AS occurred_at, t.server_time AS received_at,
                        t.latitude, t.longitude, t.speed, t.angle, t.altitude, t.satellites,
                        t.hdop, t.protocol, t.channel, t.driver_name, t.vehicle_status,
-                       NULL::double precision AS ignition, NULL::double precision AS movement
+                       NULL::double precision AS ignition, NULL::double precision AS movement,
+                       NULL::double precision AS fuel_level, NULL::double precision AS fuel_rate,
+                       NULL::double precision AS fuel_used
                 FROM telemetry t
                 WHERE t.imei = ?
                   AND EXISTS (
@@ -436,8 +450,13 @@ public class DeviceWorkspaceTripRouteRepository {
                 SELECT e.id, e.telemetry_id,
                        COALESCE(NULLIF(mapping.source_name, ''), NULLIF(e.io_name, ''), NULLIF(e.title, ''), e.event_code, 'Telemetry event') AS title,
                        COALESCE(e.message, '') AS message, COALESCE(e.severity, 'INFO') AS severity,
-                       e.occurred_at, e.latitude, e.longitude, e.speed
+                       e.occurred_at, COALESCE(trigger.latitude, e.latitude) AS latitude,
+                       COALESCE(trigger.longitude, e.longitude) AS longitude,
+                       COALESCE(trigger.speed, e.speed) AS speed,
+                       CASE WHEN trigger.latitude IS NOT NULL AND trigger.longitude IS NOT NULL
+                            THEN 'TRIGGER_TELEMETRY_GPS' ELSE 'EVENT_RECORDED_GPS' END AS location_source
                 FROM telemetry_events e
+                LEFT JOIN telemetry trigger ON trigger.id = e.telemetry_id AND trigger.imei = e.imei
                 LEFT JOIN LATERAL (
                     SELECT m.source_name
                     FROM device_io_mappings m
@@ -464,8 +483,13 @@ public class DeviceWorkspaceTripRouteRepository {
                 SELECT e.id, e.telemetry_id,
                        COALESCE(NULLIF(mapping.source_name, ''), NULLIF(e.io_name, ''), NULLIF(e.title, ''), e.event_code, 'Telemetry event') AS title,
                        COALESCE(e.message, '') AS message, COALESCE(e.severity, 'INFO') AS severity,
-                       e.occurred_at, e.latitude, e.longitude, e.speed
+                       e.occurred_at, COALESCE(trigger.latitude, e.latitude) AS latitude,
+                       COALESCE(trigger.longitude, e.longitude) AS longitude,
+                       COALESCE(trigger.speed, e.speed) AS speed,
+                       CASE WHEN trigger.latitude IS NOT NULL AND trigger.longitude IS NOT NULL
+                            THEN 'TRIGGER_TELEMETRY_GPS' ELSE 'EVENT_RECORDED_GPS' END AS location_source
                 FROM telemetry_events e
+                LEFT JOIN telemetry trigger ON trigger.id = e.telemetry_id AND trigger.imei = e.imei
                 LEFT JOIN LATERAL (
                     SELECT m.source_name
                     FROM device_io_mappings m
@@ -509,7 +533,7 @@ public class DeviceWorkspaceTripRouteRepository {
         }).toList();
     }
 
-    private List<VehicleAssignmentPeriod> vehicleAssignmentPeriods(String imei, Instant from, Instant to) {
+    public List<VehicleAssignmentPeriod> vehicleAssignmentPeriods(String imei, Instant from, Instant to) {
         return jdbc.query("""
                 SELECT a.assigned_at AS start_at,
                        CASE WHEN a.removed_at IS NOT NULL THEN a.removed_at
@@ -528,7 +552,7 @@ public class DeviceWorkspaceTripRouteRepository {
                 imei, Timestamp.from(to), Timestamp.from(from));
     }
 
-    private List<DriverAssignmentPeriod> driverAssignmentPeriods(String imei, Instant from, Instant to) {
+    public List<DriverAssignmentPeriod> driverAssignmentPeriods(String imei, Instant from, Instant to) {
         return jdbc.query("""
                 WITH device_scope AS (
                     SELECT id, company_id FROM devices WHERE imei = ? LIMIT 1
@@ -591,12 +615,12 @@ public class DeviceWorkspaceTripRouteRepository {
                 Timestamp.from(to), Timestamp.from(from));
     }
 
-    private static String vehiclePlateAt(List<VehicleAssignmentPeriod> periods, Instant occurredAt) {
+    public static String vehiclePlateAt(List<VehicleAssignmentPeriod> periods, Instant occurredAt) {
         return periods.stream().filter(period -> period.includes(occurredAt)).map(VehicleAssignmentPeriod::plateNumber)
                 .filter(value -> value != null && !value.isBlank() && !"-".equals(value)).findFirst().orElse("-");
     }
 
-    private static String driverAt(List<DriverAssignmentPeriod> periods, Instant occurredAt) {
+    public static String driverAt(List<DriverAssignmentPeriod> periods, Instant occurredAt) {
         return periods.stream().filter(period -> period.includes(occurredAt)).map(DriverAssignmentPeriod::driverName)
                 .filter(value -> value != null && !value.isBlank() && !"-".equals(value)).findFirst().orElse("-");
     }
@@ -615,7 +639,7 @@ public class DeviceWorkspaceTripRouteRepository {
                 rs.getLong("id"), rs.getObject("telemetry_id", Long.class), rs.getString("title"),
                 rs.getString("message"), rs.getString("severity"), rs.getString("occurred_at"),
                 rs.getObject("latitude", Double.class), rs.getObject("longitude", Double.class),
-                rs.getObject("speed", Double.class));
+                rs.getObject("speed", Double.class), rs.getString("location_source"));
     }
 
     private TelemetryPoint point(ResultSet rs) throws SQLException {
@@ -626,7 +650,9 @@ public class DeviceWorkspaceTripRouteRepository {
                 rs.getObject("altitude", Integer.class), rs.getObject("satellites", Integer.class),
                 rs.getObject("hdop", Double.class), rs.getString("protocol"), rs.getString("channel"),
                 rs.getString("driver_name"), rs.getString("vehicle_status"),
-                rs.getObject("ignition", Double.class), rs.getObject("movement", Double.class));
+                rs.getObject("ignition", Double.class), rs.getObject("movement", Double.class),
+                rs.getObject("fuel_level", Double.class), rs.getObject("fuel_rate", Double.class),
+                rs.getObject("fuel_used", Double.class));
     }
 
 
@@ -782,10 +808,10 @@ public class DeviceWorkspaceTripRouteRepository {
         jdbc.update("DELETE FROM trip_route_instrument_source_assignments WHERE company_id = ?", companyId);
     }
 
-    private record VehicleAssignmentPeriod(Instant startAt, Instant endAt, String plateNumber) {
+    public record VehicleAssignmentPeriod(Instant startAt, Instant endAt, String plateNumber) {
         boolean includes(Instant value) { return value != null && !value.isBefore(startAt) && (endAt == null || !value.isAfter(endAt)); }
     }
-    private record DriverAssignmentPeriod(Instant startAt, Instant endAt, String driverName) {
+    public record DriverAssignmentPeriod(Instant startAt, Instant endAt, String driverName) {
         boolean includes(Instant value) { return value != null && !value.isBefore(startAt) && (endAt == null || !value.isAfter(endAt)); }
     }
 
@@ -794,5 +820,13 @@ public class DeviceWorkspaceTripRouteRepository {
     public record TelemetryPoint(Long id, Instant occurredAt, Instant receivedAt, Double latitude, Double longitude, Double speed,
                                  Integer angle, Integer altitude, Integer satellites, Double hdop,
                                  String protocol, String channel, String driverName, String vehicleStatus,
-                                 Double ignition, Double movement) {}
+                                 Double ignition, Double movement, Double fuelLevel, Double fuelRate, Double fuelUsed) {
+        public TelemetryPoint(Long id, Instant occurredAt, Instant receivedAt, Double latitude, Double longitude, Double speed,
+                              Integer angle, Integer altitude, Integer satellites, Double hdop,
+                              String protocol, String channel, String driverName, String vehicleStatus,
+                              Double ignition, Double movement) {
+            this(id, occurredAt, receivedAt, latitude, longitude, speed, angle, altitude, satellites, hdop, protocol, channel,
+                    driverName, vehicleStatus, ignition, movement, null, null, null);
+        }
+    }
 }

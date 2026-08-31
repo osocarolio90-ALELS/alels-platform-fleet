@@ -40,7 +40,9 @@ WITH model_seed(model_code, model_name, dictionary_code, sort_order) AS (
     VALUES
         ('FMB150', 'FMB150', 'FMB150', 10),
         ('FMC150', 'FMC150', 'FMC150', 20),
-        ('FMC650', 'FMC650', 'FMC650', 30)
+        ('FMC650', 'FMC650', 'FMC650', 30),
+        ('FMB003', 'FMB003', 'FMB003', 40),
+        ('FMC003', 'FMC003', 'FMC003', 50)
 )
 INSERT INTO device_models (
     brand_id, model_code, model_name, vendor, protocol_code, parser_code,
@@ -68,7 +70,9 @@ WITH dictionary_seed(model_code, dictionary_code, dictionary_name, dictionary_fi
     VALUES
         ('FMB150', 'FMB150', 'Teltonika FMB150 AVL dictionary', 'fmb150.json'),
         ('FMC150', 'FMC150', 'Teltonika FMC150 AVL dictionary', 'fmc150.json'),
-        ('FMC650', 'FMC650', 'Teltonika FMC650 AVL dictionary', 'fmc650.json')
+        ('FMC650', 'FMC650', 'Teltonika FMC650 AVL dictionary', 'fmc650.json'),
+        ('FMB003', 'FMB003', 'Teltonika FMB003 AVL dictionary', 'fmb003.json'),
+        ('FMC003', 'FMC003', 'Teltonika FMC003 AVL dictionary', 'fmc003.json')
 )
 INSERT INTO dictionary_registry (
     device_model_id, dictionary_code, dictionary_name, dictionary_file,

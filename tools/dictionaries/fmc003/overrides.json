@@ -1,0 +1,38 @@
+{
+  "66": {
+    "name": "External Voltage",
+    "unit": "V",
+    "multiplier": 0.001,
+    "category": "Permanent I/O elements"
+  },
+  "67": {
+    "name": "Battery Voltage",
+    "unit": "V",
+    "multiplier": 0.001,
+    "category": "Permanent I/O elements"
+  },
+  "181": {
+    "name": "GNSS PDOP",
+    "unit": "-",
+    "multiplier": 0.1,
+    "category": "Permanent I/O elements"
+  },
+  "182": {
+    "name": "GNSS HDOP",
+    "unit": "-",
+    "multiplier": 0.1,
+    "category": "Permanent I/O elements"
+  },
+  "239": {
+    "name": "Ignition",
+    "unit": "-",
+    "multiplier": 1,
+    "category": "Permanent I/O elements"
+  },
+  "240": {
+    "name": "Movement",
+    "unit": "-",
+    "multiplier": 1,
+    "category": "Permanent I/O elements"
+  }
+}
