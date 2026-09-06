@@ -265,8 +265,8 @@ public class DeviceWorkspaceTripRouteService {
             if (selected == null || selected.from() == null || selected.to() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip/Stop selection range is incomplete.");
             }
-            TimeRange checked = range(selected.from(), selected.to());
-            parsed.add(new TimeWindow(checked.from(), checked.to()));
+            TimeWindow checked = selectedTimeWindow(selected.from(), selected.to());
+            parsed.add(checked);
         }
         parsed.sort(Comparator.comparing(timeWindow -> timeWindow.from()));
         if (Duration.between(parsed.getFirst().from(), parsed.getLast().to()).compareTo(MAX_RANGE) > 0) {
@@ -308,7 +308,7 @@ public class DeviceWorkspaceTripRouteService {
             if (tripId.length() > 160 || !ids.add(tripId)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip/Stop route selection id is invalid or duplicated.");
             }
-            TimeRange checked = range(selected.from(), selected.to());
+            TimeWindow checked = selectedTimeWindow(selected.from(), selected.to());
             result.add(new RouteWindow(tripId, checked.from(), checked.to()));
             minimum = minimum == null || checked.from().isBefore(minimum) ? checked.from() : minimum;
             maximum = maximum == null || checked.to().isAfter(maximum) ? checked.to() : maximum;
@@ -363,16 +363,32 @@ public class DeviceWorkspaceTripRouteService {
     }
 
     private String vehicleState(TelemetryPoint point) {
-        if (point != null && point.vehicleStatus() != null) {
-            String canonical = point.vehicleStatus().trim().toUpperCase(java.util.Locale.ROOT);
-            if (Set.of("STOP", "IDLE", "TRIP").contains(canonical)) return canonical;
-        }
-        Double ignition = point == null ? null : point.ignition();
-        Double speed = point == null ? null : point.speed();
-        if (ignition == null || speed == null) return "STOP";
+        String canonical = canonicalVehicleState(point == null ? null : point.vehicleStatus());
+        if (canonical != null) return canonical;
+        String derived = deriveVehicleState(point == null ? null : point.ignition(), point == null ? null : point.speed());
+        return derived == null ? "STOP" : derived;
+    }
+
+    private static String canonicalVehicleState(String value) {
+        if (value == null) return null;
+        String normalized = value.trim().toUpperCase(java.util.Locale.ROOT);
+        return Set.of("STOP", "IDLE", "TRIP").contains(normalized) ? normalized : null;
+    }
+
+    private static String deriveVehicleState(Double ignition, Double speed) {
+        if (!validIgnition(ignition) || !validSpeed(speed)) return null;
         if (ignition > 0 && speed > MOVEMENT_SPEED_KMH) return "TRIP";
         if (ignition > 0) return "IDLE";
-        return "STOP";
+        if (ignition <= 0 && speed <= MOVEMENT_SPEED_KMH) return "STOP";
+        return null;
+    }
+
+    private static boolean validIgnition(Double value) {
+        return value != null && Double.isFinite(value) && (Math.abs(value) < 1e-9 || Math.abs(value - 1.0) < 1e-9);
+    }
+
+    private static boolean validSpeed(Double value) {
+        return value != null && Double.isFinite(value) && value >= 0 && value <= MAX_PLAUSIBLE_SPEED_KMH;
     }
 
     private List<TripSummary> withOperationCosts(List<TripSummary> summaries, EnergyCostProfile energyCost) {
@@ -432,6 +448,8 @@ public class DeviceWorkspaceTripRouteService {
 
     private final class TripListAccumulator {
         private final List<TripSummary> segments = new ArrayList<>();
+        private final VehicleStateTimeline stateTimeline = new VehicleStateTimeline();
+        private final List<TelemetryPoint> unresolvedPrefix = new ArrayList<>();
         private SegmentAccumulator current;
         private String currentType;
         private TelemetryPoint previous;
@@ -443,12 +461,26 @@ public class DeviceWorkspaceTripRouteService {
                 flush(false);
                 current = null;
                 currentType = null;
+                unresolvedPrefix.clear();
+                stateTimeline.reset();
             }
 
-            String pointType = vehicleState(point);
+            String pointType = stateTimeline.resolve(point);
+            if (pointType == null) {
+                // Do not fabricate STOP/IDLE/TRIP when this packet and the recent device-time
+                // history contain insufficient evidence. Hold only the initial unresolved rows;
+                // once a valid state arrives they inherit that nearest chronological state.
+                if (current == null) unresolvedPrefix.add(point);
+                else current.add(point);
+                previous = point;
+                return;
+            }
+
             if (current == null) {
                 current = new SegmentAccumulator();
                 currentType = pointType;
+                for (TelemetryPoint pending : unresolvedPrefix) current.add(pending);
+                unresolvedPrefix.clear();
             } else if (!currentType.equals(pointType)) {
                 flush(false);
                 current = new SegmentAccumulator();
@@ -470,6 +502,62 @@ public class DeviceWorkspaceTripRouteService {
             if (current != null && current.count() > 0) {
                 segments.add(current.summary(currentType, inProgress));
             }
+        }
+    }
+
+    private static final class VehicleStateTimeline {
+        private Double lastIgnition;
+        private Instant lastIgnitionAt;
+        private Double lastSpeed;
+        private Instant lastSpeedAt;
+        private String lastResolvedState;
+        private Instant lastResolvedAt;
+
+        String resolve(TelemetryPoint point) {
+            if (point == null || point.occurredAt() == null) return null;
+            Instant at = point.occurredAt();
+
+            if (validIgnition(point.ignition())) {
+                lastIgnition = point.ignition();
+                lastIgnitionAt = at;
+            }
+            if (validSpeed(point.speed())) {
+                lastSpeed = point.speed();
+                lastSpeedAt = at;
+            }
+
+            Double ignition = validIgnition(point.ignition()) ? point.ignition() : fresh(lastIgnition, lastIgnitionAt, at);
+            Double speed = validSpeed(point.speed()) ? point.speed() : fresh(lastSpeed, lastSpeedAt, at);
+            String derived = deriveVehicleState(ignition, speed);
+            String canonical = canonicalVehicleState(point.vehicleStatus());
+
+            String resolved = derived != null ? derived : canonical;
+            if (resolved == null && lastResolvedState != null && isFresh(lastResolvedAt, at)) {
+                resolved = lastResolvedState;
+            }
+            if (resolved != null) {
+                lastResolvedState = resolved;
+                lastResolvedAt = at;
+            }
+            return resolved;
+        }
+
+        void reset() {
+            lastIgnition = null;
+            lastIgnitionAt = null;
+            lastSpeed = null;
+            lastSpeedAt = null;
+            lastResolvedState = null;
+            lastResolvedAt = null;
+        }
+
+        private static Double fresh(Double value, Instant valueAt, Instant at) {
+            return value != null && isFresh(valueAt, at) ? value : null;
+        }
+
+        private static boolean isFresh(Instant valueAt, Instant at) {
+            if (valueAt == null || at == null || valueAt.isAfter(at)) return false;
+            return Duration.between(valueAt, at).compareTo(MAX_PACKET_GAP) <= 0;
         }
     }
 
@@ -504,8 +592,6 @@ public class DeviceWorkspaceTripRouteService {
             previous = point;
         }
 
-        TelemetryPoint first() { return first; }
-        TelemetryPoint last() { return last; }
         long count() { return count; }
 
         TripSummary summary(String type, boolean inProgress) {
@@ -706,6 +792,25 @@ public class DeviceWorkspaceTripRouteService {
         if (deviceId == null || deviceId <= 0) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Device id is invalid.");
         return deviceRepository.accessById(deviceId, user.companyId(), user.normalizedRole())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found or outside your scope."));
+    }
+
+    private TimeWindow selectedTimeWindow(String fromValue, String toValue) {
+        try {
+            Instant from = Instant.parse(fromValue), to = Instant.parse(toValue);
+            Duration duration = Duration.between(from, to);
+            if (duration.isNegative()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip/Idle/Stop selection cannot end before it starts.");
+            }
+            if (duration.compareTo(MAX_RANGE) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trip/Idle/Stop selection cannot exceed 31 days.");
+            }
+            // A one-packet state transition legitimately has start == finish. Keep that exact
+            // device-time instant so the packet can still be selected for route/log/event history.
+            return new TimeWindow(from, to);
+        } catch (DateTimeParseException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Trip/Idle/Stop selection must use ISO-8601 timestamps.", exception);
+        }
     }
 
     private TimeRange range(String fromValue, String toValue) {

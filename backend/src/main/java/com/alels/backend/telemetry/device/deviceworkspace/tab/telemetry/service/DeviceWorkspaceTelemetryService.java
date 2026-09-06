@@ -76,7 +76,7 @@ public class DeviceWorkspaceTelemetryService {
                 packet == null ? null : packet.protocol(), packet == null ? null : packet.channel()
         );
         PacketInfo packetInfo = packet == null ? null : new PacketInfo(packet.id(), packet.sequence(), packet.serverTime());
-        String vehicleStatus = validStatus(packet == null ? null : packet.vehicleStatus())
+        String vehicleStatus = packet != null && validStatus(packet.vehicleStatus())
                 ? packet.vehicleStatus().toUpperCase(Locale.ROOT) : resolveVehicleStatus(parameters);
 
         return new WorkspaceTelemetryResponse(
@@ -88,13 +88,23 @@ public class DeviceWorkspaceTelemetryService {
     }
 
     private String resolveVehicleStatus(List<DataParameter> parameters) {
-        Double ignition = parameters.stream().filter(p -> isParameter(p, "ignition")).map(DataParameter::numericValue).filter(v -> v != null).findFirst().orElse(null);
-        Double speed = parameters.stream().filter(p -> isParameter(p, "speed")).map(DataParameter::numericValue).filter(v -> v != null).findFirst().orElse(null);
+        Double ignition = firstNumericValue(parameters, "ignition");
+        Double speed = firstNumericValue(parameters, "speed");
         if (ignition == null || speed == null) return "STOP";
         if (ignition > 0 && speed > 5) return "TRIP";
         if (ignition > 0) return "IDLE";
         if (speed <= 5) return "STOP";
         return "STOP";
+    }
+
+    private Double firstNumericValue(List<DataParameter> parameters, String code) {
+        for (DataParameter parameter : parameters) {
+            if (isParameter(parameter, code)) {
+                Double value = parameter.numericValue();
+                if (value != null) return value;
+            }
+        }
+        return null;
     }
 
     private boolean validStatus(String value) { return value != null && Set.of("STOP", "IDLE", "TRIP").contains(value.toUpperCase(Locale.ROOT)); }

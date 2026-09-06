@@ -75,6 +75,54 @@ class DeviceWorkspaceTripRouteServiceTest {
         verify(repository).selectedLogPoints(eq("359000000000011"), any(), eq(0), eq(50));
     }
 
+
+    @Test
+    void selectedLogsAcceptsSinglePacketZeroDurationSegment() {
+        authorized();
+        Instant at = Instant.parse("2026-08-11T08:00:00Z");
+        when(repository.selectedLogCount(eq("359000000000011"), any())).thenReturn(1L);
+        when(repository.selectedLogPoints(eq("359000000000011"), any(), eq(0), eq(15)))
+                .thenReturn(List.of(point(1L, at, 0.0, 0.0)));
+
+        var result = service.selectedLogs(user, 11L, new SelectedLogsRequest(
+                List.of(new SelectedTimeRange(at.toString(), at.toString())), 0, 15, null));
+
+        assertEquals(1L, result.totalRows());
+    }
+
+    @Test
+    void carriesForwardRecentIgnitionWhenBufferedPacketOmitsIgnition() {
+        authorized();
+        Instant start = Instant.parse("2026-08-11T08:00:00Z");
+        mockTripPoints(List.of(
+                pointWithSignals(1L, start, 0.0, 1.0, "IDLE"),
+                pointWithSignals(2L, start.plusSeconds(30), 20.0, null, "UNKNOWN"),
+                pointWithSignals(3L, start.plusSeconds(60), 0.0, 1.0, "IDLE")
+        ));
+
+        var result = service.trips(user, 11L, "2026-08-11T00:00:00Z", "2026-08-12T00:00:00Z");
+
+        assertEquals(List.of("IDLE", "TRIP", "IDLE"),
+                result.trips().stream().map(trip -> trip.type()).toList());
+    }
+
+    @Test
+    void carriesForwardRecentSpeedWhenBufferedPacketOmitsSpeed() {
+        authorized();
+        Instant start = Instant.parse("2026-08-11T08:00:00Z");
+        mockTripPoints(List.of(
+                pointWithSignals(1L, start, 20.0, 1.0, "TRIP"),
+                pointWithSignals(2L, start.plusSeconds(30), null, 1.0, "UNKNOWN"),
+                pointWithSignals(3L, start.plusSeconds(60), 0.0, 1.0, "IDLE")
+        ));
+
+        var result = service.trips(user, 11L, "2026-08-11T00:00:00Z", "2026-08-12T00:00:00Z");
+
+        assertEquals(List.of("IDLE", "TRIP"),
+                result.trips().stream().map(trip -> trip.type()).toList());
+        assertEquals(30, result.trips().getLast().durationSeconds());
+    }
+
     @Test
     void rejectsRangesLongerThanThirtyOneDays() {
         authorized();
@@ -420,6 +468,12 @@ class DeviceWorkspaceTripRouteServiceTest {
 
     private TelemetryPoint point(Long id, Instant time, double speed, double ignition) {
         return pointWithNullableIgnition(id, time, speed, ignition);
+    }
+
+    private TelemetryPoint pointWithSignals(Long id, Instant time, Double speed, Double ignition, String vehicleStatus) {
+        return new TelemetryPoint(id, time, time, -6.19 + id / 10_000.0, 106.82 + id / 10_000.0,
+                speed, 10, 12, 10, 0.8, "TELTONIKA_CODEC8E", "GSM", "Karina",
+                vehicleStatus, ignition, speed != null && speed > 0 ? 1.0 : 0.0);
     }
 
     private TelemetryPoint fuelPoint(Long id, Instant time, double speed, Double ignition,

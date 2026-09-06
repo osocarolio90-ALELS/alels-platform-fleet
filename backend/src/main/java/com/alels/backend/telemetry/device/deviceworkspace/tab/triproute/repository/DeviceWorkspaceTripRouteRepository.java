@@ -235,7 +235,7 @@ public class DeviceWorkspaceTripRouteRepository {
                       SELECT 1 FROM selected_ranges r
                       WHERE COALESCE(t.device_time, t.server_time) BETWEEN r.from_at AND r.to_at
                   )
-                ORDER BY received_at DESC, t.id DESC
+                ORDER BY occurred_at DESC, received_at DESC, t.id DESC
                 LIMIT ? OFFSET ?
                 """.formatted(values);
         List<Object> args = selectedRangeArgs(ranges);
@@ -407,7 +407,7 @@ public class DeviceWorkspaceTripRouteRepository {
                 ORDER BY n.telemetry_id, n.id
                 """, (RowCallbackHandler) rs -> {
             InstrumentAccumulator item = values.computeIfAbsent(rs.getLong("telemetry_id"), ignored -> new InstrumentAccumulator());
-            item.acceptNormalized(rs.getString("field_code"), rs.getObject("numeric_value", Double.class), rs.getString("unit"));
+            item.acceptNormalized(rs.getString("field_code"), nullableDouble(rs, "numeric_value"), rs.getString("unit"));
         }, imei, Timestamp.from(from), Timestamp.from(to));
 
         jdbc.query("""
@@ -428,7 +428,7 @@ public class DeviceWorkspaceTripRouteRepository {
                 ORDER BY i.telemetry_id, i.id
                 """, (RowCallbackHandler) rs -> {
             InstrumentAccumulator item = values.computeIfAbsent(rs.getLong("telemetry_id"), ignored -> new InstrumentAccumulator());
-            item.acceptIo(rs.getString("io_name"), rs.getObject("numeric_value", Double.class), rs.getString("unit"));
+            item.acceptIo(rs.getString("io_name"), nullableDouble(rs, "numeric_value"), rs.getString("unit"));
         }, imei, Timestamp.from(from), Timestamp.from(to));
 
         Map<Long, TripInstrumentSnapshot> result = new LinkedHashMap<>();
@@ -665,6 +665,17 @@ public class DeviceWorkspaceTripRouteRepository {
                 .filter(value -> value != null && !value.isBlank() && !"-".equals(value)).findFirst().orElse("-");
     }
 
+    private static Double nullableDouble(ResultSet rs, String column) throws SQLException {
+        Object value = rs.getObject(column);
+        if (value == null) return null;
+        if (value instanceof Number number) return number.doubleValue();
+        try {
+            return Double.valueOf(value.toString());
+        } catch (NumberFormatException exception) {
+            throw new SQLException("Column " + column + " is not numeric: " + value, exception);
+        }
+    }
+
     private static Instant timestampInstant(ResultSet rs, String column) throws SQLException {
         Timestamp value = rs.getTimestamp(column);
         return value == null ? null : value.toInstant();
@@ -678,21 +689,21 @@ public class DeviceWorkspaceTripRouteRepository {
         return new TripEvent(
                 rs.getLong("id"), rs.getObject("telemetry_id", Long.class), rs.getString("title"),
                 rs.getString("message"), rs.getString("severity"), rs.getString("occurred_at"),
-                rs.getObject("latitude", Double.class), rs.getObject("longitude", Double.class),
-                rs.getObject("speed", Double.class), rs.getString("location_source"));
+                nullableDouble(rs, "latitude"), nullableDouble(rs, "longitude"),
+                nullableDouble(rs, "speed"), rs.getString("location_source"));
     }
 
     private TelemetryPoint point(ResultSet rs) throws SQLException {
         return new TelemetryPoint(rs.getLong("id"), rs.getTimestamp("occurred_at").toInstant(),
                 rs.getTimestamp("received_at").toInstant(),
-                rs.getObject("latitude", Double.class), rs.getObject("longitude", Double.class),
-                rs.getObject("speed", Double.class), rs.getObject("angle", Integer.class),
+                nullableDouble(rs, "latitude"), nullableDouble(rs, "longitude"),
+                nullableDouble(rs, "speed"), rs.getObject("angle", Integer.class),
                 rs.getObject("altitude", Integer.class), rs.getObject("satellites", Integer.class),
-                rs.getObject("hdop", Double.class), rs.getString("protocol"), rs.getString("channel"),
+                nullableDouble(rs, "hdop"), rs.getString("protocol"), rs.getString("channel"),
                 rs.getString("driver_name"), rs.getString("vehicle_status"),
-                rs.getObject("ignition", Double.class), rs.getObject("movement", Double.class),
-                rs.getObject("fuel_level", Double.class), rs.getObject("fuel_rate", Double.class),
-                rs.getObject("fuel_used", Double.class));
+                nullableDouble(rs, "ignition"), nullableDouble(rs, "movement"),
+                nullableDouble(rs, "fuel_level"), nullableDouble(rs, "fuel_rate"),
+                nullableDouble(rs, "fuel_used"));
     }
 
 

@@ -60,7 +60,9 @@ export function TripLogTable({ deviceId, imei, selectedSegments, rangeIdentity }
 
   const rows = query.data?.rows ?? [];
   const orderedRows = useMemo(() => [...rows].sort((left, right) =>
-    Date.parse(right.receivedAt) - Date.parse(left.receivedAt) || right.telemetryId - left.telemetryId), [rows]);
+    Date.parse(right.occurredAt) - Date.parse(left.occurredAt) ||
+    Date.parse(right.receivedAt) - Date.parse(left.receivedAt) ||
+    right.telemetryId - left.telemetryId), [rows]);
 
   const dynamic = useMemo(() => {
     const map = new Map<string, string>();
@@ -137,8 +139,8 @@ export function TripLogTable({ deviceId, imei, selectedSegments, rangeIdentity }
   return <section className="dw-trip-log">
     <header>
       <div>
-        <h2>Device Log History — Selected Trip &amp; Stop Data</h2>
-        <p>{selectedSegments.length ? `${selectedSegments.length} selected Trip/Stop item(s). Only telemetry inside the selected intervals is shown.` : "Select at least one Trip or Stop to display device log history."}</p>
+        <h2>Device Log History — Selected Trip, Idle &amp; Stop Data</h2>
+        <p>{selectedSegments.length ? `${selectedSegments.length} selected Trip/Idle/Stop item(s). Only telemetry inside the selected intervals is shown.` : "Select at least one Trip, Idle or Stop to display device log history."}</p>
       </div>
       <div className="dw-trip-table-actions">
         <label><Search/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search this page" disabled={!selectedSegments.length}/></label>
@@ -165,12 +167,12 @@ export function TripLogTable({ deviceId, imei, selectedSegments, rangeIdentity }
         <thead><tr>{visible.map((column, index) => <th key={column.key} className={index < 4 ? `sticky sticky-${index}` : ""}>{column.label}</th>)}</tr></thead>
         <tbody>
           {!selectedSegments.length
-            ? <tr><td className="dw-trip-log-empty" colSpan={Math.max(1, visible.length)}>No Trip/Stop selected.</td></tr>
+            ? <tr><td className="dw-trip-log-empty" colSpan={Math.max(1, visible.length)}>No Trip/Idle/Stop selected.</td></tr>
             : query.isLoading
               ? <tr><td className="dw-trip-log-empty" colSpan={Math.max(1, visible.length)}>Loading selected telemetry…</td></tr>
               : filtered.length
                 ? filtered.map(row => <tr key={row.telemetryId}>{visible.map((column, index) => <td key={column.key} className={index < 4 ? `sticky sticky-${index}` : ""}>{column.value(row)}</td>)}</tr>)
-                : <tr><td className="dw-trip-log-empty" colSpan={Math.max(1, visible.length)}>No telemetry rows for the selected Trip/Stop interval.</td></tr>}
+                : <tr><td className="dw-trip-log-empty" colSpan={Math.max(1, visible.length)}>No telemetry rows for the selected Trip/Idle/Stop interval.</td></tr>}
         </tbody>
       </table>
     </div>

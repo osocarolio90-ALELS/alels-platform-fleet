@@ -135,8 +135,7 @@ public class DeviceWorkspaceTelemetryRepository {
                 SELECT id, packet_sequence, server_time, device_time, protocol, channel, dictionary_code,
                        latitude, longitude, speed, angle, altitude, satellites, hdop,
                        priority, event_io_id,
-                       CASE WHEN server_time < NOW() - INTERVAL '30 minutes' THEN 'STOP'
-                            ELSE vehicle_status END AS vehicle_status,
+                       vehicle_status,
                        io_data::text AS io_data
                 FROM telemetry
                 WHERE imei = ?

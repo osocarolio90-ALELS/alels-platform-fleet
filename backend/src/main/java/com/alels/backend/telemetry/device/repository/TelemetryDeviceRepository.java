@@ -67,7 +67,6 @@ public class TelemetryDeviceRepository {
             LEFT JOIN LATERAL (
               SELECT t.server_time,
                      CASE
-                       WHEN t.server_time < NOW() - INTERVAL '30 minutes' THEN 'STOP'
                        WHEN UPPER(COALESCE(t.vehicle_status,'')) IN ('STOP','IDLE','TRIP') THEN UPPER(t.vehicle_status)
                        WHEN latest_ignition.ignition IS NULL OR t.speed IS NULL THEN 'STOP'
                        WHEN latest_ignition.ignition > 0 AND t.speed > 5 THEN 'TRIP'
