@@ -1,10 +1,12 @@
 package com.alels.backend.assetregister.repository;
 
+import java.util.Objects;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.lang.NonNull;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -47,7 +49,7 @@ public class AssetWastedRepository {
         String normalizedType = normalizeItemType(itemType);
         if (!tableAvailableFor(normalizedType)) return;
         String tableName = tableName(normalizedType);
-        jdbcTemplate.update("""
+        jdbcTemplate.update(Objects.requireNonNull("""
                 UPDATE %s
                 SET deleted_at = NULL,
                     deleted_by = NULL,
@@ -56,7 +58,7 @@ public class AssetWastedRepository {
                     updated_by = ?,
                     updated_at = NOW()
                 WHERE id = ? AND deleted_at IS NOT NULL
-                """.formatted(tableName), actorUserId, id);
+                """.formatted(tableName)), actorUserId, id);
     }
 
     public void permanentDelete(String itemType, Long id) {
@@ -234,6 +236,7 @@ public class AssetWastedRepository {
         return "'" + fallback + "'";
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<AssetWastedRow> wastedMapper() {
         return (rs, rowNum) -> new AssetWastedRow(
                 rs.getString("item_type"),

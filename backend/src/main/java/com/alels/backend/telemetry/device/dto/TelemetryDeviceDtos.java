@@ -11,7 +11,7 @@ public final class TelemetryDeviceDtos {
             String vehicleModel, String vehicleType, String plateNumber,
             String energyType, BigDecimal referencePrice,
             String driverName, String driverPhone, String driverLicense,
-            String movementStatus, boolean tcpEnabled, boolean connected,
+            String vehicleStatus, boolean tcpEnabled, boolean connected,
             Long groupId, String groupName, boolean groupDeleted,
             String company, String lastUpdated
     ) {}

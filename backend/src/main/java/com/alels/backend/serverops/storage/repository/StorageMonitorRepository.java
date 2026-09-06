@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
 
 import com.alels.backend.serverops.storage.model.StorageMonitorOverviewResponse.StorageDistribution;
@@ -22,11 +23,11 @@ public class StorageMonitorRepository {
     }
 
     public long diskTotalBytes() {
-        return fileStoreValue(FileStore::getTotalSpace);
+        return fileStoreValue(fileStore -> fileStore.getTotalSpace());
     }
 
     public long diskUsableBytes() {
-        return fileStoreValue(FileStore::getUsableSpace);
+        return fileStoreValue(fileStore -> fileStore.getUsableSpace());
     }
 
     public long databaseSizeBytes() {
@@ -114,7 +115,7 @@ public class StorageMonitorRepository {
     }
 
     private void normalizePercent(List<StorageDistribution> rows) {
-        long total = rows.stream().mapToLong(StorageDistribution::getCount).sum();
+        long total = rows.stream().mapToLong(storageDistribution -> storageDistribution.getCount()).sum();
         rows.forEach(row -> row.setPercent(total <= 0 ? 0 : row.getCount() * 100.0 / total));
     }
 
@@ -150,7 +151,7 @@ public class StorageMonitorRepository {
         }
     }
 
-    private long count(String sql) {
+    private long count(@NonNull String sql) {
         try {
             Long value = jdbcTemplate.queryForObject(sql, Long.class);
             return value == null ? 0L : value;

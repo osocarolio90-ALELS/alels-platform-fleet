@@ -12,7 +12,7 @@ const dotTone: Record<StatusIndicatorTone, string> = {
 };
 
 const blueStatuses = new Set([
-  "ACTIVE", "MOVING", "NORMAL", "HEALTHY", "CONNECTED", "OPERATIONAL", "VALID", "RESOLVED"
+  "ACTIVE", "MOVING", "TRIP", "NORMAL", "HEALTHY", "CONNECTED", "OPERATIONAL", "VALID", "RESOLVED"
 ]);
 const greenStatuses = new Set(["ONLINE", "LIVE"]);
 const yellowStatuses = new Set(["IDLE", "WARNING", "PENDING", "MAINTENANCE", "ATTENTION"]);

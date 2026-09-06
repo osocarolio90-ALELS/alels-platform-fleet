@@ -45,7 +45,6 @@ public class ClientSession implements Runnable {
     private String sessionImei = null;
     private ChannelType sessionChannel = null;
 
-    private String lastAlelsCommandName = null;
     private String lastTeltonikaCommandName = null;
 
     private static final String FALLBACK_DEVICE_MODEL = "fmc650";
@@ -487,7 +486,6 @@ public class ClientSession implements Runnable {
 
         DeviceSessionManager.printSessions();
 
-        lastAlelsCommandName = "ping";
     }
 
     private void handleTeltonikaImei(byte[] packet, OutputStream out) throws Exception {

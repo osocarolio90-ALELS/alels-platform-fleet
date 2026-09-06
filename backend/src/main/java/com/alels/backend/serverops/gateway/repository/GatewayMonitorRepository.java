@@ -3,6 +3,7 @@ package com.alels.backend.serverops.gateway.repository;
 import java.util.List;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
 
 import com.alels.backend.serverops.gateway.model.GatewayMonitorOverviewResponse.GatewayDistribution;
@@ -62,7 +63,7 @@ public class GatewayMonitorRepository {
         );
     }
 
-    private List<GatewayDistribution> distribution(String sql, long total) {
+    private List<GatewayDistribution> distribution(@NonNull String sql, long total) {
         try {
             return jdbcTemplate.query(sql, (rs, rowNum) -> {
                 String name = rs.getString("name");
@@ -75,7 +76,7 @@ public class GatewayMonitorRepository {
         }
     }
 
-    private long count(String sql) {
+    private long count(@NonNull String sql) {
         try {
             Long value = jdbcTemplate.queryForObject(sql, Long.class);
             return value == null ? 0L : value;

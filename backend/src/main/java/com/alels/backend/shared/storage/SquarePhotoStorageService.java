@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -14,6 +15,7 @@ import java.util.UUID;
 import javax.imageio.ImageIO;
 
 import org.springframework.core.io.Resource;
+import org.springframework.lang.NonNull;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -47,9 +49,10 @@ public class SquarePhotoStorageService {
         Path normalizedDirectory = directory.toAbsolutePath().normalize();
         Path file = normalizedDirectory.resolve(fileName).normalize();
         if (!file.startsWith(normalizedDirectory) || !Files.isRegularFile(file)) return null;
-        return new UrlResource(file.toUri());
+        return new UrlResource(Objects.requireNonNull(file.toUri()));
     }
 
+    @NonNull
     public String contentType(Resource resource) throws IOException {
         String value = Files.probeContentType(resource.getFile().toPath());
         return value == null ? "application/octet-stream" : value;

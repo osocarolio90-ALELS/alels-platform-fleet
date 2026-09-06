@@ -5,6 +5,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -150,7 +151,7 @@ public class DeviceWorkspaceTripRouteRepository {
             List<Object> args = new ArrayList<>();
             args.add(imei);
             args.addAll(chunk);
-            result.addAll(jdbc.query(sql, (rs, rowNum) -> point(rs), args.toArray()));
+            result.addAll(jdbc.query(Objects.requireNonNull(sql), (rs, rowNum) -> point(rs), args.toArray()));
         }
         result.sort((a, b) -> {
             int time = a.occurredAt().compareTo(b.occurredAt());
@@ -214,7 +215,7 @@ public class DeviceWorkspaceTripRouteRepository {
             args.add(beforeId);
         }
         args.add(limit);
-        return jdbc.query(sql, (rs, rowNum) -> point(rs), args.toArray());
+        return jdbc.query(Objects.requireNonNull(sql), (rs, rowNum) -> point(rs), args.toArray());
     }
 
 
@@ -241,7 +242,7 @@ public class DeviceWorkspaceTripRouteRepository {
         args.add(imei);
         args.add(size);
         args.add((long) page * size);
-        return jdbc.query(sql, (rs, rowNum) -> point(rs), args.toArray());
+        return jdbc.query(Objects.requireNonNull(sql), (rs, rowNum) -> point(rs), args.toArray());
     }
 
     public long selectedLogCount(String imei, List<TimeWindow> ranges) {
@@ -258,7 +259,7 @@ public class DeviceWorkspaceTripRouteRepository {
                 """.formatted(values);
         List<Object> args = selectedRangeArgs(ranges);
         args.add(imei);
-        Long count = jdbc.queryForObject(sql, Long.class, args.toArray());
+        Long count = jdbc.queryForObject(Objects.requireNonNull(sql), Long.class, args.toArray());
         return count == null ? 0L : count;
     }
 
@@ -276,7 +277,7 @@ public class DeviceWorkspaceTripRouteRepository {
                 """.formatted(values);
         List<Object> args = selectedRangeArgs(ranges);
         args.add(imei);
-        return jdbc.queryForObject(sql, Long.class, args.toArray());
+        return jdbc.queryForObject(Objects.requireNonNull(sql), Long.class, args.toArray());
     }
 
     private List<Object> selectedRangeArgs(List<TimeWindow> ranges) {
@@ -288,6 +289,44 @@ public class DeviceWorkspaceTripRouteRepository {
         return args;
     }
 
+
+    public Optional<EnergyCostProfile> vehicleEnergyCostProfile(Long deviceId, Long companyId) {
+        List<EnergyCostProfile> profiles = jdbc.query("""
+                SELECT COALESCE(NULLIF(cep.price_energy, 0),
+                                NULLIF(v.energy_price_snapshot, 0),
+                                NULLIF(erp.reference_price_country, 0),
+                                NULLIF(erp.reference_price_country_idr, 0)) AS unit_price,
+                       COALESCE(NULLIF(cep.currency, ''), NULLIF(v.energy_currency, ''),
+                                NULLIF(erp.currency, ''), 'IDR') AS currency
+                FROM vehicle_device_assignments assignment
+                JOIN vehicles v ON v.id = assignment.vehicle_id
+                               AND v.company_id = ?
+                               AND v.deleted_at IS NULL
+                LEFT JOIN energy_types et
+                       ON et.id = v.energy_id
+                       OR (v.energy_id IS NULL AND et.energy_code = v.energy_code)
+                LEFT JOIN company_energy_prices cep
+                       ON cep.company_id = assignment.company_id
+                      AND cep.energy_id = et.id
+                      AND cep.country_code = COALESCE(NULLIF(v.country_code, ''), 'ID')
+                LEFT JOIN energy_reference_prices erp
+                       ON erp.energy_id = et.id
+                      AND erp.country_code = COALESCE(NULLIF(v.country_code, ''), 'ID')
+                WHERE assignment.device_id = ?
+                  AND assignment.company_id = ?
+                  AND assignment.assignment_status = 'ACTIVE'
+                  AND assignment.deleted_at IS NULL
+                ORDER BY assignment.assigned_at DESC
+                LIMIT 1
+                """, (rs, rowNum) -> {
+                    java.math.BigDecimal unitPrice = rs.getBigDecimal("unit_price");
+                    return new EnergyCostProfile(
+                            unitPrice == null ? null : unitPrice.doubleValue(),
+                            rs.getString("currency")
+                    );
+                }, companyId, deviceId, companyId);
+        return profiles.stream().findFirst().filter(profile -> profile.unitPrice() != null && profile.unitPrice() > 0);
+    }
 
     public String vehicleEnergyGroup(Long deviceId, Long companyId) {
         List<String> groups = jdbc.query("""
@@ -420,7 +459,7 @@ public class DeviceWorkspaceTripRouteRepository {
         List<Object> args = new ArrayList<>();
         args.add(imei); args.addAll(telemetryIds);
         Map<Long, List<ParameterValue>> result = new LinkedHashMap<>();
-        jdbc.query(sql, (RowCallbackHandler) rs -> result.computeIfAbsent(rs.getLong("telemetry_id"), ignored -> new ArrayList<>()).add(
+        jdbc.query(Objects.requireNonNull(sql), (RowCallbackHandler) rs -> result.computeIfAbsent(rs.getLong("telemetry_id"), ignored -> new ArrayList<>()).add(
                 new ParameterValue(rs.getString("field_code"), rs.getString("label"),
                         rs.getString("display_value"), rs.getString("unit"), rs.getString("category"))
         ), args.toArray());
@@ -438,7 +477,7 @@ public class DeviceWorkspaceTripRouteRepository {
                   )
                 ORDER BY i.telemetry_id, i.id
                 """.formatted(placeholders);
-        jdbc.query(ioSql, (RowCallbackHandler) rs -> result.computeIfAbsent(rs.getLong("telemetry_id"), ignored -> new ArrayList<>()).add(
+        jdbc.query(Objects.requireNonNull(ioSql), (RowCallbackHandler) rs -> result.computeIfAbsent(rs.getLong("telemetry_id"), ignored -> new ArrayList<>()).add(
                 new ParameterValue(rs.getString("field_code"), rs.getString("label"),
                         rs.getString("display_value"), rs.getString("unit"), rs.getString("category"))
         ), args.toArray());
@@ -448,14 +487,15 @@ public class DeviceWorkspaceTripRouteRepository {
     public List<TripEvent> events(String imei, Long companyId, Instant from, Instant to) {
         return jdbc.query("""
                 SELECT e.id, e.telemetry_id,
-                       COALESCE(NULLIF(mapping.source_name, ''), NULLIF(e.io_name, ''), NULLIF(e.title, ''), e.event_code, 'Telemetry event') AS title,
-                       COALESCE(e.message, '') AS message, COALESCE(e.severity, 'INFO') AS severity,
+                       CASE WHEN e.event_io_id = '239' THEN 'Ignition ' || CASE WHEN COALESCE(e.real_value::text, e.numeric_value::text, e.raw_value, t.io_data ->> e.event_io_id, t.io ->> e.event_io_id) IN ('1','true','TRUE') THEN 'ON' ELSE 'OFF' END ELSE COALESCE(NULLIF(mapping.source_name, ''), NULLIF(e.io_name, ''), NULLIF(e.title, ''), e.event_code, 'Telemetry event') END AS title,
+                       CASE WHEN NULLIF(e.message, '') IS NOT NULL AND e.message LIKE '%=%' THEN e.message ELSE COALESCE(NULLIF(e.message, ''), COALESCE(NULLIF(e.title, ''), e.event_code, 'Telemetry event')) || ' = ' || COALESCE(e.real_value::text, e.numeric_value::text, e.raw_value, e.metadata->>'rawValue', t.io_data ->> e.event_io_id, t.io ->> e.event_io_id, '-') END AS message, COALESCE(e.severity, 'INFO') AS severity,
                        e.occurred_at, COALESCE(trigger.latitude, e.latitude) AS latitude,
                        COALESCE(trigger.longitude, e.longitude) AS longitude,
                        COALESCE(trigger.speed, e.speed) AS speed,
                        CASE WHEN trigger.latitude IS NOT NULL AND trigger.longitude IS NOT NULL
                             THEN 'TRIGGER_TELEMETRY_GPS' ELSE 'EVENT_RECORDED_GPS' END AS location_source
                 FROM telemetry_events e
+                LEFT JOIN telemetry t ON t.id = e.telemetry_id
                 LEFT JOIN telemetry trigger ON trigger.id = e.telemetry_id AND trigger.imei = e.imei
                 LEFT JOIN LATERAL (
                     SELECT m.source_name
@@ -481,8 +521,8 @@ public class DeviceWorkspaceTripRouteRepository {
         String sql = """
                 WITH selected_ranges(from_at, to_at) AS (VALUES %s)
                 SELECT e.id, e.telemetry_id,
-                       COALESCE(NULLIF(mapping.source_name, ''), NULLIF(e.io_name, ''), NULLIF(e.title, ''), e.event_code, 'Telemetry event') AS title,
-                       COALESCE(e.message, '') AS message, COALESCE(e.severity, 'INFO') AS severity,
+                       CASE WHEN e.event_io_id = '239' THEN 'Ignition ' || CASE WHEN COALESCE(e.real_value::text, e.numeric_value::text, e.raw_value, t.io_data ->> e.event_io_id, t.io ->> e.event_io_id) IN ('1','true','TRUE') THEN 'ON' ELSE 'OFF' END ELSE COALESCE(NULLIF(mapping.source_name, ''), NULLIF(e.io_name, ''), NULLIF(e.title, ''), e.event_code, 'Telemetry event') END AS title,
+                       CASE WHEN NULLIF(e.message, '') IS NOT NULL AND e.message LIKE '%=%' THEN e.message ELSE COALESCE(NULLIF(e.message, ''), COALESCE(NULLIF(e.title, ''), e.event_code, 'Telemetry event')) || ' = ' || COALESCE(e.real_value::text, e.numeric_value::text, e.raw_value, e.metadata->>'rawValue', t.io_data ->> e.event_io_id, t.io ->> e.event_io_id, '-') END AS message, COALESCE(e.severity, 'INFO') AS severity,
                        e.occurred_at, COALESCE(trigger.latitude, e.latitude) AS latitude,
                        COALESCE(trigger.longitude, e.longitude) AS longitude,
                        COALESCE(trigger.speed, e.speed) AS speed,
@@ -513,12 +553,12 @@ public class DeviceWorkspaceTripRouteRepository {
         List<Object> args = selectedRangeArgs(ranges);
         args.add(imei);
         args.add(companyId);
-        return jdbc.query(sql, (rs, rowNum) -> tripEvent(rs), args.toArray());
+        return jdbc.query(Objects.requireNonNull(sql), (rs, rowNum) -> tripEvent(rs), args.toArray());
     }
 
     public List<TripLogRow> logs(String imei, Instant from, Instant to, List<TelemetryPoint> points) {
         Map<Long, List<ParameterValue>> parameters = normalizedParameters(
-                imei, from, to, points.stream().map(TelemetryPoint::id).toList());
+                imei, from, to, points.stream().map(telemetryPoint -> telemetryPoint.id()).toList());
         List<VehicleAssignmentPeriod> vehicleAssignments = vehicleAssignmentPeriods(imei, from, to);
         List<DriverAssignmentPeriod> driverAssignments = driverAssignmentPeriods(imei, from, to);
         return points.stream().map(point -> {
@@ -616,12 +656,12 @@ public class DeviceWorkspaceTripRouteRepository {
     }
 
     public static String vehiclePlateAt(List<VehicleAssignmentPeriod> periods, Instant occurredAt) {
-        return periods.stream().filter(period -> period.includes(occurredAt)).map(VehicleAssignmentPeriod::plateNumber)
+        return periods.stream().filter(period -> period.includes(occurredAt)).map(vehicleAssignmentPeriod -> vehicleAssignmentPeriod.plateNumber())
                 .filter(value -> value != null && !value.isBlank() && !"-".equals(value)).findFirst().orElse("-");
     }
 
     public static String driverAt(List<DriverAssignmentPeriod> periods, Instant occurredAt) {
-        return periods.stream().filter(period -> period.includes(occurredAt)).map(DriverAssignmentPeriod::driverName)
+        return periods.stream().filter(period -> period.includes(occurredAt)).map(driverAssignmentPeriod -> driverAssignmentPeriod.driverName())
                 .filter(value -> value != null && !value.isBlank() && !"-".equals(value)).findFirst().orElse("-");
     }
 
@@ -815,6 +855,7 @@ public class DeviceWorkspaceTripRouteRepository {
         boolean includes(Instant value) { return value != null && !value.isBefore(startAt) && (endAt == null || !value.isAfter(endAt)); }
     }
 
+    public record EnergyCostProfile(Double unitPrice, String currency) {}
     public record TimeWindow(Instant from, Instant to) {}
     public record RouteWindow(String tripId, Instant from, Instant to) {}
     public record TelemetryPoint(Long id, Instant occurredAt, Instant receivedAt, Double latitude, Double longitude, Double speed,

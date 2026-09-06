@@ -28,7 +28,6 @@ class TelemetryIngestionServiceOutcomeTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
     void validNeighborCommitsWhileOnlyInvalidRecordIsReportedForDlq() {
         IngestionRecord valid=record(10,"""
                 {"imei":"123456789012345","protocol":"ALELS_JSON","channel":"WIFI","latitude":0,"longitude":0}
@@ -41,7 +40,7 @@ class TelemetryIngestionServiceOutcomeTest {
         assertEquals(1,result.processed);
         assertEquals(1,result.failed);
         assertEquals(invalid,result.failures.getFirst().record());
-        ArgumentCaptor<List<IngestionRecord>> accepted=ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<IngestionRecord>> accepted=ArgumentCaptor.captor();
         verify(repository).insertBatch(accepted.capture(),anyList());
         assertEquals(List.of(valid),accepted.getValue());
     }

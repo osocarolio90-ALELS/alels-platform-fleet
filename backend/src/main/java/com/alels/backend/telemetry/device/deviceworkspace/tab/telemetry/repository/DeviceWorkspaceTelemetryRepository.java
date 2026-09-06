@@ -1,5 +1,6 @@
 package com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.repository;
 
+import java.util.Objects;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -133,7 +134,10 @@ public class DeviceWorkspaceTelemetryRepository {
         return jdbc.query("""
                 SELECT id, packet_sequence, server_time, device_time, protocol, channel, dictionary_code,
                        latitude, longitude, speed, angle, altitude, satellites, hdop,
-                       priority, event_io_id, io_data::text AS io_data
+                       priority, event_io_id,
+                       CASE WHEN server_time < NOW() - INTERVAL '30 minutes' THEN 'STOP'
+                            ELSE vehicle_status END AS vehicle_status,
+                       io_data::text AS io_data
                 FROM telemetry
                 WHERE imei = ?
                 ORDER BY COALESCE(device_time, server_time) DESC, server_time DESC, id DESC
@@ -146,7 +150,7 @@ public class DeviceWorkspaceTelemetryRepository {
                     rs.getObject("speed", Double.class), rs.getObject("angle", Integer.class),
                     rs.getObject("altitude", Integer.class), rs.getObject("satellites", Integer.class),
                     rs.getObject("hdop", Double.class), rs.getObject("priority", Integer.class),
-                    rs.getObject("event_io_id", Integer.class), rs.getString("io_data")
+                    rs.getObject("event_io_id", Integer.class), rs.getString("vehicle_status"), rs.getString("io_data")
                 ), imei).stream().findFirst();
     }
 
@@ -259,42 +263,57 @@ public class DeviceWorkspaceTelemetryRepository {
                   AND (e.occurred_at, e.id) < (
                       SELECT anchor.occurred_at, anchor.id
                       FROM telemetry_events anchor
-                      WHERE anchor.id = ? AND anchor.imei = ?
+                      WHERE anchor.id = ?
+                        AND anchor.imei = ?
                         AND (anchor.company_id IS NULL OR anchor.company_id = ?)
+                      ORDER BY anchor.created_at DESC
+                      LIMIT 1
                   )
                 """;
+
+        // telemetry_events is the canonical, self-contained event read model.
+        // Read presentation data from the event row itself so a missing telemetry
+        // packet or dictionary mapping can never suppress an otherwise valid event.
         String sql = """
                 SELECT e.id,
-                       COALESCE(NULLIF(mapping.source_name, ''), NULLIF(e.io_name, ''), NULLIF(e.title, ''), e.event_code, 'Telemetry event') AS title,
-                       COALESCE(e.message, '') AS message, COALESCE(e.severity, 'INFO') AS severity,
+                       CASE
+                           WHEN e.event_io_id = '239' THEN
+                               'Ignition ' || CASE
+                                   WHEN LOWER(COALESCE(e.real_value::text, e.numeric_value::text,
+                                                       e.raw_value, e.metadata ->> 'rawValue', '0'))
+                                        IN ('1', 'true', 'on')
+                                   THEN 'ON' ELSE 'OFF'
+                               END
+                           ELSE COALESCE(NULLIF(e.io_name, ''), NULLIF(e.title, ''),
+                                         NULLIF(e.event_code, ''), 'Telemetry event')
+                       END AS title,
+                       CASE
+                           WHEN NULLIF(e.message, '') IS NOT NULL THEN e.message
+                           ELSE COALESCE(NULLIF(e.io_name, ''), NULLIF(e.title, ''),
+                                         NULLIF(e.event_code, ''), 'Telemetry event')
+                                || CASE
+                                       WHEN COALESCE(e.real_value::text, e.numeric_value::text,
+                                                     e.raw_value, e.metadata ->> 'rawValue') IS NULL
+                                       THEN ''
+                                       ELSE ' = ' || COALESCE(e.real_value::text, e.numeric_value::text,
+                                                               e.raw_value, e.metadata ->> 'rawValue')
+                                   END
+                       END AS message,
+                       COALESCE(NULLIF(e.severity, ''), 'INFO') AS severity,
                        e.occurred_at
                 FROM telemetry_events e
-                LEFT JOIN LATERAL (
-                    SELECT m.source_name
-                    FROM device_io_mappings m
-                    WHERE e.event_io_id IS NOT NULL
-                      AND m.source_io_id = e.event_io_id
-                      AND m.status = 'ACTIVE'
-                      AND (m.dictionary_code = e.metadata ->> 'dictionaryCode' OR m.dictionary_code IS NULL OR e.metadata ->> 'dictionaryCode' IS NULL)
-                      AND (m.source_protocol = e.metadata ->> 'sourceProtocol' OR m.source_protocol IN ('TELTONIKA_AUTO', 'ANY')
-                           OR m.source_protocol IS NULL OR e.metadata ->> 'sourceProtocol' IS NULL)
-                    ORDER BY CASE WHEN m.dictionary_code = e.metadata ->> 'dictionaryCode' THEN 0 ELSE 1 END,
-                             CASE WHEN m.source_protocol = e.metadata ->> 'sourceProtocol' THEN 0
-                                  WHEN m.source_protocol = 'TELTONIKA_AUTO' THEN 1 ELSE 2 END,
-                             CASE WHEN m.normalized_field_id IS NOT NULL THEN 0 ELSE 1 END,
-                             m.id DESC
-                    LIMIT 1
-                ) mapping ON TRUE
                 WHERE e.imei = ?
                   AND (e.company_id IS NULL OR e.company_id = ?)
                   %s
                 ORDER BY e.occurred_at DESC, e.id DESC
                 LIMIT ?
                 """.formatted(cursor);
+
         Object[] parameters = beforeId == null
                 ? new Object[]{imei, companyId, limit}
                 : new Object[]{imei, companyId, beforeId, imei, companyId, limit};
-        return jdbc.query(sql, (rs, rowNum) -> new RecentEvent(
+
+        return jdbc.query(Objects.requireNonNull(sql), (rs, rowNum) -> new RecentEvent(
                 rs.getLong("id"), rs.getString("title"), rs.getString("message"),
                 rs.getString("severity"), rs.getString("occurred_at")
         ), parameters);
@@ -329,6 +348,6 @@ public class DeviceWorkspaceTelemetryRepository {
             Long id, Long sequence, String serverTime, String deviceTime, String protocol, String channel, String dictionaryCode,
             Double latitude, Double longitude, Double speed, Integer angle,
             Integer altitude, Integer satellites, Double hdop, Integer priority,
-            Integer eventIoId, String ioDataJson
+            Integer eventIoId, String vehicleStatus, String ioDataJson
     ) {}
 }

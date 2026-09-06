@@ -2,6 +2,10 @@ package com.alels.backend.telemetry.device.repository;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.sql.ResultSet;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,5 +31,15 @@ class TelemetryDeviceRepositoryTenantScopeTest {
         assertEquals("",repository.scope("SUPER_ADMIN","d"));
         assertEquals("",repository.scope("ADMIN","d"));
         assertArrayEquals(new Object[]{42L},repository.scopeParameters(42L,"ADMIN"));
+    }
+
+    @Test
+    void mapsVehicleStatusUsingTheRepositoryColumnAlias() throws Exception {
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.getString("vehicle_status")).thenReturn("TRIP");
+
+        var row = repository.mapDeviceRow(resultSet, 0);
+
+        assertEquals("TRIP", row.vehicleStatus());
     }
 }

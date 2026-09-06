@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
@@ -360,6 +361,7 @@ public class EnergyReferenceRepository {
                 """, actorUserId, actorCompanyId, targetType, targetId, action, detailsJson == null ? "{}" : detailsJson);
     }
 
+    @NonNull
     private RowMapper<EnergyReferenceCountryRow> countryMapper() {
         return (rs, rowNum) -> new EnergyReferenceCountryRow(
                 rs.getLong("id"),
@@ -376,6 +378,7 @@ public class EnergyReferenceRepository {
         );
     }
 
+    @NonNull
     private RowMapper<EnergyReferenceRow> rowMapper() {
         return (rs, rowNum) -> new EnergyReferenceRow(
                 rs.getLong("id"),

@@ -28,6 +28,7 @@ type DataTableProps<T> = {
   selectable?: boolean;
   isRowSelectable?: (row: T) => boolean;
   rowClassName?: (row: T) => string | undefined;
+  rowStickyBackgroundColor?: (row: T) => string | undefined;
   onRowDoubleClick?: (row: T) => void;
   emptyMessage?: string;
   searchPlaceholder?: string;
@@ -51,6 +52,7 @@ export function DataTable<T>({
   selectable,
   isRowSelectable,
   rowClassName,
+  rowStickyBackgroundColor,
   onRowDoubleClick,
   emptyMessage = "No data found.",
   searchPlaceholder,
@@ -327,7 +329,7 @@ export function DataTable<T>({
                 >
                   {selectionEnabled ? (
                     <Td
-                      style={stickySelectionStyle()}
+                      style={stickySelectionStyle(rowStickyBackgroundColor?.(row))}
                       className={DATA_TABLE_UI_STANDARD.stickySelectionCellClassName}
                     >
                       <input
@@ -342,7 +344,7 @@ export function DataTable<T>({
                   {activeColumns.map((column, columnIndex) => (
                     <Td
                       key={column.key}
-                      style={stickyColumnStyle(columnIndex, selectionEnabled)}
+                      style={stickyColumnStyle(columnIndex, selectionEnabled, rowStickyBackgroundColor?.(row))}
                       className={cn(stickyColumnClassName(columnIndex, "body"), column.className)}
                     >
                       {column.render ? column.render(row) : getColumnValue(row, column)}

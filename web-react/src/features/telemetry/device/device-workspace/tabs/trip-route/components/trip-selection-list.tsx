@@ -26,7 +26,7 @@ export function TripSelectionList({ trips, selectedId, checkedTripIds, allChecke
 
   return <aside className={`dw-trip-list ${fullscreen ? "dw-trip-fullscreen-list" : ""}`}>
     <header>
-      <strong>Trips &amp; Stops ({trips.length})</strong>
+      <strong>Trip, Idle &amp; Stop ({trips.length})</strong>
       <span className="dw-trip-list-header-actions">
         <button type="button" className={allChecked ? "active" : ""} onClick={onToggleAll} disabled={!trips.length}>All</button>
         <button type="button" onClick={() => onVisible(false)} title="Hide Trips" aria-label="Hide Trips"><ChevronLeft/></button>
@@ -34,7 +34,7 @@ export function TripSelectionList({ trips, selectedId, checkedTripIds, allChecke
     </header>
     <div>
       {loading
-        ? <p className="empty">Loading trips and stops...</p>
+        ? <p className="empty">Loading trip, idle and stop history...</p>
         : trips.length
           ? trips.map(trip => <article key={trip.id} className={`${selectedId === trip.id ? "selected " : ""}${trip.type.toLowerCase()}`}>
             <input type="checkbox" checked={checkedTripIds.has(trip.id)} onChange={() => onToggle(trip.id)} aria-label={`Show ${trip.type.toLowerCase()} ${trip.id}`}/>
@@ -44,6 +44,9 @@ export function TripSelectionList({ trips, selectedId, checkedTripIds, allChecke
               <span className="dw-trip-card-data">
                 <span><b>Duration</b><strong>{duration(trip.durationSeconds)}</strong></span>
                 <span><b>Distance</b><strong>{trip.distanceKm.toFixed(1)} km</strong></span>
+                <span className="wide"><b>Cost Operation</b><strong>{money(trip.operationCost, trip.costCurrency)}</strong></span>
+                <span><b>Fuel Cost</b><strong>{money(trip.fuelCost, trip.costCurrency)}</strong></span>
+                <span><b>Road Cost</b><strong>{money(trip.roadCost, trip.costCurrency)}</strong></span>
                 <span className="wide"><b>Fuel Consumption</b><strong>{metric(trip.fuelConsumption, "L")}</strong></span>
                 <span className="wide"><b>Fuel Level</b><strong>{fuelLevel(trip.fuelStart, trip.fuelFinish)}</strong></span>
                 <span><b>Start</b><time>{dateTime(trip.startTime)}</time></span>
@@ -51,10 +54,9 @@ export function TripSelectionList({ trips, selectedId, checkedTripIds, allChecke
                 <span><b>Driver</b><strong>{trip.driverName || "-"}</strong></span>
                 <span><b>No. Vehicle</b><strong>{trip.vehiclePlateNumber || "-"}</strong></span>
               </span>
-              <small className="dw-trip-card-source"><b>Source:</b> GPS telemetry (time, location, distance) · normalized CAN/AVL (fuel) · assignment master (driver, vehicle)</small>
             </button>
           </article>)
-        : <p className="empty">No ignition trips or stops in this range.</p>}
+        : <p className="empty">No trip, idle or stop history in this range.</p>}
     </div>
   </aside>;
 }
@@ -71,6 +73,11 @@ function metric(value?: number | null, unit?: string) {
 function fuelLevel(start?: number | null, finish?: number | null) {
   if (!Number.isFinite(start) && !Number.isFinite(finish)) return "-";
   return `${metric(start, "%")} → ${metric(finish, "%")}`;
+}
+function money(value?: number | null, currency?: string | null) {
+  if (!Number.isFinite(value)) return "-";
+  const normalizedCurrency = currency && /^[A-Z]{3}$/.test(currency.toUpperCase()) ? currency.toUpperCase() : "IDR";
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: normalizedCurrency, maximumFractionDigits: 2 }).format(Number(value));
 }
 function duration(seconds: number) {
   const hours = Math.floor(seconds / 3600);

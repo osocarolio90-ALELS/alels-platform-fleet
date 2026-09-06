@@ -61,7 +61,7 @@ public final class DeviceWorkspaceTelemetryDtos {
 
     public record WorkspaceTelemetryResponse(
             DeviceInfo device, DriverInfo driver, VehicleInfo vehicle, PositionInfo position,
-            ConnectionInfo connection, PacketInfo packet, List<DataParameter> dataReceived,
+            ConnectionInfo connection, PacketInfo packet, String vehicleStatus, List<DataParameter> dataReceived,
             List<String> parameterGroups, WorkspaceConfiguration configuration, List<TrackPoint> track
     ) {}
 

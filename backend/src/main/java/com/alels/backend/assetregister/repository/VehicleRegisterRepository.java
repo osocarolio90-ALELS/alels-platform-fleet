@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.lang.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -263,6 +264,7 @@ public class VehicleRegisterRepository {
                 """;
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<VehicleRegisterRow> rowMapper() {
         return (rs, rowNum) -> new VehicleRegisterRow(
                 rs.getLong("id"), rs.getLong("company_id"), rs.getString("company_name"), rs.getString("vehicle_code"), rs.getString("vehicle_name"), rs.getString("plate_number"),

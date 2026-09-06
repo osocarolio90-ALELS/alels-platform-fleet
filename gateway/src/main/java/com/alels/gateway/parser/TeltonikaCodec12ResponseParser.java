@@ -1,7 +1,5 @@
 package com.alels.gateway.parser;
 
-import java.nio.charset.StandardCharsets;
-
 import com.alels.gateway.detector.ProtocolType;
 import com.alels.gateway.util.TeltonikaCrc16;
 

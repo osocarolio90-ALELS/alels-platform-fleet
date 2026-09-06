@@ -1,6 +1,5 @@
 package com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.service;
 
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,7 +58,7 @@ public class DeviceWorkspaceTelemetryService {
     public WorkspaceTelemetryResponse telemetry(JwtUserContext user, Long deviceId) {
         ScopedDevice device = scopedDevice(user, deviceId);
         VehicleInfo vehicle = workspaceRepository.vehicle(deviceId, device.companyId())
-                .map(DeviceWorkspaceTelemetryRepository.VehicleResult::info)
+                .map(vehicleResult -> vehicleResult.info())
                 .orElseGet(DeviceWorkspaceTelemetryService::notPairedVehicle);
         DriverInfo driver = workspaceRepository.driver(deviceId, device.companyId()).orElseGet(DeviceWorkspaceTelemetryService::notPairedDriver);
         LatestPacket packet = workspaceRepository.latestPacket(device.info().imei()).orElse(null);
@@ -77,13 +76,33 @@ public class DeviceWorkspaceTelemetryService {
                 packet == null ? null : packet.protocol(), packet == null ? null : packet.channel()
         );
         PacketInfo packetInfo = packet == null ? null : new PacketInfo(packet.id(), packet.sequence(), packet.serverTime());
+        String vehicleStatus = validStatus(packet == null ? null : packet.vehicleStatus())
+                ? packet.vehicleStatus().toUpperCase(Locale.ROOT) : resolveVehicleStatus(parameters);
 
         return new WorkspaceTelemetryResponse(
-                device.info(), driver, vehicle, position, connection, packetInfo, parameters,
+                device.info(), driver, vehicle, position, connection, packetInfo, vehicleStatus, parameters,
                 DeviceParameterGroupCatalog.groups(device.info().model(), dictionaryCode),
                 readConfiguration(deviceId, user.userId()),
                 workspaceRepository.recentTrack(device.info().imei(), MAX_TRACK_POINTS)
         );
+    }
+
+    private String resolveVehicleStatus(List<DataParameter> parameters) {
+        Double ignition = parameters.stream().filter(p -> isParameter(p, "ignition")).map(DataParameter::numericValue).filter(v -> v != null).findFirst().orElse(null);
+        Double speed = parameters.stream().filter(p -> isParameter(p, "speed")).map(DataParameter::numericValue).filter(v -> v != null).findFirst().orElse(null);
+        if (ignition == null || speed == null) return "STOP";
+        if (ignition > 0 && speed > 5) return "TRIP";
+        if (ignition > 0) return "IDLE";
+        if (speed <= 5) return "STOP";
+        return "STOP";
+    }
+
+    private boolean validStatus(String value) { return value != null && Set.of("STOP", "IDLE", "TRIP").contains(value.toUpperCase(Locale.ROOT)); }
+
+    private boolean isParameter(DataParameter parameter, String code) {
+        String field = parameter.fieldCode() == null ? "" : parameter.fieldCode().toLowerCase(Locale.ROOT);
+        String label = parameter.label() == null ? "" : parameter.label().toLowerCase(Locale.ROOT);
+        return field.equals(code) || field.endsWith("." + code) || label.equals(code) || label.contains(" " + code);
     }
 
     public HistoricalRoutesResponse historicalRoutes(JwtUserContext user, Long deviceId) {
@@ -148,12 +167,12 @@ public class DeviceWorkspaceTelemetryService {
         if (normalized.bottomItems().isEmpty() || normalized.bottomItems().size() > BOTTOM_ITEM_COUNT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bottom data must contain between 1 and 7 items.");
         }
-        long uniqueBottomSlots = normalized.bottomItems().stream().map(InstrumentMapping::slot).distinct().count();
+        long uniqueBottomSlots = normalized.bottomItems().stream().map(instrumentMapping -> instrumentMapping.slot()).distinct().count();
         if (uniqueBottomSlots != normalized.bottomItems().size()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bottom data slots must be unique.");
         }
         Set<String> instrumentSlots = normalized.instruments().stream()
-                .map(InstrumentMapping::slot).collect(java.util.stream.Collectors.toSet());
+                .map(instrumentMapping -> instrumentMapping.slot()).collect(java.util.stream.Collectors.toSet());
         if (!instrumentSlots.equals(REQUIRED_INSTRUMENT_SLOTS)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Main instrument slots must contain RPM and SPEED.");
         }
@@ -168,7 +187,7 @@ public class DeviceWorkspaceTelemetryService {
                 .filter(item -> REQUIRED_INSTRUMENT_SLOTS.contains(item.slot()))
                 .toList();
         Set<String> normalizedInstrumentSlots = instruments.stream()
-                .map(InstrumentMapping::slot).collect(java.util.stream.Collectors.toSet());
+                .map(instrumentMapping -> instrumentMapping.slot()).collect(java.util.stream.Collectors.toSet());
         if (!normalizedInstrumentSlots.equals(REQUIRED_INSTRUMENT_SLOTS)) {
             instruments = defaultConfiguration().instruments();
         }
@@ -203,7 +222,7 @@ public class DeviceWorkspaceTelemetryService {
         Map<String, String> sourceCategories = sourceParameters.stream()
                 .filter(parameter -> parameter.parameterId() != null && parameter.category() != null)
                 .collect(java.util.stream.Collectors.toMap(
-                        DataParameter::parameterId, DataParameter::category, (first, ignored) -> first));
+                        dataParameter -> dataParameter.parameterId(), dataParameter -> dataParameter.category(), (first, ignored) -> first));
         List<DataParameter> normalized = workspaceRepository.normalizedParameters(packet.id(), imei).stream()
                 .map(parameter -> withSourceCategory(parameter, sourceCategories.get(parameter.parameterId())))
                 .map(DeviceWorkspaceTelemetryService::withCanonicalDisplay)
@@ -213,7 +232,7 @@ public class DeviceWorkspaceTelemetryService {
         }
 
         Set<String> normalizedIds = normalized.stream()
-                .map(DataParameter::parameterId)
+                .map(dataParameter -> dataParameter.parameterId())
                 .filter(value -> value != null && !value.isBlank())
                 .collect(java.util.stream.Collectors.toSet());
         for (DataParameter sourceParameter : sourceParameters) {
@@ -225,7 +244,7 @@ public class DeviceWorkspaceTelemetryService {
 
         Map<String, Object> rawIo = readIoData(packet.ioDataJson());
         Set<String> persistedIds = values.values().stream()
-                .map(DataParameter::parameterId)
+                .map(dataParameter -> dataParameter.parameterId())
                 .filter(value -> value != null && !value.isBlank())
                 .collect(java.util.stream.Collectors.toSet());
         rawIo.forEach((id, rawValue) -> {
@@ -243,7 +262,7 @@ public class DeviceWorkspaceTelemetryService {
                 .map(parameter -> withCanonicalGroup(parameter, model, dictionaryCode))
                 .sorted(Comparator.comparingInt(DeviceWorkspaceTelemetryService::categoryOrder)
                         .thenComparingInt(DeviceWorkspaceTelemetryService::parameterOrder)
-                        .thenComparing(DataParameter::label, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                        .thenComparing(dataParameter -> dataParameter.label(), Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
     }
 
@@ -334,7 +353,7 @@ public class DeviceWorkspaceTelemetryService {
             String text = ((parameter.fieldCode() == null ? "" : parameter.fieldCode()) + " "
                     + (parameter.label() == null ? "" : parameter.label())).toUpperCase(Locale.ROOT);
             return text.contains("GSM") || text.contains("SIGNAL") || text.contains("RSSI");
-        }).map(DataParameter::numericValue).filter(value -> value != null)
+        }).map(dataParameter -> dataParameter.numericValue()).filter(value -> value != null)
           .findFirst().orElse(null);
         if (raw == null) return null;
         if (raw < 0) return raw >= -75 ? 5 : raw >= -85 ? 4 : raw >= -95 ? 3 : raw >= -105 ? 2 : 1;

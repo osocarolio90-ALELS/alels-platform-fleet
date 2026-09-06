@@ -3,15 +3,15 @@ export const DATA_TABLE_UI_STANDARD = {
   firstStickyColumnWidthPx: 220,
   secondStickyColumnWidthPx: 180,
   stickyHeaderClassName: "sticky z-30 isolate overflow-hidden bg-card bg-clip-padding",
-  stickyCellClassName: "sticky z-20 isolate overflow-hidden bg-card bg-clip-padding",
+  stickyCellClassName: "sticky z-20 isolate overflow-hidden bg-clip-padding",
   stickySelectionHeaderClassName: "sticky left-0 z-40 isolate overflow-hidden bg-card bg-clip-padding",
-  stickySelectionCellClassName: "sticky left-0 z-30 isolate overflow-hidden bg-card bg-clip-padding",
+  stickySelectionCellClassName: "sticky left-0 z-30 isolate overflow-hidden bg-clip-padding",
   stickyBoundaryClassName: "shadow-[6px_0_8px_-8px_hsl(var(--foreground))]"
 } as const;
 
 const SOLID_STICKY_BACKGROUND = "hsl(var(--card))";
 
-export function stickyColumnStyle(columnIndex: number, selectionEnabled: boolean) {
+export function stickyColumnStyle(columnIndex: number, selectionEnabled: boolean, backgroundColor = SOLID_STICKY_BACKGROUND) {
   if (columnIndex > 1) return undefined;
 
   const selectionOffset = selectionEnabled ? DATA_TABLE_UI_STANDARD.selectionColumnWidthPx : 0;
@@ -27,17 +27,17 @@ export function stickyColumnStyle(columnIndex: number, selectionEnabled: boolean
     minWidth: width,
     width,
     maxWidth: width,
-    backgroundColor: SOLID_STICKY_BACKGROUND
+    backgroundColor
   };
 }
 
-export function stickySelectionStyle() {
+export function stickySelectionStyle(backgroundColor = SOLID_STICKY_BACKGROUND) {
   return {
     left: 0,
     minWidth: DATA_TABLE_UI_STANDARD.selectionColumnWidthPx,
     width: DATA_TABLE_UI_STANDARD.selectionColumnWidthPx,
     maxWidth: DATA_TABLE_UI_STANDARD.selectionColumnWidthPx,
-    backgroundColor: SOLID_STICKY_BACKGROUND
+    backgroundColor
   };
 }
 

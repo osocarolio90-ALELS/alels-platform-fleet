@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.lang.NonNull;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -178,6 +179,7 @@ public class DeviceRegisterRepository {
                 """;
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<DeviceRegisterRow> rowMapper() {
         return (rs, rowNum) -> new DeviceRegisterRow(
                 rs.getLong("id"), rs.getLong("company_id"), rs.getString("company_name"), rs.getObject("device_brand_id", Long.class), rs.getString("brand_name"),

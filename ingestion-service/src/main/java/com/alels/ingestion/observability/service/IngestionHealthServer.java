@@ -9,10 +9,8 @@ import java.util.concurrent.Executors;
 
 public final class IngestionHealthServer implements AutoCloseable {
     private final HttpServer server;
-    private final IngestionRuntimeMetrics metrics;
 
     public IngestionHealthServer(String host, int port, IngestionRuntimeMetrics metrics) throws IOException {
-        this.metrics = metrics;
         server = HttpServer.create(new InetSocketAddress(host, port), 64);
         server.createContext("/live", exchange -> respond(exchange, 200, "UP\n"));
         server.createContext("/ready", exchange -> respond(

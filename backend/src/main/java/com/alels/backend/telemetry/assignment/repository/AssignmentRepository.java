@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.lang.NonNull;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -368,6 +369,7 @@ public class AssignmentRepository {
                 """;
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<AssetAssignmentRow> assetAssignmentMapper() {
         return (rs, rowNum) -> new AssetAssignmentRow(
                 rs.getLong("id"), rs.getLong("company_id"), rs.getString("company_name"),
@@ -418,6 +420,7 @@ public class AssignmentRepository {
                 """;
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<VehicleDeviceAssignmentRow> vehicleDeviceMapper() {
         return (rs, rowNum) -> new VehicleDeviceAssignmentRow(
                 rs.getLong("id"), rs.getLong("company_id"), rs.getString("company_name"), rs.getLong("vehicle_id"), rs.getString("vehicle_name"), rs.getString("plate_number"),
@@ -425,6 +428,7 @@ public class AssignmentRepository {
         );
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<DriverManualAssignmentRow> driverManualMapper() {
         return (rs, rowNum) -> new DriverManualAssignmentRow(
                 rs.getLong("id"), rs.getLong("company_id"), rs.getString("company_name"), rs.getObject("vehicle_id", Long.class), rs.getString("vehicle_name"), rs.getString("plate_number"),
@@ -433,6 +437,7 @@ public class AssignmentRepository {
         );
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<AssignmentLookupOption> lookupMapper() {
         return (rs, rowNum) -> new AssignmentLookupOption(
                 rs.getLong("id"), rs.getString("label"), rs.getString("code"), rs.getString("extra"),

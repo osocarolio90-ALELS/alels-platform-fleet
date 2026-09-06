@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
@@ -334,15 +335,18 @@ public class OrganizationRepository {
                 """, actorUserId, actorCompanyId, targetType, targetId, action, detailsJson == null ? "{}" : detailsJson);
     }
 
+    @NonNull
     private RowMapper<CompanyRow> companyMapper() {
         return (rs, rowNum) -> new CompanyRow(
                 rs.getLong("id"), nullableLong(rs, "parent_company_id"), rs.getString("parent_company_name"), rs.getString("company_name"), rs.getString("company_code"), rs.getString("company_type"), rs.getString("company_type"), rs.getString("plan"), nullableInt(rs, "month_packet"), nullableLong(rs, "storage_quota_mb"), nullableLong(rs, "storage_quota_mb"), nullableLong(rs, "storage_used_mb"), "MB", rs.getString("country"), rs.getString("status"), rs.getString("subscription_status"), rs.getBoolean("is_internal"), str(rs, "first_login_at"), str(rs, "started_at"), str(rs, "expired_at"), str(rs, "created_at"), nullableLong(rs, "created_by"), rs.getString("created_by_name"), rs.getString("created_by_email"), str(rs, "updated_at"), str(rs, "deleted_at"), str(rs, "delete_permanent_at"), nullableInt(rs, "remaining_days"), rs.getString("deleted_reason"), nullableLong(rs, "active_user_count"));
     }
 
+    @NonNull
     private RowMapper<UserRow> userMapper() {
         return (rs, rowNum) -> new UserRow(nullableLong(rs, "id"), nullableLong(rs, "company_id"), rs.getString("company_name"), rs.getString("parent_company_name"), rs.getString("username"), rs.getString("full_name"), rs.getString("email"), rs.getString("role"), rs.getString("status"), str(rs, "first_login_at"), str(rs, "last_login_at"), str(rs, "created_at"), nullableLong(rs, "created_by"), rs.getString("created_by_name"), rs.getString("created_by_email"), str(rs, "updated_at"), str(rs, "deleted_at"), str(rs, "delete_permanent_at"), nullableInt(rs, "remaining_days"), rs.getString("deleted_reason"), rs.getString("profile_photo_path"));
     }
 
+    @NonNull
     private RowMapper<WastedRow> wastedMapper() {
         return (rs, rowNum) -> new WastedRow(rs.getString("item_type"), nullableLong(rs, "id"), rs.getString("name"), rs.getString("company_name"), rs.getString("role_or_type"), str(rs, "deleted_at"), str(rs, "delete_permanent_at"), nullableInt(rs, "remaining_days"), rs.getString("deleted_reason"), nullableLong(rs, "deleted_by"), rs.getString("deleted_by_email"));
     }

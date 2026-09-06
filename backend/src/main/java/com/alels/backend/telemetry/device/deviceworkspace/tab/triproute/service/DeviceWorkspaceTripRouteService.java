@@ -49,6 +49,7 @@ import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.reposito
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.RouteWindow;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.TelemetryPoint;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.DriverAssignmentPeriod;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.EnergyCostProfile;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.VehicleAssignmentPeriod;
 import com.alels.backend.telemetry.device.repository.TelemetryDeviceRepository;
 import com.alels.backend.telemetry.device.repository.TelemetryDeviceRepository.DeviceAccess;
@@ -57,8 +58,7 @@ import com.alels.backend.telemetry.device.repository.TelemetryDeviceRepository.D
 public class DeviceWorkspaceTripRouteService {
     static final Duration MAX_RANGE = Duration.ofDays(31);
     private static final Duration MAX_PACKET_GAP = Duration.ofMinutes(30);
-    private static final Duration IGNITION_CONFIRMATION = Duration.ofSeconds(10);
-    private static final double MOVEMENT_SPEED_KMH = 3.0;
+    private static final double MOVEMENT_SPEED_KMH = 5.0;
     private static final double MAX_PLAUSIBLE_SPEED_KMH = 220.0;
     private static final int MAX_LIST_ROUTE_POINTS = 12_000;
     private static final int MAX_SEGMENT_ROUTE_POINTS = 2_000;
@@ -84,7 +84,8 @@ public class DeviceWorkspaceTripRouteService {
         List<TripSummary> trips = accumulator.finish();
         Collections.reverse(trips);
         trips = withAssignmentLabels(device.imei(), range, trips);
-        // P1: Trip list is summary-only. Route geometry is loaded only for checked Trip/Stop ranges.
+        trips = withOperationCosts(trips, repository.vehicleEnergyCostProfile(deviceId, device.companyId()).orElse(null));
+        // P1: Trip list is summary-only. Route geometry is loaded only for checked Trip/Idle/Stop ranges.
         return new TripListResponse(trips, List.of(), repository.vehicleEnergyGroup(deviceId, device.companyId()));
     }
 
@@ -96,8 +97,11 @@ public class DeviceWorkspaceTripRouteService {
         if (points.size() > DeviceWorkspaceTripRouteRepository.MAX_DETAIL_POINTS) {
             throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Selected trip contains too many telemetry points. Select a shorter interval.");
         }
-        TripSummary summary = withAssignmentLabels(device.imei(), range,
-                List.of(summarize(points, ignitionOn(points.getFirst()) ? "TRIP" : "STOP", false))).getFirst();
+        String summaryType = vehicleState(points.getFirst());
+        TripSummary summary = withOperationCosts(
+                withAssignmentLabels(device.imei(), range, List.of(summarize(points, summaryType, false))),
+                repository.vehicleEnergyCostProfile(deviceId, device.companyId()).orElse(null)
+        ).getFirst();
         Map<Long, TripInstrumentSnapshot> instruments = repository.instrumentSnapshots(device.imei(), range.from(), range.to());
         List<TripPoint> track = points.stream().filter(this::validPosition).map(point -> new TripPoint(
                 point.id(), point.occurredAt().toString(), point.latitude(), point.longitude(),
@@ -168,8 +172,11 @@ public class DeviceWorkspaceTripRouteService {
 
     public SelectedDeviceLogPage selectedLogs(JwtUserContext user, Long deviceId, SelectedLogsRequest request) {
         DeviceAccess device = scopedDevice(user, deviceId);
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Select at least one Trip or Stop.");
+        }
         List<TimeWindow> ranges = selectedRanges(request);
-        int size = request == null || request.size() == null ? 50 : request.size();
+        int size = request.size() == null ? 50 : request.size();
         if (size != 15 && size != 25 && size != 50 && size != 75 && size != 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Log page size must be 15, 25, 50, 75, or 100.");
         }
@@ -261,7 +268,7 @@ public class DeviceWorkspaceTripRouteService {
             TimeRange checked = range(selected.from(), selected.to());
             parsed.add(new TimeWindow(checked.from(), checked.to()));
         }
-        parsed.sort(Comparator.comparing(TimeWindow::from));
+        parsed.sort(Comparator.comparing(timeWindow -> timeWindow.from()));
         if (Duration.between(parsed.getFirst().from(), parsed.getLast().to()).compareTo(MAX_RANGE) > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selected Trip/Stop ranges cannot span more than 31 days.");
         }
@@ -336,63 +343,6 @@ public class DeviceWorkspaceTripRouteService {
         return result;
     }
 
-    private List<TripSummary> segment(List<TelemetryPoint> points) {
-        List<TripSummary> result = new ArrayList<>();
-        List<TelemetryPoint> trip = null;
-        List<TelemetryPoint> stop = null;
-        boolean tripConfirmed = false;
-        boolean stopHasIndependentPoint = false;
-        TelemetryPoint previous = null;
-        for (TelemetryPoint point : points) {
-            boolean gap = previous != null && Duration.between(previous.occurredAt(), point.occurredAt()).compareTo(MAX_PACKET_GAP) > 0;
-            if (gap) {
-                flushSegment(result, trip, stop, tripConfirmed, stopHasIndependentPoint, false);
-                trip = null;
-                stop = null;
-                tripConfirmed = false;
-                stopHasIndependentPoint = false;
-            }
-            if (trip == null) {
-                if (ignitionOn(point)) {
-                    if (stop != null) {
-                        stop.add(point);
-                        addSegment(result, stop, "STOP", false);
-                        stop = null;
-                        stopHasIndependentPoint = false;
-                    }
-                    trip = new ArrayList<>();
-                    trip.add(point);
-                } else if (ignitionOff(point)) {
-                    if (stop == null) stop = new ArrayList<>();
-                    stop.add(point);
-                    stopHasIndependentPoint = true;
-                }
-            } else {
-                trip.add(point);
-                if (Duration.between(trip.getFirst().occurredAt(), point.occurredAt())
-                        .compareTo(IGNITION_CONFIRMATION) > 0) {
-                    tripConfirmed = true;
-                }
-                if (ignitionOff(point)) {
-                    if (tripConfirmed) {
-                        addSegment(result, trip, "TRIP", false);
-                        stop = new ArrayList<>();
-                        stop.add(point);
-                        stopHasIndependentPoint = false;
-                    }
-                    trip = null;
-                    tripConfirmed = false;
-                }
-            }
-            previous = point;
-        }
-        boolean latestPacketIsCurrent = previous != null
-                && !previous.occurredAt().isAfter(Instant.now())
-                && Duration.between(previous.occurredAt(), Instant.now()).compareTo(MAX_PACKET_GAP) <= 0;
-        flushSegment(result, trip, stop, tripConfirmed, stopHasIndependentPoint, latestPacketIsCurrent);
-        return result.reversed();
-    }
-
     private List<TripSummary> withAssignmentLabels(String imei, TimeRange range, List<TripSummary> summaries) {
         if (summaries.isEmpty()) return summaries;
         List<VehicleAssignmentPeriod> vehicles = repository.vehicleAssignmentPeriods(imei, range.from(), range.to());
@@ -406,27 +356,49 @@ public class DeviceWorkspaceTripRouteService {
             String vehicle = DeviceWorkspaceTripRouteRepository.vehiclePlateAt(vehicles, startedAt);
             return new TripSummary(summary.id(), summary.type(), summary.status(), summary.startTime(), summary.endTime(),
                     summary.durationSeconds(), summary.distanceKm(), summary.averageSpeed(), summary.maximumSpeed(),
-                    driver, vehicle, summary.fuelConsumption(), summary.fuelStart(), summary.fuelFinish(),
+                    driver, vehicle, summary.operationCost(), summary.fuelCost(), summary.roadCost(), summary.costCurrency(),
+                    summary.fuelConsumption(), summary.fuelStart(), summary.fuelFinish(),
                     summary.startLatitude(), summary.startLongitude(), summary.endLatitude(), summary.endLongitude());
         }).toList();
     }
 
-    private void flushSegment(List<TripSummary> result, List<TelemetryPoint> trip,
-                              List<TelemetryPoint> stop, boolean tripConfirmed,
-                              boolean stopHasIndependentPoint, boolean inProgress) {
-        if (trip != null && tripConfirmed) {
-            addSegment(result, trip, "TRIP", inProgress);
-        } else if (stop != null && (stop.size() > 1 || stopHasIndependentPoint)) {
-            result.add(summarize(stop, "STOP", inProgress));
+    private String vehicleState(TelemetryPoint point) {
+        if (point != null && point.vehicleStatus() != null) {
+            String canonical = point.vehicleStatus().trim().toUpperCase(java.util.Locale.ROOT);
+            if (Set.of("STOP", "IDLE", "TRIP").contains(canonical)) return canonical;
         }
+        Double ignition = point == null ? null : point.ignition();
+        Double speed = point == null ? null : point.speed();
+        if (ignition == null || speed == null) return "STOP";
+        if (ignition > 0 && speed > MOVEMENT_SPEED_KMH) return "TRIP";
+        if (ignition > 0) return "IDLE";
+        return "STOP";
     }
 
-    private void addSegment(List<TripSummary> result, List<TelemetryPoint> points, String type, boolean inProgress) {
-        if (points.size() > 1) result.add(summarize(points, type, inProgress));
+    private List<TripSummary> withOperationCosts(List<TripSummary> summaries, EnergyCostProfile energyCost) {
+        if (summaries.isEmpty()) return summaries;
+        return summaries.stream().map(summary -> {
+            Double fuelCost = null;
+            String currency = energyCost == null ? null : energyCost.currency();
+            if (summary.fuelConsumption() != null && summary.fuelConsumption() >= 0
+                    && energyCost != null && energyCost.unitPrice() != null && energyCost.unitPrice() > 0) {
+                fuelCost = roundMoney(summary.fuelConsumption() * energyCost.unitPrice());
+            }
+            // No validated toll-gate tariff source exists in the current ALELS schema.
+            // Per the product rule, operation cost therefore equals fuel cost until road cost is available.
+            Double roadCost = null;
+            Double operationCost = fuelCost;
+            return new TripSummary(summary.id(), summary.type(), summary.status(), summary.startTime(), summary.endTime(),
+                    summary.durationSeconds(), summary.distanceKm(), summary.averageSpeed(), summary.maximumSpeed(),
+                    summary.driverName(), summary.vehiclePlateNumber(), operationCost, fuelCost, roadCost, currency,
+                    summary.fuelConsumption(), summary.fuelStart(), summary.fuelFinish(),
+                    summary.startLatitude(), summary.startLongitude(), summary.endLatitude(), summary.endLongitude());
+        }).toList();
     }
 
-    private boolean ignitionOn(TelemetryPoint point) { return point.ignition() != null && point.ignition() > 0; }
-    private boolean ignitionOff(TelemetryPoint point) { return point.ignition() != null && point.ignition() <= 0; }
+    private static double roundMoney(double value) {
+        return Math.round(value * 100.0) / 100.0;
+    }
 
     private TripSummary summarize(List<TelemetryPoint> points, String type, boolean inProgress) {
         TelemetryPoint first = points.get(0), last = points.get(points.size() - 1);
@@ -452,6 +424,7 @@ public class DeviceWorkspaceTripRouteService {
                 Math.max(0, Duration.between(first.occurredAt(), last.occurredAt()).toSeconds()),
                 round(distance), round(speedCount == 0 ? 0 : speedTotal / speedCount), round(maximumSpeed),
                 first.driverName() == null || first.driverName().isBlank() ? "-" : first.driverName(),
+                null, null, null, null,
                 fuel.consumption(), fuel.startLevel(), fuel.finishLevel(),
                 first.latitude(), first.longitude(), last.latitude(), last.longitude());
     }
@@ -459,10 +432,8 @@ public class DeviceWorkspaceTripRouteService {
 
     private final class TripListAccumulator {
         private final List<TripSummary> segments = new ArrayList<>();
-        private SegmentAccumulator trip;
-        private SegmentAccumulator stop;
-        private boolean tripConfirmed;
-        private boolean stopHasIndependentPoint;
+        private SegmentAccumulator current;
+        private String currentType;
         private TelemetryPoint previous;
 
         void accept(TelemetryPoint point) {
@@ -470,43 +441,20 @@ public class DeviceWorkspaceTripRouteService {
                     && Duration.between(previous.occurredAt(), point.occurredAt()).compareTo(MAX_PACKET_GAP) > 0;
             if (gap) {
                 flush(false);
-                trip = null;
-                stop = null;
-                tripConfirmed = false;
-                stopHasIndependentPoint = false;
+                current = null;
+                currentType = null;
             }
 
-            if (trip == null) {
-                if (ignitionOn(point)) {
-                    if (stop != null) {
-                        stop.add(point);
-                        addIfMultiple(stop, "STOP", false);
-                        stop = null;
-                        stopHasIndependentPoint = false;
-                    }
-                    trip = new SegmentAccumulator();
-                    trip.add(point);
-                } else if (ignitionOff(point)) {
-                    if (stop == null) stop = new SegmentAccumulator();
-                    stop.add(point);
-                    stopHasIndependentPoint = true;
-                }
-            } else {
-                trip.add(point);
-                if (Duration.between(trip.first().occurredAt(), point.occurredAt()).compareTo(IGNITION_CONFIRMATION) > 0) {
-                    tripConfirmed = true;
-                }
-                if (ignitionOff(point)) {
-                    if (tripConfirmed) {
-                        addIfMultiple(trip, "TRIP", false);
-                        stop = new SegmentAccumulator();
-                        stop.add(point);
-                        stopHasIndependentPoint = false;
-                    }
-                    trip = null;
-                    tripConfirmed = false;
-                }
+            String pointType = vehicleState(point);
+            if (current == null) {
+                current = new SegmentAccumulator();
+                currentType = pointType;
+            } else if (!currentType.equals(pointType)) {
+                flush(false);
+                current = new SegmentAccumulator();
+                currentType = pointType;
             }
+            current.add(point);
             previous = point;
         }
 
@@ -519,15 +467,9 @@ public class DeviceWorkspaceTripRouteService {
         }
 
         private void flush(boolean inProgress) {
-            if (trip != null && tripConfirmed) {
-                addIfMultiple(trip, "TRIP", inProgress);
-            } else if (stop != null && (stop.count() > 1 || stopHasIndependentPoint)) {
-                segments.add(stop.summary("STOP", inProgress));
+            if (current != null && current.count() > 0) {
+                segments.add(current.summary(currentType, inProgress));
             }
-        }
-
-        private void addIfMultiple(SegmentAccumulator accumulator, String type, boolean inProgress) {
-            if (accumulator.count() > 1) segments.add(accumulator.summary(type, inProgress));
         }
     }
 
@@ -563,6 +505,7 @@ public class DeviceWorkspaceTripRouteService {
         }
 
         TelemetryPoint first() { return first; }
+        TelemetryPoint last() { return last; }
         long count() { return count; }
 
         TripSummary summary(String type, boolean inProgress) {
@@ -572,6 +515,7 @@ public class DeviceWorkspaceTripRouteService {
                     Math.max(0, Duration.between(first.occurredAt(), last.occurredAt()).toSeconds()),
                     round(distance), round(speedCount == 0 ? 0 : speedTotal / speedCount), round(maximumSpeed),
                     first.driverName() == null || first.driverName().isBlank() ? "-" : first.driverName(),
+                    null, null, null, null,
                     fuel.consumption(), fuel.startLevel(), fuel.finishLevel(),
                     first.latitude(), first.longitude(), last.latitude(), last.longitude());
         }

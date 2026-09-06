@@ -1,5 +1,6 @@
 package com.alels.backend.masterdata.repository;
 
+import java.util.Objects;
 import java.util.List;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -17,7 +18,7 @@ public class MasterOptionRepository {
     }
 
     public List<MasterOptionRow> list(String table, String codeColumn, String nameColumn) {
-        return jdbcTemplate.query("""
+        return jdbcTemplate.query(Objects.requireNonNull("""
                 SELECT id,
                        %s AS code,
                        %s AS name,
@@ -30,7 +31,7 @@ public class MasterOptionRepository {
                 FROM %s
                 WHERE deleted_at IS NULL
                 ORDER BY sort_order, %s
-                """.formatted(codeColumn, nameColumn, table, nameColumn),
+                """.formatted(codeColumn, nameColumn, table, nameColumn)),
                 (rs, rowNum) -> new MasterOptionRow(
                         rs.getLong("id"),
                         rs.getString("code"),
@@ -45,7 +46,7 @@ public class MasterOptionRepository {
     }
 
     public void create(String table, String codeColumn, String nameColumn, MasterOptionRequest request, Long userId) {
-        jdbcTemplate.update("""
+        jdbcTemplate.update(Objects.requireNonNull("""
                 INSERT INTO %s (%s, %s, description, is_active, is_system, sort_order, created_by, updated_by)
                 VALUES (?, ?, ?, COALESCE(?, TRUE), FALSE, COALESCE(?, 1000), ?, ?)
                 ON CONFLICT (%s) DO UPDATE
@@ -59,12 +60,12 @@ public class MasterOptionRepository {
                     deleted_by = NULL,
                     deleted_reason = NULL,
                     delete_permanent_at = NULL
-                """.formatted(table, codeColumn, nameColumn, codeColumn, nameColumn, nameColumn),
+                """.formatted(table, codeColumn, nameColumn, codeColumn, nameColumn, nameColumn)),
                 normalizeCode(request.code(), request.name()), request.name(), request.description(), request.active(), request.sortOrder(), userId, userId);
     }
 
     public void update(String table, String codeColumn, String nameColumn, Long id, MasterOptionRequest request, Long userId) {
-        jdbcTemplate.update("""
+        jdbcTemplate.update(Objects.requireNonNull("""
                 UPDATE %s
                 SET %s = COALESCE(NULLIF(TRIM(?), ''), %s),
                     %s = COALESCE(NULLIF(TRIM(?), ''), %s),
@@ -75,12 +76,12 @@ public class MasterOptionRepository {
                     updated_at = NOW()
                 WHERE id = ?
                   AND deleted_at IS NULL
-                """.formatted(table, codeColumn, codeColumn, nameColumn, nameColumn),
+                """.formatted(table, codeColumn, codeColumn, nameColumn, nameColumn)),
                 normalizeCode(request.code(), request.name()), request.name(), request.description(), request.active(), request.sortOrder(), userId, id);
     }
 
     public void softDelete(String table, Long id, Long userId) {
-        jdbcTemplate.update("""
+        jdbcTemplate.update(Objects.requireNonNull("""
                 UPDATE %s
                 SET is_active = FALSE,
                     deleted_at = NOW(),
@@ -91,7 +92,7 @@ public class MasterOptionRepository {
                     updated_at = NOW()
                 WHERE id = ?
                   AND deleted_at IS NULL
-                """.formatted(table), userId, userId, id);
+                """.formatted(table)), userId, userId, id);
     }
 
     public void log(Long actorUserId, Long actorCompanyId, String targetType, Long targetId, String action) {

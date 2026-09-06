@@ -1,8 +1,10 @@
 package com.alels.backend.masterdata.repository;
 
+import java.util.Objects;
 import java.util.List;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
 
 import com.alels.backend.masterdata.dto.MasterWastedDtos.MasterWastedRow;
@@ -22,12 +24,12 @@ public class MasterWastedRepository {
     public void restore(String itemType, Long id, Long actorUserId) {
         String table = tableName(normalizeType(itemType));
         if (!tableExists(table)) return;
-        jdbcTemplate.update("""
+        jdbcTemplate.update(Objects.requireNonNull("""
                 UPDATE %s
                 SET deleted_at = NULL, deleted_by = NULL, deleted_reason = NULL, delete_permanent_at = NULL,
                     is_active = TRUE, status = 'ACTIVE', updated_by = ?, updated_at = NOW()
                 WHERE id = ? AND deleted_at IS NOT NULL
-                """.formatted(table), actorUserId, id);
+                """.formatted(table)), actorUserId, id);
     }
 
     public void permanentDelete(String itemType, Long id) {
@@ -84,6 +86,7 @@ public class MasterWastedRepository {
                 """;
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<MasterWastedRow> mapper() {
         return (rs, rowNum) -> new MasterWastedRow(rs.getString("item_type"), rs.getLong("id"), rs.getString("name"), rs.getString("code"), rs.getString("extra"), rs.getString("status"), rs.getString("deleted_at"), rs.getObject("deleted_by", Long.class), rs.getString("deleted_by_email"), rs.getString("delete_permanent_at"), rs.getObject("remaining_days", Integer.class), rs.getString("deleted_reason"));
     }

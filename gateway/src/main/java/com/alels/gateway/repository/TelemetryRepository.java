@@ -33,7 +33,7 @@ public class TelemetryRepository {
 
         String vehicleStatus =
                 VehicleStatusResolver.resolve(
-                        data.getIoData()
+                        data
                 );
 
         Long companyId =

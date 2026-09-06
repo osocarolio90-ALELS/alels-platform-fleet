@@ -23,7 +23,6 @@ public class AiOpsMonitorService {
 
     public AiOpsOverviewResponse getOverview() {
         boolean dbHealthy = repository.isDatabaseHealthy();
-        long activeDbConnections = repository.countActiveDatabaseConnections();
         long totalDbConnections = repository.countTotalDatabaseConnections();
         long connectedDevices = repository.countConnectedDevices();
         long offlineDevices = repository.countOfflineDevices();
@@ -35,7 +34,6 @@ public class AiOpsMonitorService {
         double heapUsedPercent = heapUsedPercent();
         double diskUsedPercent = diskUsedPercent();
         double systemLoad = systemLoadAverage();
-        long uptimeMinutes = ManagementFactory.getRuntimeMXBean().getUptime() / 60_000;
 
         List<AiOpsOverviewResponse.MetricCard> metrics = List.of(
                 metric("db_status", "PostgreSQL", dbHealthy ? "UP" : "DOWN", "", dbHealthy ? "NORMAL" : "EMERGENCY", "Koneksi database utama backend."),

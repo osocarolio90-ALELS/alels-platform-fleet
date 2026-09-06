@@ -452,6 +452,22 @@ FOR EACH ROW
 WHEN (NEW.event_io_id IS NOT NULL AND NEW.event_io_id <> 0)
 EXECUTE FUNCTION alels_materialize_device_io_event();
 
+CREATE OR REPLACE FUNCTION alels_materialize_vehicle_status_event()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE previous_status TEXT;
+BEGIN
+  IF NEW.vehicle_status IS NULL OR NEW.vehicle_status NOT IN ('STOP','IDLE','TRIP') THEN RETURN NEW; END IF;
+  SELECT vehicle_status INTO previous_status FROM telemetry WHERE imei=NEW.imei AND id<>NEW.id ORDER BY server_time DESC,id DESC LIMIT 1;
+  IF previous_status IS DISTINCT FROM NEW.vehicle_status THEN
+    INSERT INTO telemetry_events(company_id,device_id,telemetry_id,imei,event_source,event_code,event_io_id,io_name,raw_value,severity,title,message,latitude,longitude,speed,occurred_at,metadata,created_at)
+    SELECT d.company_id,d.id,NEW.id,NEW.imei,'VEHICLE_STATUS','STATUS:'||NEW.vehicle_status,NULL,'Vehicle Status',NEW.vehicle_status,'INFO','Vehicle Status '||NEW.vehicle_status,'Vehicle Status = '||NEW.vehicle_status,NEW.latitude,NEW.longitude,NEW.speed,COALESCE(NEW.device_time,NEW.server_time,NOW()),jsonb_build_object('status',NEW.vehicle_status),NEW.server_time FROM devices d WHERE d.imei=NEW.imei LIMIT 1;
+  END IF;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS trg_telemetry_materialize_vehicle_status_event ON telemetry;
+CREATE TRIGGER trg_telemetry_materialize_vehicle_status_event AFTER INSERT ON telemetry FOR EACH ROW EXECUTE FUNCTION alels_materialize_vehicle_status_event();
+
 DROP TRIGGER IF EXISTS trg_telemetry_io_enrich_device_event ON telemetry_io;
 CREATE TRIGGER trg_telemetry_io_enrich_device_event
 AFTER INSERT OR UPDATE OF io_name, raw_value, numeric_value, real_value, unit, is_event ON telemetry_io

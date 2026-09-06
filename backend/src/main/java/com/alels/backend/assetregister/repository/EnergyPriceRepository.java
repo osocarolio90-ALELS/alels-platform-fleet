@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
@@ -242,6 +243,7 @@ public class EnergyPriceRepository {
                 """, actorUserId, actorCompanyId, targetType, targetId, action, detailsJson == null ? "{}" : detailsJson);
     }
 
+    @NonNull
     private RowMapper<EnergyPriceRow> rowMapper() {
         return (rs, rowNum) -> new EnergyPriceRow(
                 rs.getLong("id"),

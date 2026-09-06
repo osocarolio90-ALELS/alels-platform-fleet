@@ -72,10 +72,10 @@ public class GatewayPublicEndpoint {
         }
 
         return candidates.stream()
-                .sorted(Comparator.comparing(AddressCandidate::siteLocal).reversed()
-                        .thenComparingInt(AddressCandidate::interfaceIndex)
-                        .thenComparing(AddressCandidate::host))
-                .map(AddressCandidate::host)
+                .sorted(Comparator.comparing((AddressCandidate addressCandidate) -> addressCandidate.siteLocal()).reversed()
+                        .thenComparingInt(addressCandidate -> addressCandidate.interfaceIndex())
+                        .thenComparing(addressCandidate -> addressCandidate.host()))
+                .map(addressCandidate -> addressCandidate.host())
                 .findFirst();
     }
 

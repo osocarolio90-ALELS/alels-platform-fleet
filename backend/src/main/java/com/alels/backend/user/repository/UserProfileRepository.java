@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
@@ -105,6 +106,7 @@ public class UserProfileRepository {
         }
     }
 
+    @NonNull
     private RowMapper<UserProfileResponse> profileMapper() {
         return (rs, rowNum) -> new UserProfileResponse(
                 rs.getLong("id"),

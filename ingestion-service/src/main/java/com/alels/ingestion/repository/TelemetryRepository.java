@@ -758,15 +758,21 @@ public class TelemetryRepository {
     }
 
     private String resolveVehicleStatus(TelemetryMessage message) {
-        if (message.speed == null) {
+        if (message.speed == null || message.ioData == null) {
             return "UNKNOWN";
         }
-
-        if (message.speed > 0) {
-            return "MOVING";
+        Object rawIgnition = message.ioData.get("239");
+        Integer ignition = null;
+        if (rawIgnition instanceof Number number) ignition = number.intValue();
+        else if (rawIgnition != null) {
+            try { ignition = Integer.parseInt(String.valueOf(rawIgnition)); }
+            catch (NumberFormatException ignored) { return "UNKNOWN"; }
         }
-
-        return "STOP";
+        if (ignition == null) return "UNKNOWN";
+        if (ignition == 1 && message.speed > 5) return "TRIP";
+        if (ignition == 1) return "IDLE";
+        if (ignition == 0 && message.speed <= 5) return "STOP";
+        return "UNKNOWN";
     }
 
     private Timestamp parseTimestamp(String value) {

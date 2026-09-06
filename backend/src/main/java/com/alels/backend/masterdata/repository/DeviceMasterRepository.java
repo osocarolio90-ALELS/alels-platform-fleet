@@ -1,9 +1,9 @@
 package com.alels.backend.masterdata.repository;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.lang.NonNull;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -260,6 +260,7 @@ public class DeviceMasterRepository {
                 """;
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<DeviceModelRow> modelMapper() {
         return (rs, rowNum) -> new DeviceModelRow(
                 rs.getLong("id"), rs.getObject("brand_id", Long.class), rs.getString("brand_code"), rs.getString("brand_name"),

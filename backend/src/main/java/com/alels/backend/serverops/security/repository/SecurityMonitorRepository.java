@@ -1,6 +1,7 @@
 package com.alels.backend.serverops.security.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -106,7 +107,7 @@ public class SecurityMonitorRepository {
         return count("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '" + tableName + "'") > 0;
     }
 
-    private long count(String sql) {
+    private long count(@NonNull String sql) {
         try {
             Long value = jdbcTemplate.queryForObject(sql, Long.class);
             return value == null ? 0L : value;

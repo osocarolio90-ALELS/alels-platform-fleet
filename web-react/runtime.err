@@ -1,0 +1,37 @@
+14.44.38 [vite] http proxy error: /api/auth/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+14.45.36 [vite] http proxy error: /api/auth/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+14.46.36 [vite] http proxy error: /api/auth/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+14.47.36 [vite] http proxy error: /api/auth/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+14.48.41 [vite] http proxy error: /api/auth/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+14.48.59 [vite] http proxy error: /api/auth/heartbeat
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+14.48.59 [vite] http proxy error: /api/telemetry/devices/4/workspace/telemetry
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+14.48.59 [vite] http proxy error: /api/telemetry/devices/4/workspace/telemetry/events?limit=50
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+npm notice
+npm notice New major version of npm available! 10.9.3 -> 12.0.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+npm notice To update run: npm install -g npm@12.0.2
+npm notice

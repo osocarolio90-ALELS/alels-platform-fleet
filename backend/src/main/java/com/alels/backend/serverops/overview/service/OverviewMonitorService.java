@@ -239,7 +239,7 @@ public class OverviewMonitorService {
 
     private int averageScore(List<MonitorModule> modules) {
         if (modules.isEmpty()) return 0;
-        int total = modules.stream().mapToInt(MonitorModule::getScore).sum();
+        int total = modules.stream().mapToInt(monitorModule -> monitorModule.getScore()).sum();
         return clamp(Math.round((float) total / modules.size()));
     }
 

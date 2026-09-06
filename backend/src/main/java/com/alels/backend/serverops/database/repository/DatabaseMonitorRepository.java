@@ -3,6 +3,7 @@ package com.alels.backend.serverops.database.repository;
 import java.util.List;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
 
 import com.alels.backend.serverops.database.model.DatabaseMonitorOverviewResponse.DatabaseDistribution;
@@ -77,7 +78,7 @@ public class DatabaseMonitorRepository {
         return distribution("SELECT indexrelname AS name, pg_relation_size(indexrelid)::bigint AS count FROM pg_catalog.pg_statio_user_indexes ORDER BY pg_relation_size(indexrelid) DESC LIMIT 6");
     }
 
-    private List<DatabaseDistribution> distribution(String sql) {
+    private List<DatabaseDistribution> distribution(@NonNull String sql) {
         try {
             List<DatabaseDistribution> rows = jdbcTemplate.query(sql, (rs, rowNum) -> {
                 long bytes = rs.getLong("count");
@@ -88,7 +89,7 @@ public class DatabaseMonitorRepository {
                         formatBytes(bytes)
                 );
             });
-            long total = rows.stream().mapToLong(DatabaseDistribution::getCount).sum();
+            long total = rows.stream().mapToLong(databaseDistribution -> databaseDistribution.getCount()).sum();
             rows.forEach(row -> row.setPercent(total <= 0 ? 0 : row.getCount() * 100.0 / total));
             return rows;
         } catch (Exception e) {
@@ -113,7 +114,7 @@ public class DatabaseMonitorRepository {
         return String.format(java.util.Locale.US, "%.2f", value);
     }
 
-    private long count(String sql) {
+    private long count(@NonNull String sql) {
         try {
             Long value = jdbcTemplate.queryForObject(sql, Long.class);
             return value == null ? 0L : value;

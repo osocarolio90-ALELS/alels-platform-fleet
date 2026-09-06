@@ -12,9 +12,6 @@ public class DriverResolver {
 
     private static final String AVL_IBUTTON = "78";
 
-    private static final boolean TEST_MODE_DUMMY_RFID = false;
-    private static final String TEST_DUMMY_RFID = "0xABCNEW002";
-
     public static DriverInfo resolve(
             Long companyId,
             Map<String, Object> ioData
@@ -36,21 +33,6 @@ public class DriverResolver {
 
         String rfid =
                 String.valueOf(value).trim();
-
-        if (TEST_MODE_DUMMY_RFID
-                && (
-                        rfid.isBlank()
-                        || rfid.equals("0")
-                        || rfid.equals("0x0000000000000000")
-                )) {
-
-            rfid = TEST_DUMMY_RFID;
-
-            System.out.println(
-                    "[DRIVER RESOLVER TEST MODE] dummy RFID injected rfid="
-                            + rfid
-            );
-        }
 
         if (rfid.isBlank()
                 || rfid.equals("0")

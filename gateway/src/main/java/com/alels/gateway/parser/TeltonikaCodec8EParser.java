@@ -1,8 +1,6 @@
 package com.alels.gateway.parser;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -102,11 +100,6 @@ public class TeltonikaCodec8EParser implements PacketParser {
 
                 double longitude = longitudeRaw / 10_000_000.0;
                 double latitude = latitudeRaw / 10_000_000.0;
-
-                LocalDateTime gpsTime = LocalDateTime.ofInstant(
-                        Instant.ofEpochMilli(timestampMs),
-                        ZoneOffset.UTC
-                );
 
                 TelemetryData telemetryData = new TelemetryData();
                 telemetryData.setSourceProtocol(ProtocolType.TELTONIKA_CODEC8E);

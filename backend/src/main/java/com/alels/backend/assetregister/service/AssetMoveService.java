@@ -41,7 +41,7 @@ public class AssetMoveService {
         if (assets.size() != ids.size()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Satu atau lebih asset tidak ditemukan atau sudah dihapus.");
         }
-        if (assets.stream().map(AssetMoveRecord::companyId).distinct().count() != 1) {
+        if (assets.stream().map(assetMoveRecord -> assetMoveRecord.companyId()).distinct().count() != 1) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, MIXED_COMPANY_MESSAGE);
         }
 

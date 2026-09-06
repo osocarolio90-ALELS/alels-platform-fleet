@@ -9,6 +9,7 @@ public final class DeviceWorkspaceTripRouteDtos {
             String id, String type, String status, String startTime, String endTime,
             long durationSeconds, double distanceKm, double averageSpeed,
             double maximumSpeed, String driverName, String vehiclePlateNumber,
+            Double operationCost, Double fuelCost, Double roadCost, String costCurrency,
             Double fuelConsumption, Double fuelStart, Double fuelFinish,
             Double startLatitude, Double startLongitude,
             Double endLatitude, Double endLongitude
@@ -17,13 +18,14 @@ public final class DeviceWorkspaceTripRouteDtos {
                 String id, String type, String status, String startTime, String endTime,
                 long durationSeconds, double distanceKm, double averageSpeed,
                 double maximumSpeed, String driverName,
+                Double operationCost, Double fuelCost, Double roadCost, String costCurrency,
                 Double fuelConsumption, Double fuelStart, Double fuelFinish,
                 Double startLatitude, Double startLongitude,
                 Double endLatitude, Double endLongitude
         ) {
             this(id, type, status, startTime, endTime, durationSeconds, distanceKm, averageSpeed,
-                    maximumSpeed, driverName, "-", fuelConsumption, fuelStart, fuelFinish,
-                    startLatitude, startLongitude, endLatitude, endLongitude);
+                    maximumSpeed, driverName, "-", operationCost, fuelCost, roadCost, costCurrency,
+                    fuelConsumption, fuelStart, fuelFinish, startLatitude, startLongitude, endLatitude, endLongitude);
         }
     }
     public record TripInstrumentSnapshot(

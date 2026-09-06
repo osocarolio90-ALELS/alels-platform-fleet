@@ -3,7 +3,7 @@ export type TelemetryDeviceRow = {
   vehicleModel:string; vehicleType:string; plateNumber:string;
   energyType:string; referencePrice:number;
   driverName:string; driverPhone:string; driverLicense:string;
-  movementStatus:"MOVING"|"IDLE"|"STOP"|string; tcpEnabled:boolean; connected:boolean;
+  vehicleStatus:"STOP"|"IDLE"|"TRIP"|string; tcpEnabled:boolean; connected:boolean;
   groupId?:number|null; groupName?:string|null; groupDeleted:boolean;
   company:string; lastUpdated?:string|null;
 };

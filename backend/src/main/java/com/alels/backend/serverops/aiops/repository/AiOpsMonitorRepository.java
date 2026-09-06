@@ -1,6 +1,7 @@
 package com.alels.backend.serverops.aiops.repository;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -53,7 +54,7 @@ public class AiOpsMonitorRepository {
         return countIfTableExists("ai_ops_alerts", "SELECT COUNT(*) FROM ai_ops_alerts WHERE status = 'OPEN'");
     }
 
-    private long count(String sql) {
+    private long count(@NonNull String sql) {
         try {
             Long value = jdbcTemplate.queryForObject(sql, Long.class);
             return value == null ? 0L : value;
@@ -62,7 +63,7 @@ public class AiOpsMonitorRepository {
         }
     }
 
-    private long countIfTableExists(String tableName, String sql) {
+    private long countIfTableExists(String tableName, @NonNull String sql) {
         try {
             Boolean exists = jdbcTemplate.queryForObject(
                     "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ?)",

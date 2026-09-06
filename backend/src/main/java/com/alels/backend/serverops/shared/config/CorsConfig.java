@@ -56,7 +56,7 @@ public class CorsConfig {
             return List.of();
         }
         return Arrays.stream(value.split(","))
-                .map(String::trim)
+                .map(string -> string.trim())
                 .filter(item -> !item.isBlank())
                 .distinct()
                 .toList();

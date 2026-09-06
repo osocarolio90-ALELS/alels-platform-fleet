@@ -155,7 +155,6 @@ public class DeviceSessionRegistry {
 
             target.protocol = protocol;
             target.lastSeenMs = now;
-            target.remoteAddress = remoteAddress;
             target.writer = writer;
             target.connected = true;
             target.online = true;
@@ -291,7 +290,6 @@ public class DeviceSessionRegistry {
         private ProtocolType protocol =
                 ProtocolType.UNKNOWN;
         private long lastSeenMs;
-        private String remoteAddress;
         private NettyCommandWriter writer;
         private boolean connected;
         private boolean online;

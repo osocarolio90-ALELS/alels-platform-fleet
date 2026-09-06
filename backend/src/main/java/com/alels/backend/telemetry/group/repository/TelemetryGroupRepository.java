@@ -1,5 +1,6 @@
 package com.alels.backend.telemetry.group.repository;
 
+import java.util.Objects;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -57,7 +58,7 @@ public class TelemetryGroupRepository {
             );
 
         return jdbc.query(
-            sql,
+            Objects.requireNonNull(sql),
             (rs, n) -> new GroupRow(
                 rs.getLong("id"),
                 rs.getLong("company_id"),
@@ -179,7 +180,7 @@ public class TelemetryGroupRepository {
         }
 
         return jdbc.query(
-            sql,
+            Objects.requireNonNull(sql),
             (rs, n) -> new DeviceOption(
                 rs.getLong("id"),
                 rs.getString("imei"),
@@ -443,7 +444,7 @@ public class TelemetryGroupRepository {
             """.formatted(scope(role, "l"));
 
         return jdbc.query(
-            sql,
+            Objects.requireNonNull(sql),
             (rs, n) -> new LogRow(
                 rs.getString(1),
                 rs.getString(2),

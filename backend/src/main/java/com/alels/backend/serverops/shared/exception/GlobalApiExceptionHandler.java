@@ -22,9 +22,10 @@ public class GlobalApiExceptionHandler {
         if (status == null) {
             status = HttpStatus.INTERNAL_SERVER_ERROR;
         }
-        String message = ex.getReason() == null || ex.getReason().isBlank()
+        String reason = ex.getReason();
+        String message = reason == null || reason.isBlank()
                 ? status.getReasonPhrase()
-                : ex.getReason();
+                : reason;
         return ResponseEntity.status(status).body(new StandardErrorResponse(false, status.name(), message, Instant.now().toString()));
     }
 

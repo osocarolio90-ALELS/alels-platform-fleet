@@ -1,5 +1,8 @@
 package com.alels.backend.telemetry.device.repository;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Objects;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,12 +31,7 @@ public class TelemetryDeviceRepository {
                    COALESCE(cep.reference_price_country_idr,v.energy_price_snapshot,0) reference_price,
                    COALESCE(driver.driver_name,'-') driver_name,COALESCE(driver.phone_number,'-') driver_phone,
                    COALESCE(NULLIF(TRIM(CONCAT_WS(' / ',driver.license_type,driver.license_number)),''),'-') driver_license,
-                   CASE
-                     WHEN latest.server_time IS NULL OR latest.server_time < NOW()-interval '30 minutes' THEN 'STOP'
-                     WHEN UPPER(COALESCE(latest.vehicle_status,'')) IN ('MOVING','IDLE','STOP') THEN UPPER(latest.vehicle_status)
-                     WHEN COALESCE(latest.speed,0)>0 THEN 'MOVING'
-                     ELSE 'STOP'
-                   END movement_status,
+                   COALESCE(latest.vehicle_status,'STOP') vehicle_status,
                    COALESCE(d.tcp_enabled,TRUE) tcp_enabled,
                    (d.last_seen IS NOT NULL AND d.last_seen >= NOW()-interval '30 minutes') connected,
                    g.id group_id,g.group_name,(g.deleted_at IS NOT NULL) group_deleted,
@@ -66,7 +64,29 @@ public class TelemetryDeviceRepository {
               LEFT JOIN license_master lm ON lm.id=ad.license_master_id AND lm.deleted_at IS NULL
               ORDER BY active_driver.event_time DESC LIMIT 1
             ) driver ON TRUE
-            LEFT JOIN device_latest_position latest ON latest.imei=d.imei
+            LEFT JOIN LATERAL (
+              SELECT t.server_time,
+                     CASE
+                       WHEN t.server_time < NOW() - INTERVAL '30 minutes' THEN 'STOP'
+                       WHEN UPPER(COALESCE(t.vehicle_status,'')) IN ('STOP','IDLE','TRIP') THEN UPPER(t.vehicle_status)
+                       WHEN latest_ignition.ignition IS NULL OR t.speed IS NULL THEN 'STOP'
+                       WHEN latest_ignition.ignition > 0 AND t.speed > 5 THEN 'TRIP'
+                       WHEN latest_ignition.ignition > 0 THEN 'IDLE'
+                       WHEN t.speed <= 5 THEN 'STOP'
+                       ELSE 'STOP'
+                     END AS vehicle_status
+              FROM telemetry t
+              LEFT JOIN LATERAL (
+                SELECT normalized.numeric_value AS ignition
+                FROM telemetry_normalized normalized
+                WHERE normalized.telemetry_id=t.id AND normalized.imei=t.imei AND normalized.field_code='ignition'
+                ORDER BY normalized.id
+                LIMIT 1
+              ) latest_ignition ON TRUE
+              WHERE t.imei=d.imei
+              ORDER BY COALESCE(t.device_time,t.server_time) DESC,t.server_time DESC,t.id DESC
+              LIMIT 1
+            ) latest ON TRUE
             LEFT JOIN telemetry_group_devices membership ON membership.device_id=d.id
             LEFT JOIN telemetry_groups g ON g.id=membership.group_id
             WHERE d.deleted_at IS NULL %s AND d.id>? %s
@@ -77,15 +97,19 @@ public class TelemetryDeviceRepository {
         parameters.add(afterId);
         addFilterParameters(parameters,search,folder);
         parameters.add(limit);
-        return jdbc.query(sql, (rs,n)->new DeviceRow(
+        return jdbc.query(Objects.requireNonNull(sql), this::mapDeviceRow, parameters.toArray());
+    }
+
+    DeviceRow mapDeviceRow(ResultSet rs, int rowNumber) throws SQLException {
+        return new DeviceRow(
             rs.getLong("id"),rs.getString("imei"),rs.getString("brand"),rs.getString("model"),
             rs.getString("vehicle_model"),rs.getString("vehicle_type"),rs.getString("plate_number"),
             rs.getString("energy_type"),rs.getBigDecimal("reference_price"),
             rs.getString("driver_name"),rs.getString("driver_phone"),rs.getString("driver_license"),
-            rs.getString("movement_status"),rs.getBoolean("tcp_enabled"),rs.getBoolean("connected"),
+            rs.getString("vehicle_status"),rs.getBoolean("tcp_enabled"),rs.getBoolean("connected"),
             rs.getObject("group_id",Long.class),rs.getString("group_name"),rs.getBoolean("group_deleted"),
             rs.getString("company_name"),rs.getString("last_updated")
-        ), parameters.toArray());
+        );
     }
 
     public long count(Long companyId,String role,String search,String folder) {
@@ -103,7 +127,7 @@ public class TelemetryDeviceRepository {
             """.formatted(scope,deviceFilter(search,folder));
         java.util.List<Object> parameters=new java.util.ArrayList<>(java.util.Arrays.asList(scopeParameters(companyId,role)));
         addFilterParameters(parameters,search,folder);
-        Long result=jdbc.queryForObject(sql,Long.class,parameters.toArray());
+        Long result=jdbc.queryForObject(Objects.requireNonNull(sql),Long.class,parameters.toArray());
         return result==null?0:result;
     }
 
@@ -118,11 +142,11 @@ public class TelemetryDeviceRepository {
             FROM telemetry_groups g LEFT JOIN telemetry_group_devices m ON m.group_id=g.id
             WHERE g.deleted_at IS %s %s GROUP BY g.id,g.group_name ORDER BY g.group_name
             """.formatted(deleted?"NOT NULL":"NULL",scope);
-        return jdbc.query(sql,(rs,n)->new GroupFolder(rs.getLong("id"),rs.getString("group_name"),rs.getInt("device_count"),deleted),scopeParameters(companyId, role));
+        return jdbc.query(Objects.requireNonNull(sql),(rs,n)->new GroupFolder(rs.getLong("id"),rs.getString("group_name"),rs.getInt("device_count"),deleted),scopeParameters(companyId, role));
     }
 
     public Optional<String> imeiById(Long id,Long companyId,String role) {
-        return accessById(id,companyId,role).map(DeviceAccess::imei);
+        return accessById(id,companyId,role).map(deviceAccess -> deviceAccess.imei());
     }
 
     public Optional<DeviceAccess> accessById(Long id,Long companyId,String role) {
@@ -141,7 +165,7 @@ public class TelemetryDeviceRepository {
         parameters.add(companyId);
         parameters.add(id);
         if (usesDirectCompanyScope(role)) parameters.add(companyId);
-        return jdbc.query(sql, (rs, rowNum) -> new DeviceAccess(
+        return jdbc.query(Objects.requireNonNull(sql), (rs, rowNum) -> new DeviceAccess(
                 rs.getLong("id"),rs.getString("imei"),rs.getLong("company_id")
         ), parameters.toArray()).stream().findFirst();
     }

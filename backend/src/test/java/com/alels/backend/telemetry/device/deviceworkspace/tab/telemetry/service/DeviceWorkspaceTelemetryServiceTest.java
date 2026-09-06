@@ -19,6 +19,7 @@ import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.Devi
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.InstrumentMapping;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.WorkspaceConfiguration;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.repository.DeviceWorkspaceTelemetryRepository;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.repository.DeviceWorkspaceTelemetryRepository.LatestPacket;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.repository.DeviceWorkspaceTelemetryRepository.ScopedDevice;
 import com.alels.backend.telemetry.device.repository.TelemetryDeviceRepository;
 import com.alels.backend.telemetry.device.repository.TelemetryDeviceRepository.DeviceAccess;
@@ -53,6 +54,35 @@ class DeviceWorkspaceTelemetryServiceTest {
     void rejectsADeviceOutsideTheAuthenticatedTenantScope() {
         when(deviceRepository.accessById(99L, 20L, "CLIENTUSER")).thenReturn(Optional.empty());
         assertThrows(ResponseStatusException.class, () -> service.telemetry(user, 99L));
+    }
+
+    @Test
+    void returnsPersistedVehicleStatusFromTheLatestPacket() {
+        when(deviceRepository.accessById(11L, 20L, "CLIENTUSER")).thenReturn(Optional.of(new DeviceAccess(11L,"359000000000011",20L)));
+        when(workspaceRepository.device(11L, "359000000000011",20L)).thenReturn(Optional.of(scopedDevice()));
+        when(workspaceRepository.vehicle(11L,20L)).thenReturn(Optional.empty());
+        when(workspaceRepository.driver(11L,20L)).thenReturn(Optional.empty());
+        when(workspaceRepository.latestPacket("359000000000011")).thenReturn(Optional.of(new LatestPacket(
+                101L, 7L, "2026-09-06T03:00:00Z", "2026-09-06T03:00:00Z", "CODEC8E", "TCP", "FMC650",
+                -6.2, 106.8, 20.0, 90, 10, 12, 0.8, 0, 239, "TRIP", "{}"
+        )));
+        when(workspaceRepository.configuration(11L, 7L)).thenReturn(Optional.empty());
+
+        var result = service.telemetry(user, 11L);
+
+        assertEquals("TRIP", result.vehicleStatus());
+    }
+
+    @Test
+    void loadsRecentEventsUsingTheAuthorizedDeviceImei() {
+        when(deviceRepository.accessById(11L, 20L, "CLIENTUSER")).thenReturn(Optional.of(new DeviceAccess(11L,"359000000000011",20L)));
+        when(workspaceRepository.device(11L, "359000000000011",20L)).thenReturn(Optional.of(scopedDevice()));
+        when(workspaceRepository.events("359000000000011", 20L, null, 51)).thenReturn(List.of());
+
+        var result = service.events(user, 11L, null, 50);
+
+        assertEquals(0, result.events().size());
+        verify(workspaceRepository).events("359000000000011", 20L, null, 51);
     }
 
     @Test

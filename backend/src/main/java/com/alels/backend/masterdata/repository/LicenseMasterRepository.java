@@ -1,6 +1,7 @@
 package com.alels.backend.masterdata.repository;
 
 import java.text.Normalizer;
+import java.util.Objects;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -36,7 +37,7 @@ public class LicenseMasterRepository {
 
     public List<LicenseMasterRow> list(boolean includeDeleted) {
         String where = includeDeleted ? "" : "WHERE lm.deleted_at IS NULL";
-        return jdbcTemplate.query("""
+        return jdbcTemplate.query(Objects.requireNonNull("""
                 SELECT lm.id, lm.country_code,
                        COALESCE(NULLIF(lm.country_name, ''), c.country_name, lm.country_code) AS country_name,
                        lm.code, lm.name, lm.is_active, lm.status,
@@ -46,7 +47,7 @@ public class LicenseMasterRepository {
                 LEFT JOIN users u ON u.id = lm.created_by
                 %s
                 ORDER BY country_name, lm.sort_order, lm.name
-                """.formatted(where), (rs, rowNum) -> new LicenseMasterRow(
+                """.formatted(where)), (rs, rowNum) -> new LicenseMasterRow(
                 rs.getLong("id"), rs.getString("country_code"), rs.getString("country_name"), rs.getString("code"), rs.getString("name"),
                 rs.getBoolean("is_active"), rs.getString("status"), rs.getString("created_at"), rs.getString("created_by"), rs.getString("updated_at")
         ));

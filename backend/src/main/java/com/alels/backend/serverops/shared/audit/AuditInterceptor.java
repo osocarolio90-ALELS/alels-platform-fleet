@@ -1,6 +1,8 @@
 package com.alels.backend.serverops.shared.audit;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -19,7 +21,8 @@ public class AuditInterceptor implements HandlerInterceptor {
     }
 
     @Override
-    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+    public void afterCompletion(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
+                                @NonNull Object handler, @Nullable Exception ex) {
         if (!"GET".equalsIgnoreCase(request.getMethod())) {
             return;
         }

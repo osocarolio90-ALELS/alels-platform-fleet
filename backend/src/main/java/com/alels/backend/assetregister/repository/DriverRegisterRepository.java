@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.lang.NonNull;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -192,6 +193,7 @@ public class DriverRegisterRepository {
                 """;
     }
 
+    @NonNull
     private org.springframework.jdbc.core.RowMapper<DriverRegisterRow> rowMapper() {
         return (rs, rowNum) -> new DriverRegisterRow(
                 rs.getLong("id"), rs.getObject("company_id", Long.class), rs.getString("company_name"), rs.getString("driver_code"), rs.getString("employee_id"), rs.getString("driver_name"),
