@@ -1,5 +1,5 @@
 import{api}from"@/lib/api";
-import type{DeleteDeviceHistoryResponse,DeviceLogPage,LatestDeviceLog,SelectedDeviceLogPage,SelectedTimeRange,TripDetailResponse,TripListResponse,TripLogRow,TripPlaybackTelemetryRow,TripEvent,SelectedRouteRange,SelectedRoutesResponse,TripInstrumentSourceMap,TripInstrumentSourceProfile,TripInstrumentSourceProfileList,TripInstrumentSourceOption}from"../types/device-workspace-trip-route";
+import type{DeleteDeviceHistoryResponse,DeviceLogPage,LatestDeviceLog,SelectedDeviceLogPage,SelectedTimeRange,TripDetailResponse,TripListResponse,TripLogRow,TripPlaybackTelemetryRow,TripEvent,SelectedRouteRange,SelectedRoutesResponse}from"../types/device-workspace-trip-route";
 const base=(deviceId:number)=>`/api/telemetry/devices/${deviceId}/workspace/trip-route`;
 export async function getTrips(deviceId:number,from:string,to:string){return(await api.get<TripListResponse>(base(deviceId),{params:{from,to}})).data;}
 export async function getTripDetail(deviceId:number,from:string,to:string){return(await api.get<TripDetailResponse>(`${base(deviceId)}/detail`,{params:{from,to}})).data;}
@@ -17,8 +17,3 @@ export async function exportSelectedDeviceLogs(deviceId:number,ranges:SelectedTi
 }
 
 export async function getSelectedPlaybackTelemetry(deviceId:number,ranges:SelectedTimeRange[],telemetryIds:number[]){return(await api.post<TripPlaybackTelemetryRow[]>(`${base(deviceId)}/playback/telemetry`,{ranges,telemetryIds,page:0,size:100})).data;}
-
-export async function getInstrumentSourceOptions(deviceId:number){return(await api.get<TripInstrumentSourceOption[]>(`${base(deviceId)}/instrument-source-options`)).data;}
-export async function getInstrumentSourceProfiles(deviceId:number){return(await api.get<TripInstrumentSourceProfileList>(`${base(deviceId)}/instrument-source-profiles`)).data;}
-export async function saveInstrumentSourceProfile(deviceId:number,name:string,sources:TripInstrumentSourceMap,applyAll:boolean){return(await api.post<TripInstrumentSourceProfile>(`${base(deviceId)}/instrument-source-profiles`,{name,rpmSource:sources.rpm,speedSource:sources.speed,levelSource:sources.level,consumptionSource:sources.consumption,odometerSource:sources.odometer,applyAll})).data;}
-export async function applyInstrumentSourceProfile(deviceId:number,profileId:number,applyAll:boolean){return(await api.post<TripInstrumentSourceProfile>(`${base(deviceId)}/instrument-source-profiles/apply`,{profileId,applyAll})).data;}

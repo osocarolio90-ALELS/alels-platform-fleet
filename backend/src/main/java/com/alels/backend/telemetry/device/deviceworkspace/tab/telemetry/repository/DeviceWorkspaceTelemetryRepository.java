@@ -303,6 +303,7 @@ public class DeviceWorkspaceTelemetryRepository {
                 FROM telemetry_events e
                 WHERE e.imei = ?
                   AND (e.company_id IS NULL OR e.company_id = ?)
+                  AND (e.event_io_id IS NULL OR e.event_io_id NOT IN ('385', '548', '10500', '10828', '10829', '10831'))
                   %s
                 ORDER BY e.occurred_at DESC, e.id DESC
                 LIMIT ?
@@ -326,16 +327,6 @@ public class DeviceWorkspaceTelemetryRepository {
                 """, (rs, rowNum) -> rs.getString(1), deviceId, userId).stream().findFirst();
     }
 
-    public void saveConfiguration(Long deviceId, Long companyId, Long userId, String configurationJson) {
-        jdbc.update("""
-                INSERT INTO telemetry_device_workspace_configs(device_id, company_id, user_id, configuration)
-                VALUES (?, ?, ?, CAST(? AS jsonb))
-                ON CONFLICT (device_id, user_id) DO UPDATE
-                SET company_id = EXCLUDED.company_id,
-                    configuration = EXCLUDED.configuration,
-                    updated_at = NOW()
-                """, deviceId, companyId, userId, configurationJson);
-    }
 
     private static String valueOrDash(String value) {
         return value == null || value.isBlank() ? "-" : value;

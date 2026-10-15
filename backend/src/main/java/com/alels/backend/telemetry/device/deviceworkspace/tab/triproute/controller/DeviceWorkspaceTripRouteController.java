@@ -25,11 +25,6 @@ import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.Devi
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.SelectedDeviceLogPage;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.TripLogRow;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.PlaybackTelemetryRow;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.InstrumentSourceProfile;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.InstrumentSourceProfileList;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.InstrumentSourceOption;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.SaveInstrumentSourceProfileRequest;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.ApplyInstrumentSourceProfileRequest;
 import java.util.List;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.service.DeviceWorkspaceTripRouteService;
 
@@ -99,27 +94,6 @@ public class DeviceWorkspaceTripRouteController {
 
 
 
-    @GetMapping("/instrument-source-options")
-    public List<InstrumentSourceOption> instrumentSourceOptions(Authentication authentication, @PathVariable Long deviceId) {
-        return service.instrumentSourceOptions(user(authentication), deviceId);
-    }
-
-    @GetMapping("/instrument-source-profiles")
-    public InstrumentSourceProfileList instrumentSourceProfiles(Authentication authentication, @PathVariable Long deviceId) {
-        return service.instrumentSourceProfiles(user(authentication), deviceId);
-    }
-
-    @PostMapping("/instrument-source-profiles")
-    public InstrumentSourceProfile saveInstrumentSourceProfile(Authentication authentication, @PathVariable Long deviceId,
-                                                               @RequestBody SaveInstrumentSourceProfileRequest request) {
-        return service.saveInstrumentSourceProfile(user(authentication), deviceId, request);
-    }
-
-    @PostMapping("/instrument-source-profiles/apply")
-    public InstrumentSourceProfile applyInstrumentSourceProfile(Authentication authentication, @PathVariable Long deviceId,
-                                                                @RequestBody ApplyInstrumentSourceProfileRequest request) {
-        return service.applyInstrumentSourceProfile(user(authentication), deviceId, request);
-    }
     @DeleteMapping("/logs")
     public DeleteDeviceHistoryResponse deleteAllLogs(Authentication authentication, @PathVariable Long deviceId,
                                                        @RequestBody DeleteDeviceHistoryRequest request) {

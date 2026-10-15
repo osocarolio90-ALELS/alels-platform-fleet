@@ -118,6 +118,11 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         if (!result.isValid()) {
             return;
         }
+        if (sessionImei != null && !sessionImei.equals(result.getImei())) {
+            log.warn("event=imei_switch_rejected boundImei={} claimedImei={}", sessionImei, result.getImei());
+            ctx.close();
+            return;
+        }
         withOwnership(ctx, result.getImei(), () -> {
             bindSession(ctx, result.getImei(), ChannelType.WIFI, ProtocolType.ALELS_JSON);
             auditReceived(ctx, result.getImei(), ProtocolType.ALELS_JSON, packet,
@@ -147,6 +152,11 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
             return;
         }
         if (telemetry == null) return;
+        if (!imei.equals(telemetry.getImei())) {
+            log.warn("event=telemetry_imei_mismatch sessionImei={} payloadImei={}", imei, telemetry.getImei());
+            ctx.close();
+            return;
+        }
         publish(rawPacketId, telemetry, ProtocolType.ALELS_JSON, ChannelType.WIFI, "ALELS_JSON")
                 .whenComplete((ignored, error) -> {
                     if (error == null) sendAlelsAck(ctx);
@@ -162,6 +172,11 @@ public final class NettyDeviceChannelHandler extends SimpleChannelInboundHandler
         }
         if (imei == null) {
             imei = sessionImei;
+        }
+        if (sessionImei != null && !sessionImei.equals(imei)) {
+            log.warn("event=imei_switch_rejected boundImei={} claimedImei={}", sessionImei, imei);
+            ctx.close();
+            return;
         }
         String heartbeatImei = imei;
         withOwnership(ctx, heartbeatImei, () -> {

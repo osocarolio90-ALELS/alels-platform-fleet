@@ -1,20 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import html2canvas from "html2canvas";
-import { Download, Expand, Eye, EyeOff, LocateFixed, Search, Settings2, Shrink } from "lucide-react";
+import { Download, Expand, Eye, EyeOff, LocateFixed, Search, Shrink } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TelemetryMap, type MapViewportPadding, type WorkspaceMapEvent } from "../../telemetry/components/telemetry-map";
 import type { WorkspaceTrackPoint } from "../../telemetry/types/device-workspace-telemetry";
-import { applyInstrumentSourceProfile, getInstrumentSourceOptions, getInstrumentSourceProfiles, getSelectedEvents, getSelectedPlaybackTelemetry, getSelectedRoutes, getTrips, saveInstrumentSourceProfile } from "../api/device-workspace-trip-route-api";
+import { getSelectedEvents, getSelectedPlaybackTelemetry, getSelectedRoutes, getTrips } from "../api/device-workspace-trip-route-api";
+import { getDataSourceProfiles } from "../../configuration/data-source/api/device-workspace-data-source-api";
+import type { DataSourceProfile } from "../../configuration/data-source/types/device-workspace-data-source";
 import { TripLogTable } from "../components/trip-log-table";
 import { TripPlayback } from "../components/trip-playback";
 import { TripSelectionList } from "../components/trip-selection-list";
 import { TripFullscreenInstruments } from "../components/trip-fullscreen-instruments";
-import { TripInstrumentSourceDialog } from "../components/trip-instrument-source-dialog";
 import { TRIP_ROUTE_MAP_PROVIDER } from "../config/trip-route-map-provider";
 import { exportTripHistory } from "../utils/trip-log-export";
 import { useTripPlayback } from "../hooks/use-trip-playback";
-import type { TripEvent, TripInstrumentSourceMap, TripInstrumentSourceProfile, TripParameter, TripPlaybackTelemetryRow, TripPoint, TripSummary } from "../types/device-workspace-trip-route";
+import type { TripEvent, TripInstrumentSourceMap, TripParameter, TripPlaybackTelemetryRow, TripPoint, TripSummary } from "../types/device-workspace-trip-route";
 import "../trip-route.css";
 
 type Props = { deviceId: number; imei: string; vehicleType?: string | null; refreshToken: number };
@@ -23,7 +24,6 @@ const EMPTY_MAP_TRACK: WorkspaceTrackPoint[] = [];
 
 export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToken }: Props) {
   const defaults = useMemo(() => defaultRange(), []);
-  const queryClient = useQueryClient();
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
   const [applied, setApplied] = useState(defaults);
@@ -42,10 +42,7 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
   const [showEvents, setShowEvents] = useState(true);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [mapViewportPadding, setMapViewportPadding] = useState<MapViewportPadding>({ top: 0, right: 0, bottom: 0, left: 0 });
-  const [instrumentSourceOpen, setInstrumentSourceOpen] = useState(false);
   const [instrumentSources, setInstrumentSources] = useState<TripInstrumentSourceMap>(AUTO_SOURCES);
-  const [instrumentProfileError, setInstrumentProfileError] = useState("");
-  const [instrumentProfileSuccess, setInstrumentProfileSuccess] = useState("");
   const mapPanelRef = useRef<HTMLDivElement>(null);
   const playbackRunningRef = useRef(false);
 
@@ -119,50 +116,15 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
   }, [measureMapViewportPadding]);
 
   const instrumentProfilesQuery = useQuery({
-    queryKey: ["device-workspace", "trip-route-instrument-source-profiles", deviceId],
-    queryFn: () => getInstrumentSourceProfiles(deviceId),
-    enabled: deviceId > 0,
-    staleTime: 30_000,
-  });
-  const instrumentSourceOptionsQuery = useQuery({
-    queryKey: ["device-workspace", "trip-route-instrument-source-options", deviceId],
-    queryFn: () => getInstrumentSourceOptions(deviceId),
-    enabled: deviceId > 0 && instrumentSourceOpen,
-    staleTime: 60_000,
+    queryKey: ["device-workspace", "configuration", "data-source-profiles", deviceId],
+    queryFn: () => getDataSourceProfiles(deviceId),
+    enabled: deviceId > 0, staleTime: 30_000,
   });
   useEffect(() => {
-    const data = instrumentProfilesQuery.data;
-    if (!data) return;
-    const profile = data.profiles.find(item => item.id === data.effectiveProfileId);
-    setInstrumentSources(profile ? profileToSources(profile) : AUTO_SOURCES);
-  }, [deviceId, instrumentProfilesQuery.data]);
-  const saveInstrumentProfile = useMutation({
-    mutationFn: ({name,applyAll}:{name:string;applyAll:boolean}) => saveInstrumentSourceProfile(deviceId,name,instrumentSources,applyAll),
-    onMutate: () => { setInstrumentProfileError(""); setInstrumentProfileSuccess(""); },
-    onSuccess: async (profile, variables) => {
-      setInstrumentSources(profileToSources(profile));
-      await queryClient.invalidateQueries({queryKey:["device-workspace","trip-route-instrument-source-profiles",deviceId]});
-      await instrumentProfilesQuery.refetch();
-      setInstrumentProfileSuccess(variables.applyAll
-        ? `Configuration "${profile.name}" saved and applied to all IMEIs in this company.`
-        : `Configuration "${profile.name}" saved and applied to IMEI ${imei}.`);
-      setInstrumentSourceOpen(false);
-    },
-    onError: error => setInstrumentProfileError(error instanceof Error ? error.message : "Source configuration could not be saved."),
-  });
-  const applyInstrumentProfile = useMutation({
-    mutationFn: ({profileId,applyAll}:{profileId:number;applyAll:boolean}) => applyInstrumentSourceProfile(deviceId,profileId,applyAll),
-    onMutate: () => { setInstrumentProfileError(""); setInstrumentProfileSuccess(""); },
-    onSuccess: async (profile, variables) => {
-      setInstrumentSources(profileToSources(profile));
-      await queryClient.invalidateQueries({queryKey:["device-workspace","trip-route-instrument-source-profiles",deviceId]});
-      await instrumentProfilesQuery.refetch();
-      setInstrumentProfileSuccess(variables.applyAll
-        ? `Configuration "${profile.name}" applied to all IMEIs in this company.`
-        : `Configuration "${profile.name}" applied to IMEI ${imei}.`);
-    },
-    onError: error => setInstrumentProfileError(error instanceof Error ? error.message : "Saved configuration could not be applied."),
-  });
+    const data=instrumentProfilesQuery.data;if(!data)return;
+    const profile=data.profiles.find(item=>item.id===data.effectiveProfileId);
+    setInstrumentSources(profile?profileToSources(profile):AUTO_SOURCES);
+  },[deviceId,instrumentProfilesQuery.data]);
 
   const selected = trips.find(trip => trip.id === selectedId) || null;
   const drivers = useMemo(() => [...new Set(trips.map(trip => trip.driverName).filter(name => name && name !== "-"))], [trips]);
@@ -220,7 +182,7 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
   const playbackTelemetryQuery = useQuery({
     queryKey: ["device-workspace", "trip-route-playback-telemetry", deviceId, selectedRouteKey, refreshToken],
     queryFn: () => getSelectedPlaybackTelemetry(deviceId, selectedRanges, playbackTelemetryIds),
-    enabled: selectedRanges.length > 0 && playbackTelemetryIds.length > 0 && (mapFullscreen || instrumentSourceOpen),
+    enabled: selectedRanges.length > 0 && playbackTelemetryIds.length > 0 && mapFullscreen,
     staleTime: 30_000,
   });
   const playbackTelemetryMap = useMemo(() => new Map((playbackTelemetryQuery.data || []).map(row => [row.telemetryId, row])), [playbackTelemetryQuery.data]);
@@ -341,7 +303,6 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
 
   const playbackStart = selectedSegments[0]?.startTime;
   const playbackEnd = selectedSegments.at(-1)?.endTime;
-
   return <section className="dw-trip-route-tab">
     <header className="dw-trip-filters">
       <label>Date From<input type="datetime-local" value={from} onChange={event => setFrom(event.target.value)}/></label>
@@ -361,7 +322,6 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
       <main>
         <div ref={mapPanelRef} className="dw-trip-map-panel">
           <div className="dw-trip-map-toolbar">
-            <button type="button" className="dw-trip-source-toolbar-button" onClick={() => setInstrumentSourceOpen(true)} title="Configure playback instrument sources"><Settings2/>Sources</button>
             <button type="button" className={mode === "2d" ? "active" : ""} onClick={() => setMode("2d")}>2D</button>
             <button type="button" className={mode === "3d" ? "active" : ""} onClick={() => setMode("3d")}>3D</button>
             <button type="button" onClick={fitSelectedRoute} disabled={!selectedSegments.length}><LocateFixed/>Fit Route</button>
@@ -393,20 +353,12 @@ export function TripRouteWorkspaceTab({ deviceId, imei, vehicleType, refreshToke
         <TripLogTable deviceId={deviceId} imei={imei} selectedSegments={selectedSegments}/>
       </main>
     </div>
-    <TripInstrumentSourceDialog open={instrumentSourceOpen} energyGroup={listQuery.data?.energyGroup}
-      rows={playbackTelemetryQuery.data || []} catalog={instrumentSourceOptionsQuery.data || []} value={instrumentSources}
-      profiles={instrumentProfilesQuery.data?.profiles || []} effectiveProfileId={instrumentProfilesQuery.data?.effectiveProfileId}
-      busy={saveInstrumentProfile.isPending || applyInstrumentProfile.isPending} error={instrumentProfileError} success={instrumentProfileSuccess}
-      onChange={setInstrumentSources}
-      onSave={(name,applyAll)=>saveInstrumentProfile.mutate({name,applyAll})}
-      onApply={(profileId,applyAll)=>applyInstrumentProfile.mutate({profileId,applyAll})}
-      onClose={() => { setInstrumentSourceOpen(false); setInstrumentProfileError(""); setInstrumentProfileSuccess(""); }}/>
   </section>;
 }
 
 
 const AUTO_SOURCES:TripInstrumentSourceMap={rpm:"",speed:"__gps_speed__",level:"",consumption:"",odometer:""};
-function profileToSources(profile:TripInstrumentSourceProfile):TripInstrumentSourceMap{return{rpm:profile.rpmSource||"",speed:profile.speedSource||"__gps_speed__",level:profile.levelSource||"",consumption:profile.consumptionSource||"",odometer:profile.odometerSource||""};}
+function profileToSources(profile:DataSourceProfile):TripInstrumentSourceMap{return{rpm:profile.rpmSource||"",speed:profile.speedSource||"__gps_speed__",level:profile.levelSource||"",consumption:profile.consumptionSource||"",odometer:profile.odometerSource||""};}
 function collectPlaybackParameters(rows:TripPlaybackTelemetryRow[]){const map=new Map<string,TripParameter>();for(const row of rows)for(const parameter of row.parameters||[]){if(!parameter.fieldCode||map.has(parameter.fieldCode)||numeric(parameter.value)==null)continue;map.set(parameter.fieldCode,parameter);}return [...map.values()];}
 function resolveInstrumentSources(current:TripInstrumentSourceMap,options:TripParameter[],energyGroup?:string|null):TripInstrumentSourceMap{const group=String(energyGroup||"FUEL").toUpperCase();return{rpm:current.rpm||findSource(options,["engine_rpm","engine rpm","engine speed","rpm"]),speed:current.speed||"__gps_speed__",level:current.level||findSource(options,group==="ELECTRIC"?["battery_soc","state of charge","battery level"]:group==="GAS"?["gas level","cng level","lpg level","gas pressure"]:["fuel_level","fuel level"]),consumption:current.consumption||findSource(options,group==="ELECTRIC"?["battery consumption","battery power","high voltage battery current"]:group==="GAS"?["gas consumption","cng used","lpg used","gas used"]:["fuel_rate","fuel consumption","fuel used"]),odometer:current.odometer||findSource(options,["total_odometer","odometer","total mileage","mileage"])};}
 

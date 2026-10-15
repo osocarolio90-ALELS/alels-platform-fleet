@@ -24,7 +24,8 @@ public class AlelsJsonTelemetryNormalizer {
         TelemetryData data = new TelemetryData();
 
         data.setSourceProtocol(ProtocolType.ALELS_JSON);
-        data.setImei(getText(node, "A"));
+        String imei = getText(node, "A");
+        data.setImei(imei.isBlank() ? getText(node, "imei") : imei);
         data.setPacketSequence(getLong(node, "Q"));
         data.setDeviceTime(getText(node, "B"));
 
@@ -67,6 +68,7 @@ public class AlelsJsonTelemetryNormalizer {
 
     private static boolean isReservedKey(String key) {
         return key.equals("T")
+                || key.equals("imei")
                 || key.equals("Q")
                 || key.equals("A")
                 || key.equals("B")

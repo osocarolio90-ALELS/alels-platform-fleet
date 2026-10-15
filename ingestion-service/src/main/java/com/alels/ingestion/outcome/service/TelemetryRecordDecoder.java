@@ -34,6 +34,10 @@ public final class TelemetryRecordDecoder {
                     failures.add(new IngestionFailure(record, validationError));
                     continue;
                 }
+                if (record.key != null && !record.key.isBlank() && !record.key.equals(message.imei)) {
+                    failures.add(new IngestionFailure(record, "Kafka key does not match telemetry IMEI"));
+                    continue;
+                }
                 records.add(record);
                 messages.add(message);
             } catch (Exception invalidJson) {

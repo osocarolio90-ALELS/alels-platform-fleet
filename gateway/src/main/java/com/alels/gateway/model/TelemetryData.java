@@ -1,9 +1,11 @@
 package com.alels.gateway.model;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.alels.gateway.detector.ProtocolType;
+import com.alels.gateway.parser.EyeBeaconParser;
 
 public class TelemetryData {
     private String imei;
@@ -25,6 +27,7 @@ public class TelemetryData {
     private double hdop;
 
     private Map<String, Object> ioData = new LinkedHashMap<>();
+    private List<EyeBeaconParser.Result> eyeBeacons = List.of();
 
     public String getImei() {
         return imei;
@@ -136,6 +139,14 @@ public class TelemetryData {
 
     public void setIoData(Map<String, Object> ioData) {
         this.ioData = ioData;
+    }
+
+    public List<EyeBeaconParser.Result> getEyeBeacons() {
+        return eyeBeacons;
+    }
+
+    public void setEyeBeacons(List<EyeBeaconParser.Result> eyeBeacons) {
+        this.eyeBeacons = List.copyOf(eyeBeacons);
     }
 
     public void print() {

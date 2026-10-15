@@ -72,11 +72,12 @@ public class TelemetryRepository {
                     vehicle_status,
                     io_data,
                     io,
+                    eye_beacons,
                     parse_status
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, CAST(? AS jsonb), CAST(? AS jsonb), ?
+                    ?, ?, ?, ?, CAST(? AS jsonb), CAST(? AS jsonb), CAST(? AS jsonb), ?
                 )
                 RETURNING id
                 """;
@@ -147,7 +148,8 @@ public class TelemetryRepository {
             String ioJson = MAPPER.writeValueAsString(data.getIoData());
             stmt.setString(22, ioJson);
             stmt.setString(23, ioJson);
-            stmt.setString(24, "VALID");
+            stmt.setString(24, MAPPER.writeValueAsString(data.getEyeBeacons()));
+            stmt.setString(25, "VALID");
 
             try (ResultSet rs = stmt.executeQuery()) {
 

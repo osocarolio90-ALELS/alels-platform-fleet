@@ -40,10 +40,6 @@ import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.Devi
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.PlaybackTelemetryRow;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.TripLogRow;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.InstrumentSourceProfile;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.InstrumentSourceProfileList;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.InstrumentSourceOption;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.SaveInstrumentSourceProfileRequest;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.ApplyInstrumentSourceProfileRequest;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.TimeWindow;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.repository.DeviceWorkspaceTripRouteRepository.RouteWindow;
@@ -80,7 +76,8 @@ public class DeviceWorkspaceTripRouteService {
         DeviceAccess device = scopedDevice(user, deviceId);
         TimeRange range = range(fromValue, toValue);
         TripListAccumulator accumulator = new TripListAccumulator();
-        repository.scanPoints(device.imei(), range.from(), range.to(), accumulator::accept);
+        InstrumentSourceProfile sourceProfile = effectiveSourceProfile(device);
+        repository.scanPoints(device.imei(), range.from(), range.to(), sourceProfile, accumulator::accept);
         List<TripSummary> trips = accumulator.finish();
         Collections.reverse(trips);
         trips = withAssignmentLabels(device.imei(), range, trips);
@@ -92,7 +89,8 @@ public class DeviceWorkspaceTripRouteService {
     public TripDetailResponse detail(JwtUserContext user, Long deviceId, String fromValue, String toValue) {
         DeviceAccess device = scopedDevice(user, deviceId);
         TimeRange range = range(fromValue, toValue);
-        List<TelemetryPoint> points = repository.detailPoints(device.imei(), range.from(), range.to());
+        InstrumentSourceProfile sourceProfile = effectiveSourceProfile(device);
+        List<TelemetryPoint> points = repository.detailPoints(device.imei(), range.from(), range.to(), sourceProfile);
         if (points.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip telemetry was not found.");
         if (points.size() > DeviceWorkspaceTripRouteRepository.MAX_DETAIL_POINTS) {
             throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Selected trip contains too many telemetry points. Select a shorter interval.");
@@ -421,9 +419,11 @@ public class DeviceWorkspaceTripRouteService {
         double distance = 0, maximumSpeed = 0, speedTotal = 0;
         long speedCount = 0;
         TelemetryPoint previous = null;
+        Double firstOdometer = null, lastOdometer = null;
         FuelAccumulator fuel = new FuelAccumulator();
         for (TelemetryPoint point : points) {
             fuel.add(point);
+            if (point.odometer() != null && Double.isFinite(point.odometer()) && point.odometer() >= 0) { if (firstOdometer == null) firstOdometer = point.odometer(); lastOdometer = point.odometer(); }
             if (point.speed() != null && point.speed() >= 0) {
                 maximumSpeed = Math.max(maximumSpeed, point.speed());
                 if (point.speed() > 0) { speedTotal += point.speed(); speedCount++; }
@@ -435,6 +435,7 @@ public class DeviceWorkspaceTripRouteService {
             }
             previous = point;
         }
+        if (firstOdometer != null && lastOdometer != null && lastOdometer >= firstOdometer) distance = lastOdometer - firstOdometer;
         return new TripSummary(segmentId(type, first.id()), type, inProgress ? "IN_PROGRESS" : "COMPLETED",
                 first.occurredAt().toString(), last.occurredAt().toString(),
                 Math.max(0, Duration.between(first.occurredAt(), last.occurredAt()).toSeconds()),
@@ -570,10 +571,13 @@ public class DeviceWorkspaceTripRouteService {
         private double maximumSpeed;
         private double speedTotal;
         private long speedCount;
+        private Double firstOdometer;
+        private Double lastOdometer;
         private final FuelAccumulator fuel = new FuelAccumulator();
 
         void add(TelemetryPoint point) {
             fuel.add(point);
+            if (point.odometer() != null && Double.isFinite(point.odometer()) && point.odometer() >= 0) { if (firstOdometer == null) firstOdometer = point.odometer(); lastOdometer = point.odometer(); }
             if (first == null) first = point;
             last = point;
             count++;
@@ -599,7 +603,7 @@ public class DeviceWorkspaceTripRouteService {
                     inProgress ? "IN_PROGRESS" : "COMPLETED",
                     first.occurredAt().toString(), last.occurredAt().toString(),
                     Math.max(0, Duration.between(first.occurredAt(), last.occurredAt()).toSeconds()),
-                    round(distance), round(speedCount == 0 ? 0 : speedTotal / speedCount), round(maximumSpeed),
+                    round(firstOdometer != null && lastOdometer != null && lastOdometer >= firstOdometer ? lastOdometer-firstOdometer : distance), round(speedCount == 0 ? 0 : speedTotal / speedCount), round(maximumSpeed),
                     first.driverName() == null || first.driverName().isBlank() ? "-" : first.driverName(),
                     null, null, null, null,
                     fuel.consumption(), fuel.startLevel(), fuel.finishLevel(),
@@ -713,79 +717,9 @@ public class DeviceWorkspaceTripRouteService {
         }
     }
 
-    public List<InstrumentSourceOption> instrumentSourceOptions(JwtUserContext user, Long deviceId) {
-        DeviceAccess device = companyOwnedDevice(user, deviceId);
-        return repository.instrumentSourceOptions(device.imei());
-    }
-
-    public InstrumentSourceProfileList instrumentSourceProfiles(JwtUserContext user, Long deviceId) {
-        DeviceAccess device = companyOwnedDevice(user, deviceId);
-        List<InstrumentSourceProfile> profiles = repository.instrumentSourceProfiles(user.companyId());
-        Long effectiveProfileId = repository.effectiveInstrumentSourceProfileId(user.companyId(), device.id());
-        return new InstrumentSourceProfileList(profiles, effectiveProfileId);
-    }
-
-    @Transactional
-    public InstrumentSourceProfile saveInstrumentSourceProfile(JwtUserContext user, Long deviceId,
-                                                                SaveInstrumentSourceProfileRequest request) {
-        DeviceAccess device = companyOwnedDevice(user, deviceId);
-        if (request == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Source configuration is required.");
-        String name = normalizeProfileName(request.name());
-        Long profileId = repository.upsertInstrumentSourceProfile(
-                user.companyId(), user.userId(), name,
-                source(request.rpmSource()), sourceOrDefault(request.speedSource(), "__gps_speed__"),
-                source(request.levelSource()), source(request.consumptionSource()), source(request.odometerSource()));
-        if (Boolean.TRUE.equals(request.applyAll())) {
-            repository.applyInstrumentSourceProfileToAll(user.companyId(), profileId);
-        } else {
-            repository.applyInstrumentSourceProfileToDevice(user.companyId(), device.id(), profileId, user.userId());
-        }
-        return repository.instrumentSourceProfile(user.companyId(), profileId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Saved source configuration could not be reloaded."));
-    }
-
-    @Transactional
-    public InstrumentSourceProfile applyInstrumentSourceProfile(JwtUserContext user, Long deviceId,
-                                                                 ApplyInstrumentSourceProfileRequest request) {
-        DeviceAccess device = companyOwnedDevice(user, deviceId);
-        if (request == null || request.profileId() == null || request.profileId() <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Saved source configuration is required.");
-        }
-        InstrumentSourceProfile profile = repository.instrumentSourceProfile(user.companyId(), request.profileId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Saved source configuration was not found in your company."));
-        if (Boolean.TRUE.equals(request.applyAll())) {
-            repository.applyInstrumentSourceProfileToAll(user.companyId(), profile.id());
-        } else {
-            repository.applyInstrumentSourceProfileToDevice(user.companyId(), device.id(), profile.id(), user.userId());
-        }
-        return repository.instrumentSourceProfile(user.companyId(), profile.id()).orElse(profile);
-    }
-
-    private DeviceAccess companyOwnedDevice(JwtUserContext user, Long deviceId) {
-        DeviceAccess device = scopedDevice(user, deviceId);
-        if (!device.companyId().equals(user.companyId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Trip & Route source configurations are isolated to the signed-in user's company.");
-        }
-        return device;
-    }
-
-    private String normalizeProfileName(String value) {
-        String name = value == null ? "" : value.trim();
-        if (name.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Configuration name is required.");
-        if (name.length() > 120) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Configuration name cannot exceed 120 characters.");
-        return name;
-    }
-
-    private String source(String value) {
-        String normalized = value == null ? "" : value.trim();
-        if (normalized.length() > 160) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Telemetry source value is too long.");
-        return normalized;
-    }
-
-    private String sourceOrDefault(String value, String fallback) {
-        String normalized = source(value);
-        return normalized.isBlank() ? fallback : normalized;
+    private InstrumentSourceProfile effectiveSourceProfile(DeviceAccess device) {
+        Long id=repository.effectiveInstrumentSourceProfileId(device.companyId(),device.id());
+        return id==null?null:repository.instrumentSourceProfile(device.companyId(),id).orElse(null);
     }
 
     private DeviceAccess scopedDevice(JwtUserContext user, Long deviceId) {

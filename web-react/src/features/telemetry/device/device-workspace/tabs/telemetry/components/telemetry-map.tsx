@@ -139,7 +139,7 @@ export function TelemetryMap({
   }
 
   return <div className={`dw-map${brightMap ? " dw-map-bright" : ""}`}>
-    <MapContainer center={center} zoom={zoom} zoomControl={false} attributionControl={provider?.showAttribution ?? false} keyboard={false}>
+    <MapContainer center={center} zoom={zoom} maxZoom={22} zoomControl={false} attributionControl={provider?.showAttribution ?? false} keyboard={false}>
       <MapSync
         center={center}
         zoom={zoom}
@@ -154,6 +154,8 @@ export function TelemetryMap({
       <TileLayer
         url={provider?.tileUrl2d ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png"}
         attribution={provider?.tileAttribution2d}
+        maxNativeZoom={19}
+        maxZoom={22}
       />
       <Pane name="alels-route-pane" style={{ zIndex: 460, pointerEvents: "none" }}/>
       <LeafletRouteLayers

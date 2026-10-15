@@ -455,10 +455,10 @@ class DeviceWorkspaceTripRouteServiceTest {
 
     private void mockTripPoints(List<TelemetryPoint> points) {
         doAnswer(invocation -> {
-            Consumer<TelemetryPoint> consumer = invocation.getArgument(3);
+            Consumer<TelemetryPoint> consumer = invocation.getArgument(4);
             points.forEach(consumer);
             return null;
-        }).when(repository).scanPoints(eq("359000000000011"), any(), any(), any());
+        }).when(repository).scanPoints(eq("359000000000011"), any(), any(), any(), any());
     }
 
     private void authorized() {
@@ -481,7 +481,7 @@ class DeviceWorkspaceTripRouteServiceTest {
         return new TelemetryPoint(id, time, time, -6.19 + id / 10_000.0, 106.82 + id / 10_000.0,
                 speed, 10, 12, 10, 0.8, "TELTONIKA_CODEC8E", "GSM", "Karina",
                 canonicalVehicleStatus(speed, ignition), ignition, speed > 0 ? 1.0 : 0.0,
-                fuelLevel, fuelRate, fuelUsed);
+                fuelLevel, fuelRate, fuelUsed, null);
     }
 
     private TelemetryPoint pointWithNullableIgnition(Long id, Instant time, double speed, Double ignition) {

@@ -17,6 +17,9 @@ import java.util.function.Consumer;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.ParameterValue;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.TripEvent;
@@ -24,13 +27,13 @@ import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.Devi
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.TripInstrumentSnapshot;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.DeleteDeviceHistoryResponse;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.InstrumentSourceProfile;
-import com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto.DeviceWorkspaceTripRouteDtos.InstrumentSourceOption;
 
 @Repository
 public class DeviceWorkspaceTripRouteRepository {
     public static final int MAX_RANGE_POINTS = 50_000;
     public static final int MAX_DETAIL_POINTS = 10_000;
     private final JdbcTemplate jdbc;
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     public DeviceWorkspaceTripRouteRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
@@ -56,39 +59,59 @@ public class DeviceWorkspaceTripRouteRepository {
     }
 
 
-    public void scanPoints(String imei, Instant from, Instant to, Consumer<TelemetryPoint> consumer) {
+    public void scanPoints(String imei, Instant from, Instant to, InstrumentSourceProfile profile, Consumer<TelemetryPoint> consumer) {
+        SourceRef speed = sourceRef(profile == null ? "__gps_speed__" : cleanSource(profile.speedSource(), "__gps_speed__"));
+        SourceRef level = sourceRef(profile == null ? "fuel_level" : cleanSource(profile.levelSource(), "fuel_level"));
+        SourceRef consumption = sourceRef(profile == null ? "" : cleanSource(profile.consumptionSource(), ""));
+        SourceRef odometer = sourceRef(profile == null ? "" : cleanSource(profile.odometerSource(), ""));
+        String consumptionUnit = sourceUnit(imei, consumption.selector());
+        boolean consumptionRate = isRateUnit(consumptionUnit);
+        double consumptionFactor = consumptionRate ? rateToLitersPerHourFactor(consumptionUnit) : volumeToLitersFactor(consumptionUnit);
         String sql = """
                 SELECT t.id, COALESCE(t.device_time, t.server_time) AS occurred_at, t.server_time AS received_at,
-                       t.latitude, t.longitude, t.speed, t.angle, t.altitude, t.satellites,
-                       t.hdop, t.protocol, t.channel, t.driver_name, t.vehicle_status,
-                       MAX(CASE WHEN n.field_code = 'ignition' THEN
-                           CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END
-                                ELSE n.numeric_value END END) AS ignition,
-                       MAX(CASE WHEN n.field_code = 'movement' THEN
-                           CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END
-                                ELSE n.numeric_value END END) AS movement,
-                       MAX(CASE WHEN n.field_code = 'fuel_level' THEN n.numeric_value END) AS fuel_level,
-                       MAX(CASE WHEN n.field_code = 'fuel_rate' THEN n.numeric_value END) AS fuel_rate,
-                       MAX(CASE WHEN n.field_code = 'fuel_used' THEN n.numeric_value END) AS fuel_used
-                FROM telemetry t
-                LEFT JOIN telemetry_normalized n ON n.telemetry_id = t.id AND n.imei = t.imei
-                     AND n.field_code IN ('ignition', 'movement', 'fuel_level', 'fuel_rate', 'fuel_used')
-                WHERE t.imei = ? AND COALESCE(t.device_time, t.server_time) BETWEEN ? AND ?
-                GROUP BY t.id, t.server_time, t.device_time, t.latitude, t.longitude, t.speed,
-                         t.angle, t.altitude, t.satellites, t.hdop, t.protocol, t.channel,
-                         t.driver_name, t.vehicle_status
-                ORDER BY occurred_at, t.id
+                       t.latitude, t.longitude,
+                       COALESCE(MAX(CASE WHEN ? <> '__gps_speed__' AND n.field_code = ? AND (? = '' OR COALESCE(n.source_io_id,'') = ?) THEN CASE WHEN LOWER(COALESCE(n.unit,'')) IN ('mph','mi/h') THEN n.numeric_value*1.609344 WHEN LOWER(COALESCE(n.unit,'')) IN ('m/s','mps') THEN n.numeric_value*3.6 ELSE n.numeric_value END END), t.speed) AS speed,
+                       t.angle, t.altitude, t.satellites, t.hdop, t.protocol, t.channel, t.driver_name, t.vehicle_status,
+                       MAX(CASE WHEN n.field_code = 'ignition' THEN CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END ELSE n.numeric_value END END) AS ignition,
+                       MAX(CASE WHEN n.field_code = 'movement' THEN CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END ELSE n.numeric_value END END) AS movement,
+                       MAX(CASE WHEN n.field_code = ? AND (? = '' OR COALESCE(n.source_io_id,'') = ?) THEN n.numeric_value END) AS fuel_level,
+                       MAX(CASE WHEN ? AND n.field_code = ? AND (? = '' OR COALESCE(n.source_io_id,'') = ?) THEN n.numeric_value * ? END) AS fuel_rate,
+                       MAX(CASE WHEN NOT ? AND ? <> '' AND n.field_code = ? AND (? = '' OR COALESCE(n.source_io_id,'') = ?) THEN n.numeric_value * ? END) AS fuel_used,
+                       MAX(CASE WHEN ? <> '' AND n.field_code = ? AND (? = '' OR COALESCE(n.source_io_id,'') = ?) THEN CASE WHEN LOWER(COALESCE(n.unit,'')) IN ('m','meter','meters') THEN n.numeric_value/1000.0 WHEN LOWER(COALESCE(n.unit,'')) IN ('mi','mile','miles') THEN n.numeric_value*1.609344 ELSE n.numeric_value END END) AS odometer
+                FROM telemetry t LEFT JOIN telemetry_normalized n ON n.telemetry_id=t.id AND n.imei=t.imei
+                WHERE t.imei=? AND COALESCE(t.device_time,t.server_time) BETWEEN ? AND ?
+                GROUP BY t.id,t.server_time,t.device_time,t.latitude,t.longitude,t.speed,t.angle,t.altitude,t.satellites,t.hdop,t.protocol,t.channel,t.driver_name,t.vehicle_status
+                ORDER BY occurred_at,t.id
                 """;
         jdbc.query(connection -> {
-            PreparedStatement statement = connection.prepareStatement(
-                    sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
-            statement.setFetchSize(2_000);
-            statement.setString(1, imei);
-            statement.setTimestamp(2, Timestamp.from(from));
-            statement.setTimestamp(3, Timestamp.from(to));
-            return statement;
-        }, (RowCallbackHandler) rs -> consumer.accept(point(rs)));
+            PreparedStatement st=connection.prepareStatement(sql,ResultSet.TYPE_FORWARD_ONLY,ResultSet.CONCUR_READ_ONLY);
+            st.setFetchSize(2_000);int i=1;
+            st.setString(i++,speed.fieldCode());st.setString(i++,speed.fieldCode());st.setString(i++,speed.sourceIoId());st.setString(i++,speed.sourceIoId());
+            st.setString(i++,level.fieldCode());st.setString(i++,level.sourceIoId());st.setString(i++,level.sourceIoId());
+            st.setBoolean(i++,consumptionRate);st.setString(i++,consumption.fieldCode());st.setString(i++,consumption.sourceIoId());st.setString(i++,consumption.sourceIoId());st.setDouble(i++,consumptionFactor);
+            st.setBoolean(i++,consumptionRate);st.setString(i++,consumption.fieldCode());st.setString(i++,consumption.fieldCode());st.setString(i++,consumption.sourceIoId());st.setString(i++,consumption.sourceIoId());st.setDouble(i++,consumptionFactor);
+            st.setString(i++,odometer.fieldCode());st.setString(i++,odometer.fieldCode());st.setString(i++,odometer.sourceIoId());st.setString(i++,odometer.sourceIoId());
+            st.setString(i++,imei);st.setTimestamp(i++,Timestamp.from(from));st.setTimestamp(i,Timestamp.from(to));return st;
+        },(RowCallbackHandler)rs->consumer.accept(point(rs)));
     }
+
+    public String sourceUnit(String imei,String selector){
+        SourceRef source=sourceRef(selector);
+        if(source.fieldCode().isBlank()||source.fieldCode().startsWith("__"))return null;
+        String sql=source.sourceIoId().isBlank()
+                ? "SELECT unit FROM telemetry_normalized WHERE imei=? AND field_code=? AND unit IS NOT NULL AND unit<>'' ORDER BY telemetry_id DESC LIMIT 1"
+                : "SELECT unit FROM telemetry_normalized WHERE imei=? AND field_code=? AND source_io_id=? AND unit IS NOT NULL AND unit<>'' ORDER BY telemetry_id DESC LIMIT 1";
+        List<String> rows=source.sourceIoId().isBlank()
+                ? jdbc.query(sql,(rs,n)->rs.getString(1),imei,source.fieldCode())
+                : jdbc.query(sql,(rs,n)->rs.getString(1),imei,source.fieldCode(),source.sourceIoId());
+        return rows.isEmpty()?null:rows.getFirst();
+    }
+    private static boolean isRateUnit(String unit){String u=unit==null?"":unit.trim().toLowerCase();return u.contains("/h")||u.contains("per hour")||u.contains("/min")||u.contains("per min")||u.contains("/s")||u.contains("per sec");}
+    private static double volumeToLitersFactor(String unit){String u=unit==null?"":unit.trim().toLowerCase();if(u.contains("ml"))return 0.001;if(u.contains("gal"))return 3.785411784;return 1.0;}
+    private static double rateToLitersPerHourFactor(String unit){String u=unit==null?"":unit.trim().toLowerCase();double factor=volumeToLitersFactor(unit);if(u.contains("/min")||u.contains("per min"))factor*=60.0;else if(u.contains("/s")||u.contains("per sec"))factor*=3600.0;return factor;}
+    private static String cleanSource(String value,String fallback){return value==null||value.isBlank()?fallback:value.trim();}
+    private static SourceRef sourceRef(String selector){String value=selector==null?"":selector.trim();int split=value.indexOf("::io::");if(split<0)return new SourceRef(value,"");return new SourceRef(value.substring(0,split),value.substring(split+6));}
+    private record SourceRef(String fieldCode,String sourceIoId){String selector(){return sourceIoId==null||sourceIoId.isBlank()?fieldCode:fieldCode+"::io::"+sourceIoId;}}
 
     public void scanSelectedRoutePoints(String imei, List<RouteWindow> ranges, BiConsumer<String, TelemetryPoint> consumer) {
         if (ranges == null || ranges.isEmpty()) return;
@@ -160,29 +183,10 @@ public class DeviceWorkspaceTripRouteRepository {
         return result;
     }
 
-    public List<TelemetryPoint> detailPoints(String imei, Instant from, Instant to) {
-        return jdbc.query("""
-                SELECT t.id, COALESCE(t.device_time, t.server_time) AS occurred_at, t.server_time AS received_at,
-                       t.latitude, t.longitude, t.speed, t.angle, t.altitude, t.satellites,
-                       t.hdop, t.protocol, t.channel, t.driver_name, t.vehicle_status,
-                       MAX(CASE WHEN n.field_code = 'ignition' THEN
-                           CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END
-                                ELSE n.numeric_value END END) AS ignition,
-                       MAX(CASE WHEN n.field_code = 'movement' THEN
-                           CASE WHEN n.boolean_value IS NOT NULL THEN CASE WHEN n.boolean_value THEN 1.0 ELSE 0.0 END
-                                ELSE n.numeric_value END END) AS movement,
-                       MAX(CASE WHEN n.field_code = 'fuel_level' THEN n.numeric_value END) AS fuel_level,
-                       MAX(CASE WHEN n.field_code = 'fuel_rate' THEN n.numeric_value END) AS fuel_rate,
-                       MAX(CASE WHEN n.field_code = 'fuel_used' THEN n.numeric_value END) AS fuel_used
-                FROM telemetry t
-                LEFT JOIN telemetry_normalized n ON n.telemetry_id = t.id AND n.imei = t.imei
-                     AND n.field_code IN ('ignition', 'movement', 'fuel_level', 'fuel_rate', 'fuel_used')
-                WHERE t.imei = ? AND COALESCE(t.device_time, t.server_time) BETWEEN ? AND ?
-                GROUP BY t.id, t.server_time, t.device_time, t.latitude, t.longitude, t.speed,
-                         t.angle, t.altitude, t.satellites, t.hdop, t.protocol, t.channel,
-                         t.driver_name, t.vehicle_status
-                ORDER BY occurred_at, t.id LIMIT ?
-                """, (rs, rowNum) -> point(rs), imei, Timestamp.from(from), Timestamp.from(to), MAX_DETAIL_POINTS + 1);
+    public List<TelemetryPoint> detailPoints(String imei, Instant from, Instant to, InstrumentSourceProfile profile) {
+        List<TelemetryPoint> rows=new ArrayList<>();
+        scanPoints(imei,from,to,profile,p->{if(rows.size()<=MAX_DETAIL_POINTS)rows.add(p);});
+        return rows;
     }
 
     public List<TelemetryPoint> logPoints(String imei, Instant from, Instant to,
@@ -348,48 +352,6 @@ public class DeviceWorkspaceTripRouteRepository {
         return groups.isEmpty() || groups.getFirst() == null || groups.getFirst().isBlank() ? "FUEL" : groups.getFirst();
     }
 
-
-    public List<InstrumentSourceOption> instrumentSourceOptions(String imei) {
-        return jdbc.query("""
-                WITH recent AS (
-                    SELECT id
-                    FROM telemetry
-                    WHERE imei = ?
-                    ORDER BY id DESC
-                    LIMIT 500
-                ), source_rows AS (
-                    SELECT n.field_code AS field_code,
-                           COALESCE(NULLIF(n.field_name, ''), n.field_code) AS label,
-                           NULLIF(n.unit, '') AS unit,
-                           COALESCE(NULLIF(n.category, ''), 'OTHER') AS category,
-                           MAX(n.telemetry_id) AS last_telemetry_id
-                    FROM telemetry_normalized n
-                    WHERE n.imei = ?
-                      AND n.numeric_value IS NOT NULL
-                      AND n.telemetry_id IN (SELECT id FROM recent)
-                      AND n.field_code IS NOT NULL
-                      AND n.field_code <> ''
-                    GROUP BY n.field_code, COALESCE(NULLIF(n.field_name, ''), n.field_code), NULLIF(n.unit, ''), COALESCE(NULLIF(n.category, ''), 'OTHER')
-                    UNION ALL
-                    SELECT 'io.' || i.io_id AS field_code,
-                           COALESCE(NULLIF(i.io_name, ''), 'IO ' || i.io_id) AS label,
-                           NULLIF(i.unit, '') AS unit,
-                           COALESCE(NULLIF(i.io_category, ''), 'OTHER') AS category,
-                           MAX(i.telemetry_id) AS last_telemetry_id
-                    FROM telemetry_io i
-                    WHERE i.imei = ?
-                      AND COALESCE(i.real_value, i.numeric_value) IS NOT NULL
-                      AND i.telemetry_id IN (SELECT id FROM recent)
-                    GROUP BY i.io_id, COALESCE(NULLIF(i.io_name, ''), 'IO ' || i.io_id), NULLIF(i.unit, ''), COALESCE(NULLIF(i.io_category, ''), 'OTHER')
-                )
-                SELECT DISTINCT ON (field_code) field_code, label, unit, category
-                FROM source_rows
-                ORDER BY field_code, last_telemetry_id DESC
-                LIMIT 500
-                """, (rs, rowNum) -> new InstrumentSourceOption(
-                        rs.getString("field_code"), rs.getString("label"), rs.getString("unit"), rs.getString("category")),
-                imei, imei, imei);
-    }
 
     public Map<Long, TripInstrumentSnapshot> instrumentSnapshots(String imei, Instant from, Instant to) {
         Map<Long, InstrumentAccumulator> values = new LinkedHashMap<>();
@@ -559,6 +521,7 @@ public class DeviceWorkspaceTripRouteRepository {
     public List<TripLogRow> logs(String imei, Instant from, Instant to, List<TelemetryPoint> points) {
         Map<Long, List<ParameterValue>> parameters = normalizedParameters(
                 imei, from, to, points.stream().map(telemetryPoint -> telemetryPoint.id()).toList());
+        Map<Long, JsonNode> eyeBeacons = eyeBeacons(imei, points);
         List<VehicleAssignmentPeriod> vehicleAssignments = vehicleAssignmentPeriods(imei, from, to);
         List<DriverAssignmentPeriod> driverAssignments = driverAssignmentPeriods(imei, from, to);
         return points.stream().map(point -> {
@@ -569,8 +532,40 @@ public class DeviceWorkspaceTripRouteRepository {
                     point.id(), imei, point.occurredAt().toString(), point.receivedAt().toString(), point.protocol(), point.channel(),
                     historicalDriver, plateNumber,
                     point.latitude(), point.longitude(), point.altitude(), point.angle(), point.speed(),
-                    point.satellites(), point.hdop(), parameters.getOrDefault(point.id(), List.of()));
+                    point.satellites(), point.hdop(), parameters.getOrDefault(point.id(), List.of()),
+                    eyeBeacons.getOrDefault(point.id(), JsonNodeFactory.instance.arrayNode()));
         }).toList();
+    }
+
+    private Map<Long, JsonNode> eyeBeacons(String imei, List<TelemetryPoint> points) {
+        if (points.isEmpty()) return Map.of();
+        List<Long> telemetryIds = new ArrayList<>(points.size());
+        Instant firstReceived = points.get(0).receivedAt();
+        Instant lastReceived = firstReceived;
+        for (TelemetryPoint point : points) {
+            telemetryIds.add(point.id());
+            Instant receivedAt = point.receivedAt();
+            if (receivedAt.isBefore(firstReceived)) firstReceived = receivedAt;
+            if (receivedAt.isAfter(lastReceived)) lastReceived = receivedAt;
+        }
+        String placeholders = String.join(",", telemetryIds.stream().map(id -> "?").toList());
+        String sql = "SELECT id, eye_beacons::text AS beacon_data FROM telemetry "
+                + "WHERE imei = ? AND server_time BETWEEN ? AND ? AND id IN (" + placeholders + ") "
+                + "AND eye_beacons <> '[]'::jsonb";
+        List<Object> args = new ArrayList<>();
+        args.add(imei);
+        args.add(Timestamp.from(firstReceived));
+        args.add(Timestamp.from(lastReceived));
+        args.addAll(telemetryIds);
+        Map<Long, JsonNode> result = new LinkedHashMap<>();
+        jdbc.query(sql, (RowCallbackHandler) rs -> {
+            try {
+                result.put(rs.getLong("id"), JSON.readTree(rs.getString("beacon_data")));
+            } catch (com.fasterxml.jackson.core.JsonProcessingException invalidJson) {
+                throw new IllegalStateException("Stored EYE Beacon JSON is invalid", invalidJson);
+            }
+        }, args.toArray());
+        return result;
     }
 
     public List<VehicleAssignmentPeriod> vehicleAssignmentPeriods(String imei, Instant from, Instant to) {
@@ -693,6 +688,8 @@ public class DeviceWorkspaceTripRouteRepository {
                 nullableDouble(rs, "speed"), rs.getString("location_source"));
     }
 
+    private static Double nullableDoubleOptional(ResultSet rs,String column) throws SQLException {try{return nullableDouble(rs,column);}catch(SQLException ignored){return null;}}
+
     private TelemetryPoint point(ResultSet rs) throws SQLException {
         return new TelemetryPoint(rs.getLong("id"), rs.getTimestamp("occurred_at").toInstant(),
                 rs.getTimestamp("received_at").toInstant(),
@@ -703,7 +700,7 @@ public class DeviceWorkspaceTripRouteRepository {
                 rs.getString("driver_name"), rs.getString("vehicle_status"),
                 nullableDouble(rs, "ignition"), nullableDouble(rs, "movement"),
                 nullableDouble(rs, "fuel_level"), nullableDouble(rs, "fuel_rate"),
-                nullableDouble(rs, "fuel_used"));
+                nullableDouble(rs, "fuel_used"), nullableDoubleOptional(rs, "odometer"));
     }
 
 
@@ -778,20 +775,6 @@ public class DeviceWorkspaceTripRouteRepository {
 
 
 
-    public List<InstrumentSourceProfile> instrumentSourceProfiles(Long companyId) {
-        return jdbc.query("""
-                SELECT id, profile_name, rpm_source, speed_source, level_source,
-                       consumption_source, odometer_source, is_company_default
-                FROM trip_route_instrument_source_profiles
-                WHERE company_id = ?
-                ORDER BY is_company_default DESC, LOWER(profile_name), id
-                """, (rs, rowNum) -> new InstrumentSourceProfile(
-                rs.getLong("id"), rs.getString("profile_name"), rs.getString("rpm_source"),
-                rs.getString("speed_source"), rs.getString("level_source"),
-                rs.getString("consumption_source"), rs.getString("odometer_source"),
-                rs.getBoolean("is_company_default")), companyId);
-    }
-
     public Optional<InstrumentSourceProfile> instrumentSourceProfile(Long companyId, Long profileId) {
         List<InstrumentSourceProfile> rows = jdbc.query("""
                 SELECT id, profile_name, rpm_source, speed_source, level_source,
@@ -820,45 +803,6 @@ public class DeviceWorkspaceTripRouteRepository {
         return rows.isEmpty() ? null : rows.getFirst();
     }
 
-    public Long upsertInstrumentSourceProfile(Long companyId, Long userId, String name,
-                                               String rpmSource, String speedSource, String levelSource,
-                                               String consumptionSource, String odometerSource) {
-        return jdbc.queryForObject("""
-                INSERT INTO trip_route_instrument_source_profiles(
-                    company_id, profile_name, rpm_source, speed_source, level_source,
-                    consumption_source, odometer_source, created_by, updated_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (company_id, LOWER(profile_name)) DO UPDATE SET
-                    profile_name = EXCLUDED.profile_name,
-                    rpm_source = EXCLUDED.rpm_source,
-                    speed_source = EXCLUDED.speed_source,
-                    level_source = EXCLUDED.level_source,
-                    consumption_source = EXCLUDED.consumption_source,
-                    odometer_source = EXCLUDED.odometer_source,
-                    updated_by = EXCLUDED.updated_by,
-                    updated_at = NOW()
-                RETURNING id
-                """, Long.class, companyId, name, rpmSource, speedSource, levelSource,
-                consumptionSource, odometerSource, userId, userId);
-    }
-
-    public void applyInstrumentSourceProfileToDevice(Long companyId, Long deviceId, Long profileId, Long userId) {
-        jdbc.update("""
-                INSERT INTO trip_route_instrument_source_assignments(company_id, device_id, profile_id, assigned_by)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT (company_id, device_id) DO UPDATE SET
-                    profile_id = EXCLUDED.profile_id,
-                    assigned_by = EXCLUDED.assigned_by,
-                    updated_at = NOW()
-                """, companyId, deviceId, profileId, userId);
-    }
-
-    public void applyInstrumentSourceProfileToAll(Long companyId, Long profileId) {
-        jdbc.update("UPDATE trip_route_instrument_source_profiles SET is_company_default = FALSE, updated_at = NOW() WHERE company_id = ?", companyId);
-        jdbc.update("UPDATE trip_route_instrument_source_profiles SET is_company_default = TRUE, updated_at = NOW() WHERE company_id = ? AND id = ?", companyId, profileId);
-        jdbc.update("DELETE FROM trip_route_instrument_source_assignments WHERE company_id = ?", companyId);
-    }
-
     public record VehicleAssignmentPeriod(Instant startAt, Instant endAt, String plateNumber) {
         boolean includes(Instant value) { return value != null && !value.isBefore(startAt) && (endAt == null || !value.isAfter(endAt)); }
     }
@@ -872,13 +816,13 @@ public class DeviceWorkspaceTripRouteRepository {
     public record TelemetryPoint(Long id, Instant occurredAt, Instant receivedAt, Double latitude, Double longitude, Double speed,
                                  Integer angle, Integer altitude, Integer satellites, Double hdop,
                                  String protocol, String channel, String driverName, String vehicleStatus,
-                                 Double ignition, Double movement, Double fuelLevel, Double fuelRate, Double fuelUsed) {
+                                 Double ignition, Double movement, Double fuelLevel, Double fuelRate, Double fuelUsed, Double odometer) {
         public TelemetryPoint(Long id, Instant occurredAt, Instant receivedAt, Double latitude, Double longitude, Double speed,
                               Integer angle, Integer altitude, Integer satellites, Double hdop,
                               String protocol, String channel, String driverName, String vehicleStatus,
                               Double ignition, Double movement) {
             this(id, occurredAt, receivedAt, latitude, longitude, speed, angle, altitude, satellites, hdop, protocol, channel,
-                    driverName, vehicleStatus, ignition, movement, null, null, null);
+                    driverName, vehicleStatus, ignition, movement, null, null, null, null);
         }
     }
 }

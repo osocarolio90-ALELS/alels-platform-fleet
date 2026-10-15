@@ -1,12 +1,11 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, BatteryCharging, CircleParking, Fuel, Gauge, Maximize, Minimize2, Minus, Plus, Settings2, UserRound } from "lucide-react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { Activity, BatteryCharging, CircleParking, Fuel, Gauge, Maximize, Minimize2, Minus, Plus, UserRound } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Button } from "@/components/ui/button";
 import { getDriverPhoto } from "@/features/asset-register/api/driver-register-api";
-import { getDeviceWorkspaceEvents, getDeviceWorkspaceHistoricalRoutes, getDeviceWorkspaceTelemetry, saveDeviceWorkspaceConfiguration } from "../api/device-workspace-telemetry-api";
-import { ConfigureDataDialog } from "../components/configure-data-dialog";
+import { getDeviceWorkspaceEvents, getDeviceWorkspaceHistoricalRoutes, getDeviceWorkspaceTelemetry } from "../api/device-workspace-telemetry-api";
 import { InstrumentGauge } from "../components/instrument-gauge";
 import { hasValidPosition, TelemetryMap } from "../components/telemetry-map";
 import { useDevicePresence } from "../hooks/use-device-presence";
@@ -15,8 +14,7 @@ import type { InstrumentMapping, WorkspaceDataParameter, WorkspaceEvent, Workspa
 type Props={deviceId:number;live:boolean;refreshToken:number;clusterRef:React.RefObject<HTMLDivElement>};
 
 export function TelemetryWorkspaceTab({deviceId,live,refreshToken,clusterRef}:Props){
- const client=useQueryClient();
- const [mapMode,setMapMode]=useState<"2d"|"3d">("2d"),[zoom,setZoom]=useState(15),[configure,setConfigure]=useState(false),[configurationError,setConfigurationError]=useState(""),[fullscreen,setFullscreen]=useState(false);
+ const [mapMode,setMapMode]=useState<"2d"|"3d">("2d"),[zoom,setZoom]=useState(15),[fullscreen,setFullscreen]=useState(false);
  const validDeviceId=Number.isSafeInteger(deviceId)&&deviceId>0;
  const query=useQuery({queryKey:["device-workspace","telemetry",deviceId],queryFn:()=>getDeviceWorkspaceTelemetry(deviceId),enabled:validDeviceId,refetchInterval:live?1_000:false,refetchIntervalInBackground:false});
  const lastSnapshot=useRef<WorkspaceTelemetry|null>(null);
@@ -24,7 +22,6 @@ export function TelemetryWorkspaceTab({deviceId,live,refreshToken,clusterRef}:Pr
  const historyRoutes=useQuery({queryKey:["device-workspace","telemetry-history-routes",deviceId],queryFn:()=>getDeviceWorkspaceHistoricalRoutes(deviceId),enabled:validDeviceId,staleTime:300_000,refetchOnWindowFocus:false});
  const online=useDevicePresence(query.data);
  const events=useInfiniteQuery({queryKey:["device-workspace","events",deviceId],queryFn:({pageParam})=>getDeviceWorkspaceEvents(deviceId,pageParam,50),enabled:validDeviceId,initialPageParam:null as number|null,getNextPageParam:last=>last.hasMore?last.nextBeforeId:undefined,refetchInterval:live?5_000:false,refetchOnMount:"always",retry:2});
- const save=useMutation({mutationFn:(value:WorkspaceTelemetry["configuration"])=>saveDeviceWorkspaceConfiguration(deviceId,value),onMutate:()=>setConfigurationError(""),onSuccess:value=>{client.setQueryData<WorkspaceTelemetry>(["device-workspace","telemetry",deviceId],current=>current?{...current,configuration:value}:current);setConfigure(false);},onError:error=>setConfigurationError(error instanceof Error?error.message:"Configuration could not be saved.")});
  useEffect(()=>{if(refreshToken>0){void query.refetch();void historyRoutes.refetch();void events.refetch();}},[refreshToken]);
  useEffect(()=>{const update=()=>setFullscreen(document.fullscreenElement===clusterRef.current);document.addEventListener("fullscreenchange",update);return()=>document.removeEventListener("fullscreenchange",update);},[clusterRef]);
  if(query.isLoading)return <WorkspaceState title="Loading device workspace..."/>;
@@ -33,24 +30,25 @@ export function TelemetryWorkspaceTab({deviceId,live,refreshToken,clusterRef}:Pr
  const rpmMapping=data.configuration.instruments.find(item=>item.slot.toUpperCase()==="RPM");
  const speedMapping=data.configuration.instruments.find(item=>item.slot.toUpperCase()==="SPEED");
  const rpm=resolveNumeric(data,rpmMapping,["engine_rpm","rpm"]);
- const speed=resolveNumeric(data,speedMapping,["gps.speed","gnss_speed","speed"])??data.position.speed;
+ const speedUnit=speedMapping?.unit||"km/h";
+ const mappedSpeed=resolveNumeric(data,speedMapping,["gps.speed","gnss_speed","speed"]);
+ const speed=mappedSpeed??convertNumeric(data.position.speed,"km/h",speedUnit);
  const toggleFullscreen=async()=>{const target=clusterRef.current;if(!target||!document.fullscreenEnabled)return;try{if(document.fullscreenElement===target)await document.exitFullscreen();else await target.requestFullscreen();}catch(error){console.warn("Device workspace fullscreen request failed",error);}};
  const eventRows=uniqueEvents(events.data?.pages.flatMap(page=>page.events)||[]);
  return <div className="dw-telemetry-layout">
   <div className="dw-left-column">
    <section ref={clusterRef} className="dw-cluster dw-sticky-cluster" data-cluster-theme="dark">
-    <TelemetryMap latitude={data.position.latitude} longitude={data.position.longitude} angle={data.position.angle} vehicleType={data.vehicle.type} track={data.track||[]} routeOverlays={historyRoutes.data?.routes||[]} threeDimensional={mapMode==="3d"} zoom={zoom} routeColor="#1d4ed8"/>
+     <TelemetryMap latitude={data.position.latitude} longitude={data.position.longitude} angle={data.position.angle} vehicleType={data.vehicle.type} track={data.track||[]} routeOverlays={historyRoutes.data?.routes||[]} threeDimensional={mapMode==="3d"} zoom={zoom} routeColor="#1d4ed8"/>
     <div className="dw-cluster-toolbar">
-     <div className="dw-map-actions"><Button variant="outline" onClick={()=>setConfigure(true)}><Settings2 className="h-4 w-4"/>Configure Data</Button><ModeButton active={mapMode==="2d"} onClick={()=>setMapMode("2d")}>2D</ModeButton><ModeButton active={mapMode==="3d"} onClick={()=>setMapMode("3d")}>3D</ModeButton><Button size="icon" variant="outline" title={fullscreen?"Exit fullscreen":"Fullscreen cluster"} aria-pressed={fullscreen} disabled={!document.fullscreenEnabled} onClick={()=>void toggleFullscreen()}>{fullscreen?<Minimize2 className="h-4 w-4"/>:<Maximize className="h-4 w-4"/>}</Button><Button size="icon" variant="outline" title="Zoom in" disabled={zoom>=19} onClick={()=>setZoom(value=>Math.min(19,value+1))}><Plus className="h-4 w-4"/></Button><Button size="icon" variant="outline" title="Zoom out" disabled={zoom<=3} onClick={()=>setZoom(value=>Math.max(3,value-1))}><Minus className="h-4 w-4"/></Button></div>
+      <div className="dw-map-actions"><ModeButton active={mapMode==="2d"} onClick={()=>setMapMode("2d")}>2D</ModeButton><ModeButton active={mapMode==="3d"} onClick={()=>setMapMode("3d")}>3D</ModeButton><Button size="icon" variant="outline" title={fullscreen?"Exit fullscreen":"Fullscreen cluster"} aria-pressed={fullscreen} disabled={!document.fullscreenEnabled} onClick={()=>void toggleFullscreen()}>{fullscreen?<Minimize2 className="h-4 w-4"/>:<Maximize className="h-4 w-4"/>}</Button><Button size="icon" variant="outline" title="Zoom in" disabled={zoom>=22} onClick={()=>setZoom(value=>Math.min(22,value+1))}><Plus className="h-4 w-4"/></Button><Button size="icon" variant="outline" title="Zoom out" disabled={zoom<=3} onClick={()=>setZoom(value=>Math.max(3,value-1))}><Minus className="h-4 w-4"/></Button></div>
      <div className="dw-connectivity"><ConnectionStat label="Signal Strength" value={data.connection.signalStrength==null?"– / 5":`${data.connection.signalStrength} / 5`} bars={data.connection.signalStrength}/><ConnectionStat label="Vehicle Status" value={data.vehicleStatus||"UNKNOWN"} blue/><ConnectionStat label="Satellites Used" value={String(data.connection.satellitesUsed??"–")}/><ConnectionStat label="GNSS Status" value={data.connection.gnssStatus} blue/><ConnectionStat label="Connection" value={data.connection.channel||data.connection.tcpStatus} blue/><ConnectionStat label="Protocol" value={formatProtocol(data.connection.protocol)} blue/></div>
     </div>
-    <div className="dw-instrument-stage"><InstrumentGauge label="RPM" value={rpm??0} unit="rpm" max={6000} major={[0,1,2,3,4,5,6]}/><div className="dw-map-center-label">{hasValidPosition(data.position.latitude,data.position.longitude)?<><strong>{data.position.latitude!.toFixed(5)}, {data.position.longitude!.toFixed(5)}</strong><span>Live vehicle position</span></>:<span>Waiting for valid GPS location</span>}</div><InstrumentGauge label="SPEED" value={speed} unit="km/h" max={160} major={[0,20,40,60,80,100,120,140,160]}/></div>
+    <div className="dw-instrument-stage"><InstrumentGauge label="RPM" value={rpm??0} unit="rpm" max={6000} major={[0,1,2,3,4,5,6]}/><div className="dw-map-center-label">{hasValidPosition(data.position.latitude,data.position.longitude)?<><strong>{data.position.latitude!.toFixed(5)}, {data.position.longitude!.toFixed(5)}</strong><span>Live vehicle position</span></>:<span>Waiting for valid GPS location</span>}</div><InstrumentGauge label="SPEED" value={speed??0} unit={speedUnit} max={speedUnit==="mph"?100:160} major={speedUnit==="mph"?[0,20,40,60,80,100]:[0,20,40,60,80,100,120,140,160]}/></div>
     <div className="dw-bottom-instruments">{data.configuration.bottomItems.slice(0,7).map(item=><BottomInstrument key={item.slot} item={item} parameter={resolveParameter(data,item)}/>)}</div>
    </section>
-   <DataReceivedPanel data={data} online={online}/>
+    <DataReceivedPanel data={data} online={online}/>
   </div>
   <aside className="dw-right-column"><DriverPanel data={data}/><VehiclePanel data={data}/><RecentEventsPanel events={eventRows} error={events.isError} hasMore={Boolean(events.hasNextPage)} loading={events.isFetchingNextPage} onMore={()=>void events.fetchNextPage()}/></aside>
-  <ConfigureDataDialog open={configure} configuration={data.configuration} parameters={data.dataReceived} saving={save.isPending} error={configurationError} onClose={()=>setConfigure(false)} onSave={value=>save.mutate(value)}/>
  </div>;
 }
 
@@ -66,11 +64,11 @@ function DataReceivedPanel({data,online}:{data:WorkspaceTelemetry;online:boolean
    <button type="button" className={activeGroup==="ALL"?"active":""} aria-pressed={activeGroup==="ALL"} onClick={()=>setActiveGroup("ALL")}>ALL Data</button>
    {groups.map(group=><button type="button" key={group} className={activeGroup===group?"active":""} aria-pressed={activeGroup===group} onClick={()=>setActiveGroup(group)}>{parameterGroupTabLabel(group)}</button>)}
   </nav>
-  <div className="dw-data-scroll">
+   <div className="dw-data-scroll">
    {activeGroup==="ALL"?<><TimestampCard label="Server Timestamp" value={data.packet?.receivedAt}/><TimestampCard label="Device Timestamp" value={data.position.deviceTime}/><article className="dw-data-card dw-data-source-card"><span>Data Source</span><strong>{formatChannel(data.connection.channel)}</strong><small><b>{formatProtocol(data.connection.protocol)}</b><br/>IMEI {data.device.imei}</small></article></>:null}
    {parameters.map((parameter,index)=><article className="dw-data-card" key={`${parameter.fieldCode}-${parameter.parameterId||index}`}><span>{parameter.label}</span><strong>{formatParameter(parameter)}</strong>{parameter.parameterId?<small>AVL ID<br/><b>{parameter.parameterId}</b></small>:null}</article>)}
    {!parameters.length?<div className="dw-empty-card">{activeGroup==="ALL"?"No packet data received for this IMEI yet.":"Data not received"}</div>:null}
-  </div>
+   </div>
  </section>;
 }
 
@@ -80,7 +78,7 @@ function DriverPanel({data}:{data:WorkspaceTelemetry}){const photo=useSecurePhot
 function VehiclePanel({data}:{data:WorkspaceTelemetry}){return <section className="dw-panel dw-info-panel"><h2>Vehicle Information</h2>{!data.vehicle.paired?<NotPairing label="Vehicle"/>:<dl className="dw-vehicle-info">{infoRows([["Vehicle Name",data.vehicle.vehicleName],["Vehicle Code",data.vehicle.vehicleCode],["Plate Number",data.vehicle.plateNumber],["Type",data.vehicle.type],["Brand",data.vehicle.brand],["Model",data.vehicle.model],["Year",data.vehicle.year],["Energy",data.vehicle.energy],["Ownership",data.vehicle.ownership],["Tank Capacity",data.vehicle.capacity],["Country",data.vehicle.country]])}<dt>Operational Status</dt><dd><Status value={data.vehicle.operationalStatus}/></dd></dl>}</section>;}
 function RecentEventsPanel({events,error,hasMore,loading,onMore}:{events:WorkspaceEvent[];error:boolean;hasMore:boolean;loading:boolean;onMore:()=>void}){return <section className="dw-panel dw-events-panel"><h2>Recent Events</h2><div className="dw-events-scroll">{events.map((event,index)=><article key={`${event.id}-${index}`}><time>{formatDate(event.occurredAt)}</time><div><strong>{event.title}</strong><span>{event.message}</span></div><Status value={event.severity}/></article>)}{error?<div className="dw-not-pairing">Recent events could not be loaded. Please refresh.</div>:!events.length?<div className="dw-not-pairing">No event received for this IMEI.</div>:null}{hasMore?<Button type="button" variant="ghost" disabled={loading} onClick={onMore}>{loading?"Loading...":"Load previous events"}</Button>:null}</div></section>;}
 
-function BottomInstrument({item,parameter}:{item:InstrumentMapping;parameter?:WorkspaceDataParameter}){const Icon=iconFor(item.icon);return <article><Icon/><div><small>{parameter?.label||"Waiting for data"}</small><strong>{parameter?formatParameter(parameter):"–"}</strong></div></article>;}
+function BottomInstrument({item,parameter}:{item:InstrumentMapping;parameter?:WorkspaceDataParameter}){const Icon=iconFor(item.icon);return <article><Icon/><div><small>{parameter?.label||"Waiting for data"}</small><strong>{parameter?formatParameter(parameter,item.unit):"–"}</strong></div></article>;}
 function ConnectionStat({label,value,blue,bars}:{label:string;value:string;blue?:boolean;bars?:number|null}){return <div className="dw-connection-stat">{bars!=null?<span className="dw-signal-bars">{[1,2,3,4,5].map(level=><i key={level} className={level<=bars?"active":""}/>)}</span>:null}<span><small>{label}</small><strong data-preserve-tone={blue?"info":undefined} className={blue?"dw-blue-status":""}>{value}</strong></span></div>;}
 function ModeButton({active,onClick,children}:{active:boolean;onClick:()=>void;children:React.ReactNode}){return <Button variant={active?"default":"outline"} aria-pressed={active} onClick={onClick}>{children}</Button>;}
 function NotPairing({label}:{label:string}){return <div className="dw-not-pairing"><strong>NOT PAIRING</strong><span>{label} has not been assigned to this device.</span></div>;}
@@ -109,8 +107,9 @@ function findMapped(data:WorkspaceTelemetry,fieldCode?:string|null,parameterId?:
  if(parameterId){const bySourceId=data.dataReceived.find(item=>item.parameterId===parameterId);if(bySourceId)return bySourceId;}
  return normalizedCode?data.dataReceived.find(item=>item.fieldCode.toLowerCase()===normalizedCode):undefined;
 }
-function resolveNumeric(data:WorkspaceTelemetry,mapping:InstrumentMapping|undefined,aliases:string[]){const mapped=resolveParameter(data,mapping);if(mapped?.numericValue!=null)return mapped.numericValue;const normalizedAliases=aliases.map(value=>value.toLowerCase());return data.dataReceived.find(item=>normalizedAliases.some(alias=>item.fieldCode.toLowerCase().includes(alias)))?.numericValue;}
-function formatParameter(parameter:WorkspaceDataParameter){let value=parameter.value??(parameter.booleanValue==null?"–":parameter.booleanValue?"ON":"OFF");if(parameter.booleanValue!=null)value=parameter.booleanValue?"ON":"OFF";return `${value}${parameter.unit?` ${parameter.unit}`:""}`;}
+function resolveNumeric(data:WorkspaceTelemetry,mapping:InstrumentMapping|undefined,aliases:string[]){const mapped=resolveParameter(data,mapping);if(mapped?.numericValue!=null)return convertNumeric(mapped.numericValue,mapped.unit,mapping?.unit)||mapped.numericValue;const normalizedAliases=aliases.map(value=>value.toLowerCase());return data.dataReceived.find(item=>normalizedAliases.some(alias=>item.fieldCode.toLowerCase().includes(alias)))?.numericValue;}
+function formatParameter(parameter:WorkspaceDataParameter,targetUnit?:string|null){if(parameter.booleanValue!=null)return parameter.booleanValue?"ON":"OFF";if(parameter.numericValue!=null){const value=convertNumeric(parameter.numericValue,parameter.unit,targetUnit)||parameter.numericValue;return `${Number(value.toFixed(3))}${targetUnit||parameter.unit?` ${targetUnit||parameter.unit}`:""}`;}const value=parameter.value??"–";return `${value}${parameter.unit?` ${parameter.unit}`:""}`;}
+function convertNumeric(value:number|null|undefined,from?:string|null,to?:string|null){if(value==null||!Number.isFinite(value)||!to||!from||from.toLowerCase()===to.toLowerCase())return value??null;const f=from.toLowerCase(),t=to.toLowerCase();if((f==="m"||f.startsWith("meter"))&&t==="km")return value/1000;if(f==="km"&&t==="m")return value*1000;if((f==="mi"||f.startsWith("mile"))&&t==="km")return value*1.609344;if(f==="km"&&t==="mi")return value/1.609344;if((f==="km/h"||f==="kph")&&t==="mph")return value/1.609344;if(f==="mph"&&t==="km/h")return value*1.609344;if(f==="m/s"&&t==="km/h")return value*3.6;if(f==="km/h"&&t==="m/s")return value/3.6;if((f==="l"||f==="liter"||f==="litre")&&t==="ml")return value*1000;if(f==="ml"&&t==="l")return value/1000;if((f==="l"||f==="liter"||f==="litre")&&t==="gal")return value/3.785411784;if(f==="gal"&&t==="l")return value*3.785411784;if((f==="c"||f==="°c")&&(t==="f"||t==="°f"))return value*9/5+32;if((f==="f"||f==="°f")&&(t==="c"||t==="°c"))return(value-32)*5/9;return value;}
 function parameterGroupTabLabel(group:string){if(group==="Permanent I/O elements")return"Permanent I/O";if(group==="Eventual I/O elements")return"Event I/O";return group.replace(/ elements$/i,"");}
 function formatChannel(value?:string|null){if(!value)return"UNKNOWN";return value.toUpperCase()==="WIFI"?"Wi-Fi":value.toUpperCase();}
 function formatProtocol(value?:string|null){if(!value)return"–";return value.replace("TELTONIKA_","").replace("CODEC8E","Codec 8E").replace("CODEC8","Codec 8").replace(/_/g," ");}

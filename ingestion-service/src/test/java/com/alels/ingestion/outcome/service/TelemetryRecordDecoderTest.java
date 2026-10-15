@@ -42,6 +42,33 @@ class TelemetryRecordDecoderTest {
         assertEquals(invalid, result.failures().getFirst().record());
     }
 
+    @Test
+    void rejectsTelemetryWhoseKafkaDeviceKeyBelongsToAnotherImei() {
+        IngestionRecord mismatched = record(22, """
+                {"imei":"352093086403655","protocol":"ALELS_JSON","channel":"WIFI",
+                 "eyeBeacons":[{"ioId":10500,"beacons":[]}]}
+                """);
+        DecodedTelemetryBatch result = TelemetryRecordDecoder.decode(List.of(mismatched));
+        assertEquals(0, result.messages().size());
+        assertEquals(1, result.failures().size());
+        assertEquals(mismatched, result.failures().getFirst().record());
+    }
+
+    @Test
+    void retainsDecodedBeaconListOnItsOwnTelemetryMessage() {
+        IngestionRecord record = record(23, """
+                {"imei":"123456789012345","protocol":"ALELS_JSON","channel":"WIFI",
+                 "ioData":{"10500":"1101E39B606AA38255AA8E460B154E2D0055CF"},
+                 "eyeBeacons":[{"ioId":10500,"part":1,"totalParts":1,
+                                "beacons":[{"id":"E39B606AA38255AA8E460B154E2D0055","rssiDbm":-49}],
+                                "undecodedHex":""}]}
+                """);
+        DecodedTelemetryBatch result = TelemetryRecordDecoder.decode(List.of(record));
+        assertEquals(1, result.messages().size());
+        assertEquals("123456789012345", result.messages().getFirst().imei);
+        assertEquals(10500, result.messages().getFirst().eyeBeacons.getFirst().get("ioId"));
+    }
+
     private IngestionRecord record(long offset, String payload) {
         return new IngestionRecord("telemetry.raw", 0, offset, "123456789012345", payload);
     }

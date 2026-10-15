@@ -1,0 +1,3 @@
+export type DataSourceOption={selector:string;fieldCode:string;label:string;unit?:string|null;category?:string|null;sourceIoId?:string|null;sourceProtocol?:string|null;dictionaryCode?:string|null;sourceName?:string|null;lastValue?:string|null;lastReceivedAt?:string|null;sampleCount:number;numericAvailable:boolean};
+export type DataSourceProfile={id:number;name:string;rpmSource:string;speedSource:string;levelSource:string;consumptionSource:string;odometerSource:string;companyDefault:boolean;workspaceConfiguration:string;unitPreferences:Record<string,string>};
+export type DataSourceProfileList={profiles:DataSourceProfile[];effectiveProfileId?:number|null};

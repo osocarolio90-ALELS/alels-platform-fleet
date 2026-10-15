@@ -18,6 +18,7 @@ import com.alels.gateway.model.TelemetryData;
 import com.alels.gateway.config.KafkaSecurityConfig;
 import com.alels.gateway.cell.config.CellRoutingConfig;
 import com.alels.gateway.util.TelemetryNumericNormalizer;
+import com.alels.gateway.normalizer.EyeBeaconTelemetryNormalizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class KafkaTelemetryPublisher implements TelemetryPublisher {
@@ -86,6 +87,7 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
         }
 
         TelemetryNumericNormalizer.normalizeForPersistence(telemetryData);
+        EyeBeaconTelemetryNormalizer.normalize(telemetryData);
 
         CompletableFuture<Long> result = new CompletableFuture<>();
         try {
@@ -166,6 +168,7 @@ public class KafkaTelemetryPublisher implements TelemetryPublisher {
         payload.put("eventIoId", telemetryData.getEventIoId());
         payload.put("hdop", telemetryData.getHdop());
         payload.put("ioData", telemetryData.getIoData());
+        payload.put("eyeBeacons", telemetryData.getEyeBeacons());
 
         return payload;
     }

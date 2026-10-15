@@ -7,6 +7,7 @@ import com.alels.gateway.repository.DevicePresenceRepository;
 import com.alels.gateway.repository.DeviceStatusRepository;
 import com.alels.gateway.service.NormalizationEngine;
 import com.alels.gateway.service.TelemetryAlertEvaluator;
+import com.alels.gateway.normalizer.EyeBeaconTelemetryNormalizer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -22,6 +23,7 @@ public class DirectDatabaseTelemetryPublisher implements TelemetryPublisher {
             String logLabel
     ) {
         try {
+            EyeBeaconTelemetryNormalizer.normalize(telemetryData);
             Long telemetryId = TelemetryRepository.insert(
                     rawPacketId, telemetryData, protocol, channel, dictionaryCode
             );

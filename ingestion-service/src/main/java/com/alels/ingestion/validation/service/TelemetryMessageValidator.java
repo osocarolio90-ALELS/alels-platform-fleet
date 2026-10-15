@@ -7,10 +7,14 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import com.alels.ingestion.cell.config.IngestionCellConfig;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public final class TelemetryMessageValidator {
 
     private static final long MAX_FUTURE_SKEW_SECONDS = 24L * 60L * 60L;
+    private static final Set<Integer> BEACON_IDS = Set.of(385, 548, 10500, 10828, 10829, 10831);
 
     private TelemetryMessageValidator() {
     }
@@ -33,6 +37,20 @@ public final class TelemetryMessageValidator {
         }
         if (message.speed != null && message.speed < 0) return "speed cannot be negative";
         if (message.satellites != null && message.satellites < 0) return "satellites cannot be negative";
+        if (message.eyeBeacons != null) {
+            if (message.eyeBeacons.size() > BEACON_IDS.size()) return "too many beacon IO results";
+            for (Map<String, Object> result : message.eyeBeacons) {
+                if (result == null || !(result.get("ioId") instanceof Number number)
+                        || !BEACON_IDS.contains(number.intValue())
+                        || message.ioData == null
+                        || !(message.ioData.get(Integer.toString(number.intValue())) instanceof String)) {
+                    return "beacon result has no matching source IO";
+                }
+                if (!(result.get("beacons") instanceof List<?> beacons) || beacons.size() > 100) {
+                    return "invalid beacon result count";
+                }
+            }
+        }
         if (message.deviceTime != null && !message.deviceTime.isBlank()) {
             Instant deviceTime = parseUtc(message.deviceTime);
             if (deviceTime == null) return "deviceTime must be ISO-8601";

@@ -9,10 +9,10 @@ import java.util.Set;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.alels.backend.serverops.shared.security.JwtUserContext;
+import com.alels.backend.telemetry.device.deviceworkspace.tab.configuration.datasource.repository.DeviceWorkspaceDataSourceRepository;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.ConnectionInfo;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.DataParameter;
 import com.alels.backend.telemetry.device.deviceworkspace.tab.telemetry.dto.DeviceWorkspaceTelemetryDtos.DriverInfo;
@@ -44,15 +44,18 @@ public class DeviceWorkspaceTelemetryService {
     private final TelemetryDeviceRepository deviceRepository;
     private final DeviceWorkspaceTelemetryRepository workspaceRepository;
     private final ObjectMapper objectMapper;
+    private final DeviceWorkspaceDataSourceRepository dataSourceRepository;
 
     public DeviceWorkspaceTelemetryService(
             TelemetryDeviceRepository deviceRepository,
             DeviceWorkspaceTelemetryRepository workspaceRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            DeviceWorkspaceDataSourceRepository dataSourceRepository
     ) {
         this.deviceRepository = deviceRepository;
         this.workspaceRepository = workspaceRepository;
         this.objectMapper = objectMapper;
+        this.dataSourceRepository = dataSourceRepository;
     }
 
     public WorkspaceTelemetryResponse telemetry(JwtUserContext user, Long deviceId) {
@@ -82,7 +85,7 @@ public class DeviceWorkspaceTelemetryService {
         return new WorkspaceTelemetryResponse(
                 device.info(), driver, vehicle, position, connection, packetInfo, vehicleStatus, parameters,
                 DeviceParameterGroupCatalog.groups(device.info().model(), dictionaryCode),
-                readConfiguration(deviceId, user.userId()),
+                readConfiguration(deviceId, user.userId(), device.companyId()),
                 workspaceRepository.recentTrack(device.info().imei(), MAX_TRACK_POINTS)
         );
     }
@@ -131,21 +134,6 @@ public class DeviceWorkspaceTelemetryService {
         return new EventPage(page, nextBeforeId, hasMore);
     }
 
-    @Transactional
-    public WorkspaceConfiguration saveConfiguration(
-            JwtUserContext user, Long deviceId, WorkspaceConfiguration configuration
-    ) {
-        ScopedDevice device = scopedDevice(user, deviceId);
-        WorkspaceConfiguration clean = validateConfiguration(configuration);
-        try {
-            workspaceRepository.saveConfiguration(
-                    deviceId, device.companyId(), user.userId(), objectMapper.writeValueAsString(clean)
-            );
-            return clean;
-        } catch (JsonProcessingException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Configuration data is invalid.", exception);
-        }
-    }
 
     private ScopedDevice scopedDevice(JwtUserContext user, Long deviceId) {
         if (deviceId == null || deviceId <= 0) {
@@ -157,7 +145,18 @@ public class DeviceWorkspaceTelemetryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Device not found."));
     }
 
-    private WorkspaceConfiguration readConfiguration(Long deviceId, Long userId) {
+    private WorkspaceConfiguration readConfiguration(Long deviceId, Long userId, Long companyId) {
+        Long profileId = dataSourceRepository.effectiveId(companyId, deviceId);
+        if (profileId != null) {
+            var profile = dataSourceRepository.profile(companyId, profileId);
+            if (profile.isPresent()) {
+                try {
+                    WorkspaceConfiguration configured = objectMapper.readValue(profile.get().workspaceConfiguration(), WorkspaceConfiguration.class);
+                    WorkspaceConfiguration normalized = normalizeConfiguration(configured);
+                    if (!normalized.bottomItems().isEmpty() && normalized.bottomItems().size() <= BOTTOM_ITEM_COUNT) return normalized;
+                } catch (JsonProcessingException ignored) {}
+            }
+        }
         return workspaceRepository.configuration(deviceId, userId)
                 .flatMap(json -> {
                     try {
@@ -170,23 +169,6 @@ public class DeviceWorkspaceTelemetryService {
                 .filter(configuration -> !configuration.bottomItems().isEmpty()
                         && configuration.bottomItems().size() <= BOTTOM_ITEM_COUNT)
                 .orElseGet(DeviceWorkspaceTelemetryService::defaultConfiguration);
-    }
-
-    private WorkspaceConfiguration validateConfiguration(WorkspaceConfiguration input) {
-        WorkspaceConfiguration normalized = normalizeConfiguration(input);
-        if (normalized.bottomItems().isEmpty() || normalized.bottomItems().size() > BOTTOM_ITEM_COUNT) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bottom data must contain between 1 and 7 items.");
-        }
-        long uniqueBottomSlots = normalized.bottomItems().stream().map(instrumentMapping -> instrumentMapping.slot()).distinct().count();
-        if (uniqueBottomSlots != normalized.bottomItems().size()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bottom data slots must be unique.");
-        }
-        Set<String> instrumentSlots = normalized.instruments().stream()
-                .map(instrumentMapping -> instrumentMapping.slot()).collect(java.util.stream.Collectors.toSet());
-        if (!instrumentSlots.equals(REQUIRED_INSTRUMENT_SLOTS)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Main instrument slots must contain RPM and SPEED.");
-        }
-        return normalized;
     }
 
     private WorkspaceConfiguration normalizeConfiguration(WorkspaceConfiguration input) {

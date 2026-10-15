@@ -1,6 +1,7 @@
 package com.alels.ingestion.model;
 
 import java.util.Map;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -26,4 +27,5 @@ public class TelemetryMessage {
     public Integer eventIoId;
     public Double hdop;
     public Map<String, Object> ioData;
+    public List<Map<String, Object>> eyeBeacons;
 }

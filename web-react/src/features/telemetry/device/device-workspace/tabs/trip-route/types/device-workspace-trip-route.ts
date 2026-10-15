@@ -19,8 +19,3 @@ export type SelectedDeviceLogPage={rows:TripLogRow[];page:number;size:number;tot
 export type TripPlaybackTelemetryRow={telemetryId:number;speed?:number|null;parameters:TripParameter[]};
 export type TripInstrumentSourceKey="rpm"|"speed"|"level"|"consumption"|"odometer";
 export type TripInstrumentSourceMap=Record<TripInstrumentSourceKey,string>;
-
-export type TripInstrumentSourceProfile={id:number;name:string;rpmSource:string;speedSource:string;levelSource:string;consumptionSource:string;odometerSource:string;companyDefault:boolean};
-export type TripInstrumentSourceProfileList={profiles:TripInstrumentSourceProfile[];effectiveProfileId?:number|null};
-
-export type TripInstrumentSourceOption={fieldCode:string;label:string;unit?:string|null;category?:string|null};

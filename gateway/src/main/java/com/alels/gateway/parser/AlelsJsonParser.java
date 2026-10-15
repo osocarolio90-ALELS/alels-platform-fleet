@@ -14,7 +14,7 @@ public class AlelsJsonParser implements PacketParser {
         String type = getText(node, "T");
 
         String imei = "";
-        if (node.has("A")) {
+        if (node.has("A") && !node.get("A").asText().isBlank()) {
             imei = node.get("A").asText();
         } else if (node.has("imei")) {
             imei = node.get("imei").asText();

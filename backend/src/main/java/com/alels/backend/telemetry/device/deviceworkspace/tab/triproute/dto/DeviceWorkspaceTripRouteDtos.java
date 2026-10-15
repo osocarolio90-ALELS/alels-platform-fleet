@@ -1,6 +1,7 @@
 package com.alels.backend.telemetry.device.deviceworkspace.tab.triproute.dto;
 
 import java.util.List;
+import com.fasterxml.jackson.databind.JsonNode;
 
 public final class DeviceWorkspaceTripRouteDtos {
     private DeviceWorkspaceTripRouteDtos() {}
@@ -54,7 +55,8 @@ public final class DeviceWorkspaceTripRouteDtos {
     public record TripLogRow(Long telemetryId, String imei, String occurredAt, String receivedAt, String protocol, String source,
                              String driverName, String vehiclePlateNumber,
                              Double latitude, Double longitude, Integer altitude, Integer angle,
-                             Double speed, Integer satellites, Double hdop, List<ParameterValue> parameters) {}
+                             Double speed, Integer satellites, Double hdop, List<ParameterValue> parameters,
+                             JsonNode eyeBeacons) {}
     public record SelectedTimeRange(String from, String to) {}
     public record SelectedEventsRequest(List<SelectedTimeRange> ranges) {}
     public record SelectedLogsRequest(List<SelectedTimeRange> ranges, Integer page, Integer size, List<Long> telemetryIds) {}
@@ -80,11 +82,5 @@ public final class DeviceWorkspaceTripRouteDtos {
             Long id, String name, String rpmSource, String speedSource, String levelSource,
             String consumptionSource, String odometerSource, boolean companyDefault
     ) {}
-    public record InstrumentSourceProfileList(List<InstrumentSourceProfile> profiles, Long effectiveProfileId) {}
-    public record InstrumentSourceOption(String fieldCode, String label, String unit, String category) {}
-    public record SaveInstrumentSourceProfileRequest(
-            String name, String rpmSource, String speedSource, String levelSource,
-            String consumptionSource, String odometerSource, Boolean applyAll
-    ) {}
-    public record ApplyInstrumentSourceProfileRequest(Long profileId, Boolean applyAll) {}
+
 }
