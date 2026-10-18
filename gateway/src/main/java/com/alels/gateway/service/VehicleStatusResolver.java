@@ -1,9 +1,11 @@
 package com.alels.gateway.service;
 
 import java.util.Map;
+import java.util.List;
 import com.alels.gateway.model.TelemetryData;
 import com.alels.gateway.model.DeviceModelInfo;
 import com.alels.gateway.repository.NormalizedFieldRepository;
+import com.alels.gateway.repository.NormalizedFieldRepository.VehicleStatusSource;
 
 public class VehicleStatusResolver {
 
@@ -14,19 +16,20 @@ public class VehicleStatusResolver {
         if (data == null) return "UNKNOWN";
         DeviceModelInfo model = DeviceModelResolver.resolve(data.getImei());
         if (model == null || data.getIoData() == null) return "UNKNOWN";
+        return resolve(data.getIoData(), data.getSpeed(),
+                MAPPINGS.findVehicleStatusSources(model.getModelId(), String.valueOf(data.getSourceProtocol())));
+    }
+
+    static String resolve(Map<String, Object> ioData, Integer gpsSpeed, List<VehicleStatusSource> sources) {
         Integer ignition = null;
-        Double speed = null;
-        for (Map.Entry<String, Object> entry : data.getIoData().entrySet()) {
-            var mapping = MAPPINGS.findMapping(model.getModelId(), String.valueOf(data.getSourceProtocol()), entry.getKey());
-            if (mapping == null) continue;
-            String code = mapping.getFieldCode();
-            Double value = toDouble(entry.getValue());
-            if ("ignition".equals(code) && value != null) ignition = value.intValue();
-            if ("speed".equals(code) && value != null) {
-                double multiplier = mapping.getMultiplier() == null ? 1.0 : mapping.getMultiplier();
-                double offset = mapping.getOffsetValue() == null ? 0.0 : mapping.getOffsetValue();
-                speed = value * multiplier + offset;
-            }
+        Double speed = gpsSpeed == null ? null : gpsSpeed.doubleValue();
+        for (VehicleStatusSource source : sources) {
+            Double raw = toDouble(ioData.get(source.ioId()));
+            if (raw == null) continue;
+            double value = raw * source.multiplier() + source.offset();
+            if (!Double.isFinite(value)) continue;
+            if ("ignition".equals(source.fieldCode()) && (value == 0 || value == 1)) ignition = (int) value;
+            if ("speed".equals(source.fieldCode()) && value >= 0) speed = value;
         }
         return resolveValues(ignition, speed);
     }
@@ -57,9 +60,12 @@ public class VehicleStatusResolver {
     }
 
     private static Double toDouble(Object value) {
-        if (value instanceof Number number) return number.doubleValue();
+        if (value instanceof Boolean flag) return flag ? 1.0 : 0.0;
         if (value == null) return null;
-        try { return Double.parseDouble(String.valueOf(value)); }
+        try {
+            double parsed = Double.parseDouble(String.valueOf(value));
+            return Double.isFinite(parsed) ? parsed : null;
+        }
         catch (NumberFormatException ignored) { return null; }
     }
 

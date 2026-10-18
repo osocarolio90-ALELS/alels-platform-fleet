@@ -521,7 +521,6 @@ public class DeviceWorkspaceTripRouteRepository {
     public List<TripLogRow> logs(String imei, Instant from, Instant to, List<TelemetryPoint> points) {
         Map<Long, List<ParameterValue>> parameters = normalizedParameters(
                 imei, from, to, points.stream().map(telemetryPoint -> telemetryPoint.id()).toList());
-        Map<Long, JsonNode> eyeBeacons = eyeBeacons(imei, points);
         List<VehicleAssignmentPeriod> vehicleAssignments = vehicleAssignmentPeriods(imei, from, to);
         List<DriverAssignmentPeriod> driverAssignments = driverAssignmentPeriods(imei, from, to);
         return points.stream().map(point -> {
@@ -530,42 +529,11 @@ public class DeviceWorkspaceTripRouteRepository {
             String plateNumber = vehiclePlateAt(vehicleAssignments, point.occurredAt());
             return new TripLogRow(
                     point.id(), imei, point.occurredAt().toString(), point.receivedAt().toString(), point.protocol(), point.channel(),
-                    historicalDriver, plateNumber,
+                    historicalDriver, plateNumber, canonicalVehicleStatus(point.vehicleStatus()),
                     point.latitude(), point.longitude(), point.altitude(), point.angle(), point.speed(),
                     point.satellites(), point.hdop(), parameters.getOrDefault(point.id(), List.of()),
-                    eyeBeacons.getOrDefault(point.id(), JsonNodeFactory.instance.arrayNode()));
+                    JsonNodeFactory.instance.arrayNode());
         }).toList();
-    }
-
-    private Map<Long, JsonNode> eyeBeacons(String imei, List<TelemetryPoint> points) {
-        if (points.isEmpty()) return Map.of();
-        List<Long> telemetryIds = new ArrayList<>(points.size());
-        Instant firstReceived = points.get(0).receivedAt();
-        Instant lastReceived = firstReceived;
-        for (TelemetryPoint point : points) {
-            telemetryIds.add(point.id());
-            Instant receivedAt = point.receivedAt();
-            if (receivedAt.isBefore(firstReceived)) firstReceived = receivedAt;
-            if (receivedAt.isAfter(lastReceived)) lastReceived = receivedAt;
-        }
-        String placeholders = String.join(",", telemetryIds.stream().map(id -> "?").toList());
-        String sql = "SELECT id, eye_beacons::text AS beacon_data FROM telemetry "
-                + "WHERE imei = ? AND server_time BETWEEN ? AND ? AND id IN (" + placeholders + ") "
-                + "AND eye_beacons <> '[]'::jsonb";
-        List<Object> args = new ArrayList<>();
-        args.add(imei);
-        args.add(Timestamp.from(firstReceived));
-        args.add(Timestamp.from(lastReceived));
-        args.addAll(telemetryIds);
-        Map<Long, JsonNode> result = new LinkedHashMap<>();
-        jdbc.query(sql, (RowCallbackHandler) rs -> {
-            try {
-                result.put(rs.getLong("id"), JSON.readTree(rs.getString("beacon_data")));
-            } catch (com.fasterxml.jackson.core.JsonProcessingException invalidJson) {
-                throw new IllegalStateException("Stored EYE Beacon JSON is invalid", invalidJson);
-            }
-        }, args.toArray());
-        return result;
     }
 
     public List<VehicleAssignmentPeriod> vehicleAssignmentPeriods(String imei, Instant from, Instant to) {
@@ -674,6 +642,12 @@ public class DeviceWorkspaceTripRouteRepository {
     private static Instant timestampInstant(ResultSet rs, String column) throws SQLException {
         Timestamp value = rs.getTimestamp(column);
         return value == null ? null : value.toInstant();
+    }
+
+    private static String canonicalVehicleStatus(String value) {
+        if (value == null) return "UNKNOWN";
+        String status = value.trim().toUpperCase(java.util.Locale.ROOT);
+        return List.of("STOP", "IDLE", "TRIP").contains(status) ? status : "UNKNOWN";
     }
 
     private static String valueOrDash(String value) {

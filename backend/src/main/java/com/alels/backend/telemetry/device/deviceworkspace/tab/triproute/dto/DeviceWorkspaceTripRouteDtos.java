@@ -53,7 +53,7 @@ public final class DeviceWorkspaceTripRouteDtos {
     }
     public record ParameterValue(String fieldCode, String label, String value, String unit, String category) {}
     public record TripLogRow(Long telemetryId, String imei, String occurredAt, String receivedAt, String protocol, String source,
-                             String driverName, String vehiclePlateNumber,
+                             String driverName, String vehiclePlateNumber, String vehicleStatus,
                              Double latitude, Double longitude, Integer altitude, Integer angle,
                              Double speed, Integer satellites, Double hdop, List<ParameterValue> parameters,
                              JsonNode eyeBeacons) {}

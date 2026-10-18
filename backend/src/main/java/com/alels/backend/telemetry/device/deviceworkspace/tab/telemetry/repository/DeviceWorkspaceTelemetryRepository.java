@@ -153,6 +153,17 @@ public class DeviceWorkspaceTelemetryRepository {
                 ), imei).stream().findFirst();
     }
 
+    public Optional<String> lastKnownVehicleStatus(String imei, String deviceTime, String serverTime) {
+        return jdbc.query("""
+                SELECT vehicle_status FROM telemetry
+                WHERE imei = ? AND vehicle_status IN ('STOP', 'IDLE', 'TRIP')
+                  AND COALESCE(device_time, server_time) <= COALESCE(?::timestamptz, ?::timestamptz)
+                ORDER BY COALESCE(device_time, server_time) DESC, server_time DESC, id DESC
+                LIMIT 1
+                """, (rs, rowNum) -> rs.getString("vehicle_status"), imei, deviceTime, serverTime)
+                .stream().findFirst();
+    }
+
     public List<TrackPoint> recentTrack(String imei, int limit) {
         return jdbc.query("""
                 SELECT id, latitude, longitude, angle, speed, occurred_at
@@ -239,6 +250,31 @@ public class DeviceWorkspaceTelemetryRepository {
                     rs.getString("source_protocol"), rs.getString("dictionary_code"),
                     rs.getObject("device_model_id", Long.class)
                 ), telemetryId, imei);
+    }
+
+    public Optional<DataParameter> latestIgnitionParameter(String imei, String deviceTime, String serverTime) {
+        return jdbc.query("""
+                SELECT n.field_code, COALESCE(NULLIF(n.field_name, ''), n.field_code) AS label,
+                       COALESCE(n.text_value, n.numeric_value::text, n.boolean_value::text, n.raw_value) AS display_value,
+                       n.numeric_value, n.boolean_value, n.unit, n.source_io_id,
+                       COALESCE(NULLIF(mapping.category, ''), NULLIF(n.category, ''), 'OTHER') AS category,
+                       n.source_protocol, n.dictionary_code, n.device_model_id
+                FROM telemetry_normalized n
+                JOIN telemetry t ON t.id = n.telemetry_id AND t.imei = n.imei
+                LEFT JOIN device_io_mappings mapping ON mapping.id = n.mapping_id
+                WHERE n.imei = ? AND n.field_code = 'ignition'
+                  AND (n.numeric_value IS NOT NULL OR n.boolean_value IS NOT NULL)
+                  AND COALESCE(t.device_time, t.server_time) <= COALESCE(?::timestamptz, ?::timestamptz)
+                  AND t.server_time <= ?::timestamptz
+                ORDER BY COALESCE(t.device_time, t.server_time) DESC, t.server_time DESC, t.id DESC, n.id DESC
+                LIMIT 1
+                """, (rs, rowNum) -> new DataParameter(
+                    rs.getString("field_code"), rs.getString("label"), rs.getString("display_value"),
+                    rs.getObject("numeric_value", Double.class), rs.getObject("boolean_value", Boolean.class),
+                    rs.getString("unit"), rs.getString("source_io_id"), rs.getString("category"),
+                    rs.getString("source_protocol"), rs.getString("dictionary_code"),
+                    rs.getObject("device_model_id", Long.class)
+                ), imei, deviceTime, serverTime, serverTime).stream().findFirst();
     }
 
     public List<DataParameter> ioParameters(Long telemetryId, String imei) {

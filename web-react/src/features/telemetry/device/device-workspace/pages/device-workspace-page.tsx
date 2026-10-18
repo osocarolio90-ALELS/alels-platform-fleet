@@ -20,7 +20,7 @@ import "../device-workspace.css";
 export function DeviceWorkspacePage(){
  const params=useParams(),deviceId=Number(params.deviceId),theme=useThemeStore(state=>state.theme),toggleTheme=useThemeStore(state=>state.toggleTheme);
  const live=true;
- const [activeTab,setActiveTab]=useState<"configuration"|"telemetry"|"trip-route"|"logs-message">("configuration");
+ const [activeTab,setActiveTab]=useState<"configuration"|"telemetry"|"trip-route"|"logs-message">("telemetry");
  const [refreshToken,setRefreshToken]=useState(0),[notice,setNotice]=useState("");
  const workspaceRef=useRef<HTMLDivElement>(null),clusterRef=useRef<HTMLDivElement>(null);
  const headerQuery=useQuery({queryKey:["device-workspace","telemetry",deviceId],queryFn:()=>getDeviceWorkspaceTelemetry(deviceId),enabled:Number.isSafeInteger(deviceId)&&deviceId>0});

@@ -72,12 +72,11 @@ public class TelemetryRepository {
                     vehicle_status,
                     io_data,
                     io,
-                    eye_beacons,
                     parse_status
                 )
                 VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, CAST(? AS jsonb), CAST(? AS jsonb), CAST(? AS jsonb), ?
+                    ?, ?, ?, ?, CAST(? AS jsonb), CAST(? AS jsonb), ?
                 )
                 RETURNING id
                 """;
@@ -86,6 +85,11 @@ public class TelemetryRepository {
                 Connection conn = DatabaseConfig.getConnection();
                 PreparedStatement stmt = conn.prepareStatement(sql)
         ) {
+            // Sparse packets (for example IO 10500) do not signal an ignition change.
+            // Read durable history so reconnects/restarts retain the last known state.
+            if ("UNKNOWN".equals(vehicleStatus)) {
+                vehicleStatus = lastKnownVehicleStatus(conn, data.getImei(), parseTimestamp(data.getDeviceTime()));
+            }
             if (rawPacketId == null) {
                 stmt.setNull(1, java.sql.Types.BIGINT);
             } else {
@@ -148,8 +152,7 @@ public class TelemetryRepository {
             String ioJson = MAPPER.writeValueAsString(data.getIoData());
             stmt.setString(22, ioJson);
             stmt.setString(23, ioJson);
-            stmt.setString(24, MAPPER.writeValueAsString(data.getEyeBeacons()));
-            stmt.setString(25, "VALID");
+            stmt.setString(24, "VALID");
 
             try (ResultSet rs = stmt.executeQuery()) {
 
@@ -196,5 +199,22 @@ public class TelemetryRepository {
 
     private static Timestamp parseTimestamp(String value) {
         return TimeUtil.parseDeviceTimestampUtc(value);
+    }
+
+    private static String lastKnownVehicleStatus(Connection conn, String imei, Timestamp deviceTime) throws Exception {
+        String sql = """
+                SELECT vehicle_status FROM telemetry
+                WHERE imei = ? AND vehicle_status IN ('STOP', 'IDLE', 'TRIP')
+                  AND COALESCE(device_time, server_time) <= COALESCE(?::timestamptz, NOW())
+                ORDER BY COALESCE(device_time, server_time) DESC, server_time DESC, id DESC
+                LIMIT 1
+                """;
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, imei);
+            stmt.setTimestamp(2, deviceTime);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() ? rs.getString("vehicle_status") : "UNKNOWN";
+            }
+        }
     }
 }

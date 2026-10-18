@@ -81,6 +81,10 @@ public class DeviceWorkspaceTelemetryService {
         PacketInfo packetInfo = packet == null ? null : new PacketInfo(packet.id(), packet.sequence(), packet.serverTime());
         String vehicleStatus = packet != null && validStatus(packet.vehicleStatus())
                 ? packet.vehicleStatus().toUpperCase(Locale.ROOT) : resolveVehicleStatus(parameters);
+        if (packet != null && !validStatus(vehicleStatus)) {
+            vehicleStatus = workspaceRepository.lastKnownVehicleStatus(device.info().imei(),
+                    packet.deviceTime(), packet.serverTime()).orElse("UNKNOWN");
+        }
 
         return new WorkspaceTelemetryResponse(
                 device.info(), driver, vehicle, position, connection, packetInfo, vehicleStatus, parameters,
@@ -93,11 +97,11 @@ public class DeviceWorkspaceTelemetryService {
     private String resolveVehicleStatus(List<DataParameter> parameters) {
         Double ignition = firstNumericValue(parameters, "ignition");
         Double speed = firstNumericValue(parameters, "speed");
-        if (ignition == null || speed == null) return "STOP";
+        if (ignition == null || speed == null) return "UNKNOWN";
         if (ignition > 0 && speed > 5) return "TRIP";
         if (ignition > 0) return "IDLE";
         if (speed <= 5) return "STOP";
-        return "STOP";
+        return "UNKNOWN";
     }
 
     private Double firstNumericValue(List<DataParameter> parameters, String code) {
@@ -105,6 +109,7 @@ public class DeviceWorkspaceTelemetryService {
             if (isParameter(parameter, code)) {
                 Double value = parameter.numericValue();
                 if (value != null) return value;
+                if (parameter.booleanValue() != null) return parameter.booleanValue() ? 1.0 : 0.0;
             }
         }
         return null;
@@ -249,6 +254,15 @@ public class DeviceWorkspaceTelemetryService {
             ));
             values.put(parameterKey(parameter.fieldCode(), parameter.parameterId()), parameter);
         });
+
+        if (values.values().stream().noneMatch(parameter -> "ignition".equalsIgnoreCase(parameter.fieldCode()))) {
+            workspaceRepository.latestIgnitionParameter(imei, packet.deviceTime(), packet.serverTime())
+                    .filter(previous -> values.values().stream()
+                            .noneMatch(current -> previous.parameterId() != null
+                                    && previous.parameterId().equals(current.parameterId())))
+                    .map(DeviceWorkspaceTelemetryService::withCanonicalDisplay)
+                    .ifPresent(parameter -> values.put(parameterKey(parameter.fieldCode(), parameter.parameterId()), parameter));
+        }
 
         return values.values().stream()
                 .map(parameter -> withCanonicalGroup(parameter, model, dictionaryCode))

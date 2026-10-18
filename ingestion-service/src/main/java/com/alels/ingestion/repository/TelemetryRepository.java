@@ -122,13 +122,12 @@ public class TelemetryRepository {
                     event_io_id,
                     vehicle_status,
                     io_data,
-                    eye_beacons,
                     payload_hash,
                     parse_status,
                     created_at
                 )
                 VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, 'VALID', NOW()
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, 'VALID', NOW()
                 )
                 ON CONFLICT DO NOTHING
                 RETURNING id
@@ -154,8 +153,7 @@ public class TelemetryRepository {
             setInteger(stmt, 17, message.eventIoId);
             stmt.setString(18, resolveVehicleStatus(message));
             stmt.setString(19, message.ioData == null ? "{}" : mapper.writeValueAsString(message.ioData));
-            stmt.setString(20, message.eyeBeacons == null ? "[]" : mapper.writeValueAsString(message.eyeBeacons));
-            stmt.setString(21, sha256(payload));
+            stmt.setString(20, sha256(payload));
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -297,10 +295,10 @@ public class TelemetryRepository {
                 INSERT INTO telemetry (
                     imei, protocol, channel, dictionary_code, source_protocol, device_time,
                     packet_sequence, latitude, longitude, altitude, angle, satellites, speed, hdop,
-                    priority, event_io_id, vehicle_status, io_data, io, eye_beacons, payload_hash, parse_status,
+                    priority, event_io_id, vehicle_status, io_data, io, payload_hash, parse_status,
                     ingestion_status, kafka_topic, kafka_partition, kafka_offset, created_at
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?,
                     'VALID', 'VALID', ?, ?, ?, NOW()
                 )
                 ON CONFLICT DO NOTHING
@@ -434,11 +432,10 @@ public class TelemetryRepository {
                     String ioJson = message.ioData == null ? "{}" : mapper.writeValueAsString(message.ioData);
                     telemetryStmt.setString(18, ioJson);
                     telemetryStmt.setString(19, ioJson);
-                    telemetryStmt.setString(20, message.eyeBeacons == null ? "[]" : mapper.writeValueAsString(message.eyeBeacons));
-                    telemetryStmt.setString(21, sha256(record.payload));
-                    telemetryStmt.setString(22, record.topic);
-                    telemetryStmt.setInt(23, record.partition);
-                    telemetryStmt.setLong(24, record.offset);
+                    telemetryStmt.setString(20, sha256(record.payload));
+                    telemetryStmt.setString(21, record.topic);
+                    telemetryStmt.setInt(22, record.partition);
+                    telemetryStmt.setLong(23, record.offset);
                     telemetryStmt.addBatch();
 
                     latestByDevice.put(message.imei, message);

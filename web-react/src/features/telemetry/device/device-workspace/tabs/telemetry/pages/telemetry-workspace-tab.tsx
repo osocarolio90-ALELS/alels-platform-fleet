@@ -15,17 +15,19 @@ type Props={deviceId:number;live:boolean;refreshToken:number;clusterRef:React.Re
 
 export function TelemetryWorkspaceTab({deviceId,live,refreshToken,clusterRef}:Props){
  const [mapMode,setMapMode]=useState<"2d"|"3d">("2d"),[zoom,setZoom]=useState(15),[fullscreen,setFullscreen]=useState(false);
+ const [mapFollow,setMapFollow]=useState(true);
  const validDeviceId=Number.isSafeInteger(deviceId)&&deviceId>0;
- const query=useQuery({queryKey:["device-workspace","telemetry",deviceId],queryFn:()=>getDeviceWorkspaceTelemetry(deviceId),enabled:validDeviceId,refetchInterval:live?1_000:false,refetchIntervalInBackground:false});
+ const query=useQuery({queryKey:["device-workspace","telemetry",deviceId],queryFn:()=>getDeviceWorkspaceTelemetry(deviceId),enabled:validDeviceId,refetchInterval:live?1_000:false,refetchIntervalInBackground:true});
  const lastSnapshot=useRef<WorkspaceTelemetry|null>(null);
  const displayedData=useMemo(()=>{if(!query.data)return query.data;const merged=mergeSnapshot(lastSnapshot.current,query.data);lastSnapshot.current=merged;return merged;},[query.data]);
  const historyRoutes=useQuery({queryKey:["device-workspace","telemetry-history-routes",deviceId],queryFn:()=>getDeviceWorkspaceHistoricalRoutes(deviceId),enabled:validDeviceId,staleTime:300_000,refetchOnWindowFocus:false});
  const online=useDevicePresence(query.data);
  const events=useInfiniteQuery({queryKey:["device-workspace","events",deviceId],queryFn:({pageParam})=>getDeviceWorkspaceEvents(deviceId,pageParam,50),enabled:validDeviceId,initialPageParam:null as number|null,getNextPageParam:last=>last.hasMore?last.nextBeforeId:undefined,refetchInterval:live?5_000:false,refetchOnMount:"always",retry:2});
  useEffect(()=>{if(refreshToken>0){void query.refetch();void historyRoutes.refetch();void events.refetch();}},[refreshToken]);
+ useEffect(()=>{setMapFollow(true);},[deviceId]);
  useEffect(()=>{const update=()=>setFullscreen(document.fullscreenElement===clusterRef.current);document.addEventListener("fullscreenchange",update);return()=>document.removeEventListener("fullscreenchange",update);},[clusterRef]);
  if(query.isLoading)return <WorkspaceState title="Loading device workspace..."/>;
- if(query.isError||!query.data)return <WorkspaceState title="Workspace cannot be loaded" message={errorMessage(query.error)}/>;
+ if(!query.data)return <WorkspaceState title="Workspace cannot be loaded" message={errorMessage(query.error)}/>;
  const data=displayedData!;
  const rpmMapping=data.configuration.instruments.find(item=>item.slot.toUpperCase()==="RPM");
  const speedMapping=data.configuration.instruments.find(item=>item.slot.toUpperCase()==="SPEED");
@@ -33,14 +35,15 @@ export function TelemetryWorkspaceTab({deviceId,live,refreshToken,clusterRef}:Pr
  const speedUnit=speedMapping?.unit||"km/h";
  const mappedSpeed=resolveNumeric(data,speedMapping,["gps.speed","gnss_speed","speed"]);
  const speed=mappedSpeed??convertNumeric(data.position.speed,"km/h",speedUnit);
+ const changeZoom=(step:number)=>{setMapFollow(true);setZoom(value=>Math.max(3,Math.min(22,value+step)));};
  const toggleFullscreen=async()=>{const target=clusterRef.current;if(!target||!document.fullscreenEnabled)return;try{if(document.fullscreenElement===target)await document.exitFullscreen();else await target.requestFullscreen();}catch(error){console.warn("Device workspace fullscreen request failed",error);}};
  const eventRows=uniqueEvents(events.data?.pages.flatMap(page=>page.events)||[]);
  return <div className="dw-telemetry-layout">
   <div className="dw-left-column">
    <section ref={clusterRef} className="dw-cluster dw-sticky-cluster" data-cluster-theme="dark">
-     <TelemetryMap latitude={data.position.latitude} longitude={data.position.longitude} angle={data.position.angle} vehicleType={data.vehicle.type} track={data.track||[]} routeOverlays={historyRoutes.data?.routes||[]} threeDimensional={mapMode==="3d"} zoom={zoom} routeColor="#1d4ed8"/>
+     <TelemetryMap latitude={data.position.latitude} longitude={data.position.longitude} angle={data.position.angle} vehicleType={data.vehicle.type} track={data.track||[]} routeOverlays={historyRoutes.data?.routes||[]} threeDimensional={mapMode==="3d"} zoom={zoom} routeColor="#1d4ed8" follow={mapFollow} onUserViewChange={()=>setMapFollow(false)}/>
     <div className="dw-cluster-toolbar">
-      <div className="dw-map-actions"><ModeButton active={mapMode==="2d"} onClick={()=>setMapMode("2d")}>2D</ModeButton><ModeButton active={mapMode==="3d"} onClick={()=>setMapMode("3d")}>3D</ModeButton><Button size="icon" variant="outline" title={fullscreen?"Exit fullscreen":"Fullscreen cluster"} aria-pressed={fullscreen} disabled={!document.fullscreenEnabled} onClick={()=>void toggleFullscreen()}>{fullscreen?<Minimize2 className="h-4 w-4"/>:<Maximize className="h-4 w-4"/>}</Button><Button size="icon" variant="outline" title="Zoom in" disabled={zoom>=22} onClick={()=>setZoom(value=>Math.min(22,value+1))}><Plus className="h-4 w-4"/></Button><Button size="icon" variant="outline" title="Zoom out" disabled={zoom<=3} onClick={()=>setZoom(value=>Math.max(3,value-1))}><Minus className="h-4 w-4"/></Button></div>
+      <div className="dw-map-actions"><ModeButton active={mapMode==="2d"} onClick={()=>setMapMode("2d")}>2D</ModeButton><ModeButton active={mapMode==="3d"} onClick={()=>setMapMode("3d")}>3D</ModeButton><Button size="icon" variant="outline" title={fullscreen?"Exit fullscreen":"Fullscreen cluster"} aria-pressed={fullscreen} disabled={!document.fullscreenEnabled} onClick={()=>void toggleFullscreen()}>{fullscreen?<Minimize2 className="h-4 w-4"/>:<Maximize className="h-4 w-4"/>}</Button><Button size="icon" variant="outline" title="Zoom in" disabled={zoom>=22} onClick={()=>changeZoom(1)}><Plus className="h-4 w-4"/></Button><Button size="icon" variant="outline" title="Zoom out" disabled={zoom<=3} onClick={()=>changeZoom(-1)}><Minus className="h-4 w-4"/></Button></div>
      <div className="dw-connectivity"><ConnectionStat label="Signal Strength" value={data.connection.signalStrength==null?"– / 5":`${data.connection.signalStrength} / 5`} bars={data.connection.signalStrength}/><ConnectionStat label="Vehicle Status" value={data.vehicleStatus||"UNKNOWN"} blue/><ConnectionStat label="Satellites Used" value={String(data.connection.satellitesUsed??"–")}/><ConnectionStat label="GNSS Status" value={data.connection.gnssStatus} blue/><ConnectionStat label="Connection" value={data.connection.channel||data.connection.tcpStatus} blue/><ConnectionStat label="Protocol" value={formatProtocol(data.connection.protocol)} blue/></div>
     </div>
     <div className="dw-instrument-stage"><InstrumentGauge label="RPM" value={rpm??0} unit="rpm" max={6000} major={[0,1,2,3,4,5,6]}/><div className="dw-map-center-label">{hasValidPosition(data.position.latitude,data.position.longitude)?<><strong>{data.position.latitude!.toFixed(5)}, {data.position.longitude!.toFixed(5)}</strong><span>Live vehicle position</span></>:<span>Waiting for valid GPS location</span>}</div><InstrumentGauge label="SPEED" value={speed??0} unit={speedUnit} max={speedUnit==="mph"?100:160} major={speedUnit==="mph"?[0,20,40,60,80,100]:[0,20,40,60,80,100,120,140,160]}/></div>
@@ -87,11 +90,11 @@ function WorkspaceState({title,message}:{title:string;message?:string}){return <
 
 function resolveParameter(data:WorkspaceTelemetry,mapping?:InstrumentMapping){if(!mapping)return undefined;return findMapped(data,mapping.primaryFieldCode,mapping.primaryParameterId)||findMapped(data,mapping.fallbackFieldCode,mapping.fallbackParameterId);}
 function mergeSnapshot(previous:WorkspaceTelemetry|null,current:WorkspaceTelemetry):WorkspaceTelemetry{
- if(!previous)return current;
- const previousByKey=new Map(previous.dataReceived.map((p,index)=>[`${p.fieldCode}|${p.parameterId||index}`,p]));
- const mergedParameters=current.dataReceived.map((p,index)=>{const key=`${p.fieldCode}|${p.parameterId||index}`,old=previousByKey.get(key);return old&&!meaningfulParameter(p)?old:p;});
- const currentKeys=new Set(mergedParameters.map((p,index)=>`${p.fieldCode}|${p.parameterId||index}`));
- const retained=previous.dataReceived.filter((p,index)=>!currentKeys.has(`${p.fieldCode}|${p.parameterId||index}`));
+ if(!previous||previous.device.imei!==current.device.imei)return current;
+ const previousByKey=new Map(previous.dataReceived.map(p=>[snapshotParameterKey(p),p]));
+ const mergedParameters=current.dataReceived.map(p=>{const old=previousByKey.get(snapshotParameterKey(p));return old&&!meaningfulParameter(p)?old:p;});
+ const currentKeys=new Set(mergedParameters.map(snapshotParameterKey));
+ const retained=previous.dataReceived.filter(p=>!currentKeys.has(snapshotParameterKey(p)));
  const connection={...previous.connection} as WorkspaceTelemetry["connection"];
  Object.entries(current.connection).forEach(([key,value])=>{if(value!==null&&value!==undefined&&value!==""&&value!=="-"&&value!=="–")(connection as Record<string,unknown>)[key]=value;});
  const position={...previous.position} as WorkspaceTelemetry["position"];
@@ -99,6 +102,7 @@ function mergeSnapshot(previous:WorkspaceTelemetry|null,current:WorkspaceTelemet
  const vehicleStatus=current.vehicleStatus&&["STOP","IDLE","TRIP"].includes(current.vehicleStatus)?current.vehicleStatus:previous.vehicleStatus;
  return {...current,vehicleStatus,connection,position,dataReceived:[...mergedParameters,...retained]};
 }
+function snapshotParameterKey(parameter:WorkspaceDataParameter){return parameter.parameterId?`io:${parameter.parameterId}`:`field:${parameter.fieldCode.toLowerCase()}`;}
 function meaningfulParameter(parameter:WorkspaceDataParameter){if(parameter.numericValue!=null||parameter.booleanValue!=null)return true;const value=(parameter.value||"").trim();return value!==""&&value!=="-"&&value!=="–"&&value.toLowerCase()!=="waiting for data";}
 function findMapped(data:WorkspaceTelemetry,fieldCode?:string|null,parameterId?:string|null){
  if(!fieldCode&&!parameterId)return undefined;
