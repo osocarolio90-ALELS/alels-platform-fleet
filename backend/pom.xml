@@ -28,6 +28,11 @@
     </dependencyManagement>
 
     <dependencies>
+        <dependency>
+            <groupId>com.alels</groupId><artifactId>alels-gateway</artifactId><version>1.0.0</version>
+            <classifier>ble-parser</classifier>
+            <exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

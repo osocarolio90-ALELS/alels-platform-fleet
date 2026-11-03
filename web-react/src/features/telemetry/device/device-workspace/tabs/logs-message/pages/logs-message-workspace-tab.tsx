@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { TripLogTable } from "../../trip-route/components/trip-log-table";
+import { TripLogTable, retainReceiverData } from "../../trip-route/components/trip-log-table";
 import type { TripSummary } from "../../trip-route/types/device-workspace-trip-route";
 import { getPacketDetail, getPackets, getPacketSummary, getTraffic } from "../api/device-workspace-logs-message-api";
 
@@ -26,7 +26,7 @@ export function LogsMessageWorkspaceTab({ deviceId, imei, refreshToken }: { devi
   const toIso = live ? new Date(liveNow).toISOString() : iso(to);
   const toQueryKey = live ? "live" : toIso;
 
-  useEffect(() => { setPage(0); setSelected(null); }, [mode, from, size, eventType, transport, direction]);
+  useEffect(() => { setPage(0); setSelected(null); }, [deviceId, mode, from, size, eventType, transport, direction]);
   useEffect(() => {
     if (!live) return;
     setFrom(localDateTime(startOfToday()));
@@ -39,19 +39,19 @@ export function LogsMessageWorkspaceTab({ deviceId, imei, refreshToken }: { devi
   const traffic = useQuery({
     queryKey: ["dw-traffic", deviceId, fromIso, toQueryKey, page, size, search, eventType, transport, refreshToken],
     queryFn: () => getTraffic(deviceId, { from: fromIso, to: toIso, page, size, search, eventType, transport }),
-    enabled: deviceId > 0 && mode === "TRAFFIC", placeholderData: previous => previous,
+    enabled: deviceId > 0 && mode === "TRAFFIC", placeholderData: (previous, previousQuery) => retainReceiverData(previous, previousQuery?.queryKey, deviceId, 1),
     refetchInterval: live ? LIVE_REFRESH_MS : false, refetchIntervalInBackground: true,
   });
   const packets = useQuery({
     queryKey: ["dw-packets", deviceId, fromIso, toQueryKey, page, size, direction, refreshToken],
     queryFn: () => getPackets(deviceId, { from: fromIso, to: toIso, page, size, direction }),
-    enabled: deviceId > 0 && mode === "DEVICE", placeholderData: previous => previous,
+    enabled: deviceId > 0 && mode === "DEVICE", placeholderData: (previous, previousQuery) => retainReceiverData(previous, previousQuery?.queryKey, deviceId, 1),
     refetchInterval: live ? LIVE_REFRESH_MS : false, refetchIntervalInBackground: true,
   });
   const summary = useQuery({
     queryKey: ["dw-packet-summary", deviceId, fromIso, toQueryKey, refreshToken],
     queryFn: () => getPacketSummary(deviceId, fromIso, toIso),
-    enabled: deviceId > 0 && mode === "DEVICE", placeholderData: previous => previous,
+    enabled: deviceId > 0 && mode === "DEVICE", placeholderData: (previous, previousQuery) => retainReceiverData(previous, previousQuery?.queryKey, deviceId, 1),
     refetchInterval: live ? LIVE_REFRESH_MS : false, refetchIntervalInBackground: true,
   });
   const detail = useQuery({

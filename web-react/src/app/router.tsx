@@ -48,6 +48,7 @@ const VehicleRegisterPage = lazy(() =>
 const DriverRegisterPage = lazy(() =>
   import("@/features/asset-register/pages/driver-register-page").then((module) => ({ default: module.DriverRegisterPage }))
 );
+
 const DeviceRegisterPage = lazy(() =>
   import("@/features/asset-register/pages/device-register-page").then((module) => ({ default: module.DeviceRegisterPage }))
 );

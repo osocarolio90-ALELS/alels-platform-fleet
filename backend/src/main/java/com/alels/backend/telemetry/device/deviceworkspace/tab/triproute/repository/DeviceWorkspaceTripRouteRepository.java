@@ -521,6 +521,8 @@ public class DeviceWorkspaceTripRouteRepository {
     public List<TripLogRow> logs(String imei, Instant from, Instant to, List<TelemetryPoint> points) {
         Map<Long, List<ParameterValue>> parameters = normalizedParameters(
                 imei, from, to, points.stream().map(telemetryPoint -> telemetryPoint.id()).toList());
+        Map<Long,JsonNode> decodedBle = decodedBleHistory(imei,points.stream().map(TelemetryPoint::id).toList());
+        Map<Long,java.util.Set<String>> bleCodes = bleParameterCodes(imei,points.stream().map(TelemetryPoint::id).toList());
         List<VehicleAssignmentPeriod> vehicleAssignments = vehicleAssignmentPeriods(imei, from, to);
         List<DriverAssignmentPeriod> driverAssignments = driverAssignmentPeriods(imei, from, to);
         return points.stream().map(point -> {
@@ -531,9 +533,103 @@ public class DeviceWorkspaceTripRouteRepository {
                     point.id(), imei, point.occurredAt().toString(), point.receivedAt().toString(), point.protocol(), point.channel(),
                     historicalDriver, plateNumber, canonicalVehicleStatus(point.vehicleStatus()),
                     point.latitude(), point.longitude(), point.altitude(), point.angle(), point.speed(),
-                    point.satellites(), point.hdop(), parameters.getOrDefault(point.id(), List.of()),
-                    JsonNodeFactory.instance.arrayNode());
+                    point.satellites(), point.hdop(), decodedLogParameters(parameters.getOrDefault(point.id(),List.of()),
+                        bleCodes.getOrDefault(point.id(),java.util.Set.of()),decodedBle.get(point.id())),
+                    decodedBle.getOrDefault(point.id(),JsonNodeFactory.instance.arrayNode()));
         }).toList();
+    }
+
+    /** Read only the selected receiver's source packets; beacon identity alone never selects history. */
+    public Map<Long,JsonNode> decodedBleHistory(String imei,List<Long> ids) {
+        if(ids.isEmpty() || !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ble_observations' AND column_name='decoded_payload')",Boolean.class)))return Map.of();
+        String placeholders=String.join(",",ids.stream().map(id->"?").toList());
+        List<Object> args=new ArrayList<>();args.add(imei);args.addAll(ids);
+        Map<Long,JsonNode> result=new LinkedHashMap<>();
+        jdbc.query("""
+            SELECT o.source_telemetry_id,o.io_id,o.block_index,o.raw_identifier,o.parser_status,
+                   o.parser_error::text,o.decoded_payload::text,d.id receiver_id,t.imei
+            FROM telemetry t JOIN devices d ON d.imei=t.imei AND d.deleted_at IS NULL
+            JOIN ble_observations o ON o.source_telemetry_id=t.id
+                AND o.source_telemetry_server_time=t.server_time AND o.company_id=d.company_id
+                AND o.gateway_device_id=d.id AND o.gateway_imei=t.imei
+            WHERE t.imei=? AND t.id IN (%s) AND o.io_id IN(548,10500)
+            ORDER BY t.id,o.io_id,o.block_index
+            """.formatted(placeholders),(RowCallbackHandler)rs->{
+                com.fasterxml.jackson.databind.node.ObjectNode item=JsonNodeFactory.instance.objectNode();
+                String raw=rs.getString("decoded_payload");
+                if(raw!=null) {
+                    try {
+                        JsonNode parsed=JSON.readTree(raw);
+                        if(parsed.isObject() && rs.getString("imei").equals(parsed.path("source").path("receiverImei").asText())
+                                && parsed.path("source").path("receiverDeviceId").asLong()==rs.getLong("receiver_id"))item=(com.fasterxml.jackson.databind.node.ObjectNode)parsed;
+                        else item.put("historyError","SOURCE_RECEIVER_MISMATCH");
+                    } catch(com.fasterxml.jackson.core.JsonProcessingException invalid) {item.put("historyError","INVALID_STORED_BLE_JSON");}
+                }
+                item.put("storedIoId",rs.getInt("io_id"));item.put("storedBlockIndex",rs.getInt("block_index"));
+                item.put("storedIdentifier",rs.getString("raw_identifier"));item.put("parserStatus",rs.getString("parser_status"));
+                String error=rs.getString("parser_error");
+                if(error!=null)try{item.put("historyError",JSON.readTree(error).path("code").asText("BLE_PARSE_ERROR"));}
+                catch(com.fasterxml.jackson.core.JsonProcessingException invalid){item.put("historyError","BLE_PARSE_ERROR");}
+                var array=(com.fasterxml.jackson.databind.node.ArrayNode)result.computeIfAbsent(rs.getLong("source_telemetry_id"),ignored->JsonNodeFactory.instance.arrayNode());
+                array.add(item);
+            },args.toArray());
+        return result;
+    }
+
+    private Map<Long,java.util.Set<String>> bleParameterCodes(String imei,List<Long> ids) {
+        if(ids.isEmpty())return Map.of();
+        String placeholders=String.join(",",ids.stream().map(id->"?").toList());
+        List<Object> args=new ArrayList<>();args.add(imei);args.addAll(ids);
+        Map<Long,java.util.Set<String>> result=new LinkedHashMap<>();
+        jdbc.query("SELECT telemetry_id,field_code,source_io_id FROM telemetry_normalized WHERE imei=? AND telemetry_id IN ("+placeholders+") AND source_io_id IN('548','10500')",
+            (RowCallbackHandler)rs->result.computeIfAbsent(rs.getLong("telemetry_id"),ignored->new java.util.LinkedHashSet<>()).add(rs.getString("field_code")),args.toArray());
+        // Include raw telemetry_io names even if there is no normalized dictionary mapping.
+        jdbc.query("SELECT telemetry_id,io_id FROM telemetry_io WHERE imei=? AND telemetry_id IN ("+placeholders+") AND io_id IN('548','10500')",
+            (RowCallbackHandler)rs->result.computeIfAbsent(rs.getLong("telemetry_id"),ignored->new java.util.LinkedHashSet<>()).add("io."+rs.getString("io_id")),args.toArray());
+        return result;
+    }
+
+    private List<ParameterValue> decodedLogParameters(List<ParameterValue> original,java.util.Set<String> rawCodes,JsonNode blocks) {
+        List<ParameterValue> values=new ArrayList<>(original.stream().filter(p->!rawCodes.contains(p.fieldCode())).toList());
+        Map<String,ParameterValue> parsed=new LinkedHashMap<>();
+        if(blocks!=null)for(JsonNode block:blocks) {
+            int io=block.path("storedIoId").asInt();String id=block.path("storedIdentifier").asText("Unresolved");
+            String key="ble.parsed."+io+"."+id;
+            List<String> fields=new ArrayList<>();
+            fields.add(block.path("sensor").path("type").asText("BLE"));
+            JsonNode m=block.path("measurement"),sensor=m.path("sensorData");
+            String instance=block.path("identity").path("instanceId").asText(null);
+            if(instance==null)instance=m.path("advertisementData").path("instanceId").asText(null);
+            if(instance==null && "CUSTOM".equals(block.path("identity").path("protocol").asText()))instance=block.path("identity").path("value").asText(null);
+            String mac=com.alels.backend.telemetry.ble.service.BleMacAddress.displayMac(
+                block.path("sensor").path("type").asText(),instance,block.path("sensor").path("verifiedMac").asText(null));
+            if(mac!=null)fields.add("MAC "+mac);
+            appendBleValue(fields,m,"rssiDbm","RSSI "," dBm");
+            JsonNode distance=m.path("distance").path("meters");
+            if(distance.isNumber())fields.add("Estimated Distance ~"+String.format(java.util.Locale.ROOT,
+                distance.asDouble()<0.01?"%.2g":distance.asDouble()>=1000?"%.4g":"%.2f",distance.asDouble())+" m");
+            appendBleValue(fields,m,"batteryMillivolts","Battery "," mV");
+            appendBleValue(fields,m,"temperatureCelsius","Temperature "," °C");
+            appendBleValue(fields,sensor,"humidityPercent","Humidity "," %RH");
+            if(sensor.path("movement").isBoolean())fields.add(sensor.path("movement").asBoolean()?"Moving":"Not Moving");
+            appendBleValue(fields,sensor,"movementCounter","Movement Counter ","");
+            appendBleValue(fields,sensor,"pitchDegrees","Pitch ","°");appendBleValue(fields,sensor,"rollDegrees","Roll ","°");
+            appendBleValue(fields,sensor,"magnet","Magnet ","");appendBleValue(fields,sensor,"magnetCounter","Magnet Counter ","");
+            String parserStatus=block.path("parserStatus").asText();if(!"VALID".equals(parserStatus))fields.add(parserStatus);
+            appendBleValue(fields,block,"historyError","Diagnostic ","");
+            if(m.hasNonNull("sensorCapture") && !"DECODED".equals(m.path("sensorCapture").path("status").asText()))
+                fields.add(m.path("sensorCapture").path("status").asText()+": "+m.path("sensorCapture").path("reason").asText());
+            var errors=sensor.path("fieldErrors").fields();while(errors.hasNext()){var error=errors.next();fields.add(error.getKey()+": "+error.getValue().asText());}
+            String text=String.join("; ",fields);
+            if(parsed.containsKey(key))text=parsed.get(key).value()+" | "+text;
+            parsed.put(key,new ParameterValue(key,"BLE "+id+" (IO "+io+")",text,"","BLE"));
+        }
+        values.addAll(parsed.values());
+        if(parsed.isEmpty() && !rawCodes.isEmpty())values.add(new ParameterValue("ble.parsed.pending","BLE parsed data","Parsing pending: stored decoded BLE data is not yet available.","","BLE"));
+        return values;
+    }
+    private void appendBleValue(List<String> fields,JsonNode values,String key,String prefix,String unit) {
+        if(values.hasNonNull(key))fields.add(prefix+values.path(key).asText()+unit);
     }
 
     public List<VehicleAssignmentPeriod> vehicleAssignmentPeriods(String imei, Instant from, Instant to) {

@@ -1,0 +1,11 @@
+﻿path,bytes,sha256
+backend/target/BleCardPathCheck.java,3435,ab2dba078f478fffb3ea1192e135a9e346bcca16326f0c323371e93c59cc7a3f
+gateway/target/BleProtocolRegression.java,1299,24cbdf9e3d338a647ca632086d390962f5c0c2de1d25c5134869c9f7f932ce94
+web-react/target/ble-card-render-check.mjs,2450,b50d85fc5c7f78a7ac353d573612789a8156956c7be183abe84837f0cc118d48
+web-react/target/ble-card-render-bundle.mjs,21232,93442534e12b959bbb9fba8e113f9b6a6f1c16afeb1cd3a9a40c16017514d47b
+web-react/target/ble-card-path.json,5640,2d3a5e85ccfc553b5446a8459863c405ccccfd96774617c53f5aa11ffab24f1d
+web-react/target/ble-card-pending.json,4661,39c92477fac7bd1cc81f29633e05a0769d148c5b518581aed52246fde950bd19
+backend\target\ble-card-path-check\com\alels\backend\telemetry\ble\service\BleCardPathCheck$Devices.class,1165,e1556248594b030302f3aef3c41d459040587e2a73858f8e4f374aa02f47b2a6
+backend\target\ble-card-path-check\com\alels\backend\telemetry\ble\service\BleCardPathCheck$Registry.class,1706,0087181705ec31452991493f70e0f462b81fb4d953f6058d56862488051857fe
+backend\target\ble-card-path-check\com\alels\backend\telemetry\ble\service\BleCardPathCheck$Repo.class,1865,55de5a27e96dd4907b62a34d4c7e02f32800d520a45559f843e7309ce637ae88
+backend\target\ble-card-path-check\com\alels\backend\telemetry\ble\service\BleCardPathCheck.class,6029,b07b4d7b7089d376acdc857c0c29469b8e9f761386dfb9ae234a49b46a23ecce

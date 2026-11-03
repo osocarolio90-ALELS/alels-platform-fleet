@@ -25,10 +25,23 @@ public class TelemetryRepository {
             String channel,
             String dictionaryCode
     ) {
-        if (data == null) {
+        try {
+            PreparedInsert prepared = prepare(data);
+            if (prepared == null) return null;
+            try (Connection conn = DatabaseConfig.getConnection()) {
+                return insert(conn, rawPacketId, data, protocol, channel, dictionaryCode, prepared);
+            }
+        } catch (Exception e) {
+            System.err.println("[DB TELEMETRY ERROR] " + e.getMessage());
             return null;
         }
+    }
 
+    public record PreparedInsert(String vehicleStatus, DriverInfo driver) {}
+
+    /** Resolve existing enrichment before borrowing the write connection; resolvers use the pool. */
+    public static PreparedInsert prepare(TelemetryData data) {
+        if (data == null) return null;
         TelemetryNumericNormalizer.normalizeForPersistence(data);
 
         String vehicleStatus =
@@ -46,6 +59,17 @@ public class TelemetryRepository {
                         companyId,
                         data.getIoData()
                 );
+
+        return new PreparedInsert(vehicleStatus, driver);
+    }
+
+    public static Long insert(
+            Connection conn, Long rawPacketId, TelemetryData data,
+            String protocol, String channel, String dictionaryCode, PreparedInsert prepared
+    ) {
+        if (data == null || prepared == null) return null;
+        String vehicleStatus = prepared.vehicleStatus();
+        DriverInfo driver = prepared.driver();
 
         String sql = """
                 INSERT INTO telemetry (
@@ -81,10 +105,7 @@ public class TelemetryRepository {
                 RETURNING id
                 """;
 
-        try (
-                Connection conn = DatabaseConfig.getConnection();
-                PreparedStatement stmt = conn.prepareStatement(sql)
-        ) {
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             // Sparse packets (for example IO 10500) do not signal an ignition change.
             // Read durable history so reconnects/restarts retain the last known state.
             if ("UNKNOWN".equals(vehicleStatus)) {

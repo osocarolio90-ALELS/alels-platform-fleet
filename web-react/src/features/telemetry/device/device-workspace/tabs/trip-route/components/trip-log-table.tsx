@@ -50,7 +50,7 @@ export function TripLogTable({ deviceId, imei, selectedSegments, rangeIdentity }
     queryKey: ["device-workspace", "device-log-selection", deviceId, resetKey, page, pageSize],
     queryFn: () => getSelectedDeviceLogs(deviceId, ranges, page, pageSize),
     enabled: deviceId > 0 && ranges.length > 0,
-    placeholderData: previous => previous,
+    placeholderData: (previous, previousQuery) => retainReceiverData(previous, previousQuery?.queryKey, deviceId, 2),
     refetchInterval: ranges.length ? 15_000 : false,
   });
 
@@ -58,7 +58,7 @@ export function TripLogTable({ deviceId, imei, selectedSegments, rangeIdentity }
     if (query.data && query.data.page !== page) setPage(query.data.page);
   }, [query.data, page]);
 
-  const rows = query.data?.rows ?? [];
+  const rows = (query.data?.rows ?? []).filter(row => row.imei === imei);
   const orderedRows = useMemo(() => [...rows].sort((left, right) =>
     Date.parse(right.occurredAt) - Date.parse(left.occurredAt) ||
     Date.parse(right.receivedAt) - Date.parse(left.receivedAt) ||
@@ -69,7 +69,7 @@ export function TripLogTable({ deviceId, imei, selectedSegments, rangeIdentity }
     orderedRows.forEach(row => row.parameters.forEach(parameter => {
       if (!BASE_CODES.has(parameter.fieldCode.toLowerCase())) map.set(parameter.fieldCode, parameter.label);
     }));
-    return [...map].map(([key, label]) => ({
+    return orderLogParameterColumns([...map]).map(([key, label]) => ({
       key: `parameter:${key}`,
       label,
       value: (row: TripLogRow) => {
@@ -221,7 +221,7 @@ function exportColumns(rows: TripLogRow[]): Column[] {
     { key: "speed", label: "Speed (km/h)", value: row => number(row.speed) },
     { key: "satellites", label: "Satellites", value: row => number(row.satellites, 0) },
     { key: "hdop", label: "HDOP", value: row => number(row.hdop, 2) },
-    ...[...parameterLabels].map(([fieldCode, label]) => ({
+    ...orderLogParameterColumns([...parameterLabels]).map(([fieldCode, label]) => ({
       key: `parameter:${fieldCode}`,
       label,
       value: (row: TripLogRow) => {
@@ -262,4 +262,15 @@ function apiErrorMessage(error: unknown) {
   if (typeof payload === "string" && payload.trim()) return payload;
   if (payload && typeof payload === "object") return payload.detail || payload.message || payload.error || `Backend returned HTTP ${error.response?.status}`;
   return error.response?.status ? `Backend returned HTTP ${error.response.status}` : "Backend service is not reachable";
+}
+
+/** Pagination may retain data only while the carrier identity remains the same. */
+export function retainReceiverData<T>(data: T | undefined, previousKey: readonly unknown[] | undefined, deviceId: number, deviceIndex: number): T | undefined {
+  return previousKey?.[deviceIndex] === deviceId ? data : undefined;
+}
+
+/** Keep relative telemetry order while placing parsed BLE columns last, including exports. */
+export function orderLogParameterColumns(entries: [string, string][]): [string, string][] {
+  return [...entries.filter(([key]) => !key.startsWith("ble.parsed.")),
+    ...entries.filter(([key]) => key.startsWith("ble.parsed."))];
 }

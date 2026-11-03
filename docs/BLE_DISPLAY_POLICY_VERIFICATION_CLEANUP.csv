@@ -1,0 +1,8 @@
+﻿path,bytes,sha256
+backend\target\BleDisplayPolicyCheck.java,4502,a1c89e47825feeec0a849d73000a0085e9340a8665cf979f8d25f10a131673e8
+web-react\target\ble-policy-page.json,9309,b287a6c690abcef10393d2bcd4e6f6af736566a24f20af2deb22bc987b271217
+web-react\target\ble-policy-logs.json,9501,ca4876e032cee27e5a7097a4ac0ed712e1a9b8525b1fb29e274367f2133f315f
+web-react\target\ble-policy-render-check.mjs,3793,c854845adfc4b6f1e1783e3c2bd1dd9e3d35517eb5f00280a4e3fba5bfa5f3d3
+web-react\target\ble-policy-render-bundle.mjs,51375,f05a0e6520fd4e44f3ea48c662fd2dac20c26880011ed64d992a5dde2ddd6493
+backend\target\ble-policy-check\com\alels\backend\telemetry\ble\service\BleDisplayPolicyCheck$Conflicting.class,912,4c10530a864f986ca9637e8020154173292edc569fa5ce6f154545183a0859a4
+backend\target\ble-policy-check\com\alels\backend\telemetry\ble\service\BleDisplayPolicyCheck.class,10387,4ab5653d38ae5fc45476839247bed979d1308ea282c03e7cb365612dc63e4660

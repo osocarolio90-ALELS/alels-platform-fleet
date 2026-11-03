@@ -18,15 +18,24 @@ import com.alels.ingestion.util.TelemetryNumericNormalizer;
 import com.alels.ingestion.model.IngestionRecord;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.alels.ingestion.validation.service.TelemetryMessageValidator;
+import com.alels.ingestion.config.IngestionConfig;
 
 public class TelemetryRepository {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
     private final Database database;
+    private final boolean bleHistoryEnabled;
 
     public TelemetryRepository(Database database) {
+        this(database, IngestionConfig.load().bleHistoryEnabled());
+    }
+
+    TelemetryRepository(Database database, boolean bleHistoryEnabled) {
         this.database = database;
+        this.bleHistoryEnabled = bleHistoryEnabled;
+        System.out.println("event=ble_history_config module=ingestion enabled=" + bleHistoryEnabled
+                + " source_io_preserved=true");
     }
 
     public boolean existsDuplicate(TelemetryMessage message) {
@@ -481,6 +490,16 @@ public class TelemetryRepository {
 
             rawStmt.executeBatch();
             telemetryStmt.executeBatch();
+            for (int i = 0; i < records.size(); i++) {
+                IngestionRecord record = records.get(i);
+                TelemetryMessage message = messages.get(i);
+                if (!bleHistoryEnabled || record == null || message == null || message.eyeBeacons == null
+                        || message.eyeBeacons.isEmpty()) continue;
+                if (record.topic != null && !record.topic.isBlank()
+                        && !claimedOffsets.contains(offsetKey(record))) continue;
+                if (message.packetSequence != null && !claimedDeliveries.contains(i)) continue;
+                insertBleObservations(conn, record, message);
+            }
             deviceStmt.executeBatch();
             presenceStmt.executeBatch();
             latestPositionStmt.executeBatch();
@@ -490,6 +509,56 @@ public class TelemetryRepository {
         }
 
         return new BatchIngestionResult(processed, failed, records.size() - processed - failed, List.of());
+    }
+
+    private void insertBleObservations(Connection connection, IngestionRecord record,
+                                       TelemetryMessage message) throws Exception {
+        long telemetryId;
+        Timestamp serverTime;
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT id, server_time FROM telemetry
+                WHERE kafka_topic = ? AND kafka_partition = ? AND kafka_offset = ?
+                ORDER BY server_time DESC LIMIT 1
+                """)) {
+            statement.setString(1, record.topic);
+            statement.setInt(2, record.partition);
+            statement.setLong(3, record.offset);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) throw new IllegalStateException("BLE source telemetry not found");
+                telemetryId = result.getLong(1);
+                serverTime = result.getTimestamp(2);
+            }
+        }
+        // Packet audit allocates a fresh gatewayRawPacketId on TCP retry. It is
+        // provenance, not a logical BLE delivery identifier.
+        com.fasterxml.jackson.databind.node.ObjectNode canonical =
+                (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(record.payload);
+        canonical.remove("gatewayRawPacketId");
+        canonical.remove("cellId");
+        canonical.remove("cellIndex");
+        canonical.remove("eyeBeacons");
+        String sourceKey = message.packetSequence == null
+                ? sha256(offsetKey(record))
+                : sha256(deliveryKey(message, sha256(mapper.writeValueAsString(canonical))));
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT alels_store_ble_observations(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)
+                """)) {
+            statement.setString(1, message.imei);
+            statement.setString(2, sourceKey);
+            statement.setLong(3, telemetryId);
+            statement.setTimestamp(4, serverTime);
+            statement.setString(5, message.sourceProtocol == null ? message.protocol : message.sourceProtocol);
+            statement.setString(6, message.channel);
+            statement.setTimestamp(7, parseTimestamp(message.deviceTime));
+            statement.setTimestamp(8, serverTime);
+            setDouble(statement, 9, message.latitude);
+            setDouble(statement, 10, message.longitude);
+            setInteger(statement, 11, message.altitude);
+            setDouble(statement, 12, message.hdop);
+            setInteger(statement, 13, message.satellites);
+            statement.setString(14, mapper.writeValueAsString(message.eyeBeacons));
+            statement.executeQuery().close();
+        }
     }
 
     /**

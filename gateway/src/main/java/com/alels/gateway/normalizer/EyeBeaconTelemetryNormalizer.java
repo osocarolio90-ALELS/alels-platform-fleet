@@ -30,7 +30,9 @@ public final class EyeBeaconTelemetryNormalizer {
                 results.add(EyeBeaconParser.parse(id, hex));
             } catch (IllegalArgumentException invalidBeacon) {
                 // Preserve the source IO; malformed beacon data must not reject GPS telemetry.
-                results.add(new EyeBeaconParser.Result(id, 0, 0, List.of(), hex));
+                results.add(new EyeBeaconParser.Result(id, 0, 0, List.of(), hex,
+                        List.of(new EyeBeaconParser.ParseError("INVALID_IO_VALUE", 0, hex,
+                                invalidBeacon.getMessage()))));
             }
         }
         telemetry.setEyeBeacons(results);

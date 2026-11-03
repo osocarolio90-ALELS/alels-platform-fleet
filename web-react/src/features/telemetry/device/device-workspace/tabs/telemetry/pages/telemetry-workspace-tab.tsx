@@ -9,6 +9,7 @@ import { getDeviceWorkspaceEvents, getDeviceWorkspaceHistoricalRoutes, getDevice
 import { InstrumentGauge } from "../components/instrument-gauge";
 import { hasValidPosition, TelemetryMap } from "../components/telemetry-map";
 import { useDevicePresence } from "../hooks/use-device-presence";
+import { EyeBeaconPanel, BleReceivedTable } from "../components/eyebeacon-panel";
 import type { InstrumentMapping, WorkspaceDataParameter, WorkspaceEvent, WorkspaceTelemetry } from "../types/device-workspace-telemetry";
 
 type Props={deviceId:number;live:boolean;refreshToken:number;clusterRef:React.RefObject<HTMLDivElement>};
@@ -49,29 +50,33 @@ export function TelemetryWorkspaceTab({deviceId,live,refreshToken,clusterRef}:Pr
     <div className="dw-instrument-stage"><InstrumentGauge label="RPM" value={rpm??0} unit="rpm" max={6000} major={[0,1,2,3,4,5,6]}/><div className="dw-map-center-label">{hasValidPosition(data.position.latitude,data.position.longitude)?<><strong>{data.position.latitude!.toFixed(5)}, {data.position.longitude!.toFixed(5)}</strong><span>Live vehicle position</span></>:<span>Waiting for valid GPS location</span>}</div><InstrumentGauge label="SPEED" value={speed??0} unit={speedUnit} max={speedUnit==="mph"?100:160} major={speedUnit==="mph"?[0,20,40,60,80,100]:[0,20,40,60,80,100,120,140,160]}/></div>
     <div className="dw-bottom-instruments">{data.configuration.bottomItems.slice(0,7).map(item=><BottomInstrument key={item.slot} item={item} parameter={resolveParameter(data,item)}/>)}</div>
    </section>
-    <DataReceivedPanel data={data} online={online}/>
+    <DataReceivedPanel data={data} online={online} live={live} refreshToken={refreshToken}/>
   </div>
   <aside className="dw-right-column"><DriverPanel data={data}/><VehiclePanel data={data}/><RecentEventsPanel events={eventRows} error={events.isError} hasMore={Boolean(events.hasNextPage)} loading={events.isFetchingNextPage} onMore={()=>void events.fetchNextPage()}/></aside>
  </div>;
 }
 
-function DataReceivedPanel({data,online}:{data:WorkspaceTelemetry;online:boolean}){
+function DataReceivedPanel({data,online,live,refreshToken}:{data:WorkspaceTelemetry;online:boolean;live:boolean;refreshToken:number}){
  const [activeGroup,setActiveGroup]=useState("ALL");
- const groups=data.parameterGroups||[];
- useEffect(()=>{if(activeGroup!=="ALL"&&!groups.includes(activeGroup))setActiveGroup("ALL");},[activeGroup,groups]);
- const allParameters=orderedDataParameters(data.dataReceived);
- const parameters=activeGroup==="ALL"?allParameters:allParameters.filter(parameter=>parameter.category===activeGroup);
+ const groups=Array.from(new Set((data.parameterGroups||[]).map(parameterGroupKey)));
+ const tabOrder=["Permanent I/O","FMS","EV FMS","Tachograph data","Manual CAN","__EYEBEACON__","__EYESENSOR__","BLE"];
+ const tabRank=(group:string)=>{const index=tabOrder.indexOf(parameterGroupTabLabel(group));return index<0?tabOrder.length:index;};
+ const orderedGroups=[...groups,"__EYEBEACON__","__EYESENSOR__"].sort((left,right)=>tabRank(left)-tabRank(right));
+ useEffect(()=>{if(activeGroup!=="ALL"&&activeGroup!=="__EYEBEACON__"&&activeGroup!=="__EYESENSOR__"&&!groups.includes(activeGroup))setActiveGroup("ALL");},[activeGroup,groups]);
+ const allParameters=orderedDataParameters(data.dataReceived).filter(parameter=>!["548","10500"].includes(String(parameter.parameterId)));
+ const parameters=activeGroup==="ALL"?allParameters:allParameters.filter(parameter=>parameterGroupKey(parameter.category||"")===activeGroup);
  return <section className="dw-panel dw-data-panel">
   <header><h2>Data Received</h2><div><StatusIndicator status={online?"LIVE":"OFFLINE"}/>{data.packet?<><span>Packet #{data.packet.sequence??data.packet.id}</span><i/><span>Received {formatDate(data.packet.receivedAt)}</span></>:<span>Waiting for first packet</span>}</div></header>
   <nav className="dw-data-group-tabs" aria-label="Data received parameter groups">
    <button type="button" className={activeGroup==="ALL"?"active":""} aria-pressed={activeGroup==="ALL"} onClick={()=>setActiveGroup("ALL")}>ALL Data</button>
-   {groups.map(group=><button type="button" key={group} className={activeGroup===group?"active":""} aria-pressed={activeGroup===group} onClick={()=>setActiveGroup(group)}>{parameterGroupTabLabel(group)}</button>)}
+   {orderedGroups.map(group=><button type="button" key={group} className={activeGroup===group?"active":""} aria-pressed={activeGroup===group} onClick={()=>setActiveGroup(group)}>{group==="__EYEBEACON__"?"EyeBeacon":group==="__EYESENSOR__"?"EyeSensor":parameterGroupTabLabel(group)}</button>)}
   </nav>
-   <div className="dw-data-scroll">
+   {(activeGroup==="__EYEBEACON__"||activeGroup==="__EYESENSOR__")?<EyeBeaconPanel assetType={activeGroup==="__EYESENSOR__"?"EyeSensor":"EyeBeacon"} key={data.device.id} deviceId={data.device.id} live={live} refreshToken={refreshToken}/>:<div className="dw-data-scroll">
    {activeGroup==="ALL"?<><TimestampCard label="Server Timestamp" value={data.packet?.receivedAt}/><TimestampCard label="Device Timestamp" value={data.position.deviceTime}/><article className="dw-data-card dw-data-source-card"><span>Data Source</span><strong>{formatChannel(data.connection.channel)}</strong><small><b>{formatProtocol(data.connection.protocol)}</b><br/>IMEI {data.device.imei}</small></article></>:null}
    {parameters.map((parameter,index)=><article className="dw-data-card" key={`${parameter.fieldCode}-${parameter.parameterId||index}`}><span>{parameter.label}</span><strong>{formatParameter(parameter)}</strong>{parameter.parameterId?<small>AVL ID<br/><b>{parameter.parameterId}</b></small>:null}</article>)}
    {!parameters.length?<div className="dw-empty-card">{activeGroup==="ALL"?"No packet data received for this IMEI yet.":"Data not received"}</div>:null}
-   </div>
+   </div>}
+   {(activeGroup==="ALL" || parameterGroupTabLabel(activeGroup)==="BLE")?<BleReceivedTable deviceId={data.device.id} live={live} refreshToken={refreshToken}/>:null}
  </section>;
 }
 
@@ -114,6 +119,8 @@ function findMapped(data:WorkspaceTelemetry,fieldCode?:string|null,parameterId?:
 function resolveNumeric(data:WorkspaceTelemetry,mapping:InstrumentMapping|undefined,aliases:string[]){const mapped=resolveParameter(data,mapping);if(mapped?.numericValue!=null)return convertNumeric(mapped.numericValue,mapped.unit,mapping?.unit)||mapped.numericValue;const normalizedAliases=aliases.map(value=>value.toLowerCase());return data.dataReceived.find(item=>normalizedAliases.some(alias=>item.fieldCode.toLowerCase().includes(alias)))?.numericValue;}
 function formatParameter(parameter:WorkspaceDataParameter,targetUnit?:string|null){if(parameter.booleanValue!=null)return parameter.booleanValue?"ON":"OFF";if(parameter.numericValue!=null){const value=convertNumeric(parameter.numericValue,parameter.unit,targetUnit)||parameter.numericValue;return `${Number(value.toFixed(3))}${targetUnit||parameter.unit?` ${targetUnit||parameter.unit}`:""}`;}const value=parameter.value??"–";return `${value}${parameter.unit?` ${parameter.unit}`:""}`;}
 function convertNumeric(value:number|null|undefined,from?:string|null,to?:string|null){if(value==null||!Number.isFinite(value)||!to||!from||from.toLowerCase()===to.toLowerCase())return value??null;const f=from.toLowerCase(),t=to.toLowerCase();if((f==="m"||f.startsWith("meter"))&&t==="km")return value/1000;if(f==="km"&&t==="m")return value*1000;if((f==="mi"||f.startsWith("mile"))&&t==="km")return value*1.609344;if(f==="km"&&t==="mi")return value/1.609344;if((f==="km/h"||f==="kph")&&t==="mph")return value/1.609344;if(f==="mph"&&t==="km/h")return value*1.609344;if(f==="m/s"&&t==="km/h")return value*3.6;if(f==="km/h"&&t==="m/s")return value/3.6;if((f==="l"||f==="liter"||f==="litre")&&t==="ml")return value*1000;if(f==="ml"&&t==="l")return value/1000;if((f==="l"||f==="liter"||f==="litre")&&t==="gal")return value/3.785411784;if(f==="gal"&&t==="l")return value*3.785411784;if((f==="c"||f==="°c")&&(t==="f"||t==="°f"))return value*9/5+32;if((f==="f"||f==="°f")&&(t==="c"||t==="°c"))return(value-32)*5/9;return value;}
+// These catalog aliases share one tab, including parameters from both source categories.
+function parameterGroupKey(group:string){return /^EV FMS(?: elements)?$/i.test(group.trim())?"EV FMS":group;}
 function parameterGroupTabLabel(group:string){if(group==="Permanent I/O elements")return"Permanent I/O";if(group==="Eventual I/O elements")return"Event I/O";return group.replace(/ elements$/i,"");}
 function formatChannel(value?:string|null){if(!value)return"UNKNOWN";return value.toUpperCase()==="WIFI"?"Wi-Fi":value.toUpperCase();}
 function formatProtocol(value?:string|null){if(!value)return"–";return value.replace("TELTONIKA_","").replace("CODEC8E","Codec 8E").replace("CODEC8","Codec 8").replace(/_/g," ");}

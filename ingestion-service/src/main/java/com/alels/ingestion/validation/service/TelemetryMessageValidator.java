@@ -46,9 +46,9 @@ public final class TelemetryMessageValidator {
                         || !(message.ioData.get(Integer.toString(number.intValue())) instanceof String)) {
                     return "beacon result has no matching source IO";
                 }
-                if (!(result.get("beacons") instanceof List<?> beacons) || beacons.size() > 100) {
-                    return "invalid beacon result count";
-                }
+                if (!(result.get("beacons") instanceof List<?> beacons)) return "invalid beacon result list";
+                String sourceHex = (String) message.ioData.get(Integer.toString(number.intValue()));
+                if (beacons.size() > sourceHex.length() / 2) return "beacon result exceeds source IO bytes";
             }
         }
         if (message.deviceTime != null && !message.deviceTime.isBlank()) {

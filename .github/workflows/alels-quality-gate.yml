@@ -32,6 +32,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Prepare shared BLE parser for backend
+        if: matrix.module == 'backend'
+        run: mvn --batch-mode --no-transfer-progress -f gateway/pom.xml -DskipTests install
       - name: Test and package
         working-directory: ${{ matrix.module }}
         run: mvn --batch-mode --no-transfer-progress clean verify

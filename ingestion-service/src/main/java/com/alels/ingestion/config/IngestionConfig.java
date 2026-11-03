@@ -89,6 +89,10 @@ public class IngestionConfig {
         return Boolean.parseBoolean(get("ingestion.dlq.replay.on.startup", "INGESTION_DLQ_REPLAY_ON_STARTUP", "false"));
     }
 
+    public boolean bleHistoryEnabled() {
+        return Boolean.parseBoolean(get("ble.history.enabled", "ALELS_BLE_HISTORY_ENABLED", "false"));
+    }
+
     public String databaseUrl() {
         return requiredEnvironment("ALELS_DB_URL");
     }

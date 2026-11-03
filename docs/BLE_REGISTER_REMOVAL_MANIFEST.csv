@@ -1,0 +1,10 @@
+﻿path,sha256,action
+backend/src/main/java/com/alels/backend/assetregister/controller/BleSensorRegisterController.java,95ef30948363d292555396a36efb01e5cbcca0790ae4508c154fd0e6fb119e9c,Removed obsolete BLE Register code
+backend/src/main/java/com/alels/backend/assetregister/service/BleSensorRegisterService.java,47b7cbec3339c4aa99e657095905ec1cc293880a4cda464f2ccd645e0db8e0ee,Removed obsolete BLE Register code
+backend/src/main/java/com/alels/backend/assetregister/repository/BleSensorRegisterRepository.java,6419595b7e31a524725314c59ef261e9ec63ab6e954f0f7a19fb5a892b639c16,Removed obsolete BLE Register code
+backend/src/main/java/com/alels/backend/assetregister/service/BleSensorIdentity.java,4bf5473abd1c0e2751e3014282f3a59aa50bf62978693a5b6ced5f50543adfdb,MAC formatting moved into BLE monitoring; registry validation removed
+web-react/src/features/asset-register/api/ble-sensor-register-api.ts,83a9d0e0d65bcdf70659b8a71dc773a2809272f71e539f9d532173bb4b0de09e,Removed obsolete BLE Register code
+web-react/src/features/asset-register/components/ble-sensor-schema-gate.tsx,10a3f9d08b1fea9a2d72f8f690fa30ea9b8992bc423d1dcf925a208dc139d894,Removed obsolete BLE Register code
+web-react/src/features/asset-register/components/ble-sensor-wasted-panel.tsx,a7f8f53f64d464443ab69dbd97bf4916121d4dd335b9975fe38634fed425553a,Removed obsolete BLE Register code
+web-react/src/features/asset-register/pages/ble-sensor-register-page.tsx,171692b60e77224adf7b83a3e7e32ba99b13afe98dbe9ec0549052757ede6a13,Removed obsolete BLE Register code
+web-react/src/features/asset-register/utils/ble-sensor.ts,,MAC formatting moved into BLE monitoring; registry validation removed

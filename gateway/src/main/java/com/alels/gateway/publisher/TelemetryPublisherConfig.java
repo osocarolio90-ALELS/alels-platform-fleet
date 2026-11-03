@@ -23,6 +23,10 @@ public class TelemetryPublisherConfig {
         );
     }
 
+    public static boolean bleHistoryEnabled() {
+        return Boolean.parseBoolean(get("ble.history.enabled", "ALELS_BLE_HISTORY_ENABLED", "false"));
+    }
+
     public static String kafkaBootstrapServers() {
         return get(
                 "kafka.bootstrap.servers",

@@ -1,0 +1,2 @@
+﻿path,sha256,reason
+database\migrations\027_ble_sensor_register.sql,19c1b95e451e701772263da7aa15133920fd935da9a937305117bfab0b9886ac,Explicit user request: remove obsolete BLE Sensor Register migration027

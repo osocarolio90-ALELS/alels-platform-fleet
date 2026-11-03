@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $repositoryRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$modules = @("backend", "gateway", "ingestion-service")
+$modules = @("gateway", "backend", "ingestion-service")
 
 & (Join-Path $PSScriptRoot "validate-repository.ps1")
 if ($LASTEXITCODE -ne 0) { throw "repository validation failed" }
@@ -9,7 +9,9 @@ if ($LASTEXITCODE -ne 0) { throw "repository validation failed" }
 foreach ($module in $modules) {
     Push-Location (Join-Path $repositoryRoot $module)
     try {
-        & mvn.cmd --batch-mode --no-transfer-progress clean verify
+        # Backend reuses the gateway's parser-only classifier; install it after gateway verification.
+        $mavenGoal = if ($module -eq "gateway") { "install" } else { "verify" }
+        & mvn.cmd --batch-mode --no-transfer-progress clean $mavenGoal
         if ($LASTEXITCODE -ne 0) { throw "$module quality gate failed" }
     } finally {
         Pop-Location
